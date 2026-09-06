@@ -57,6 +57,16 @@ const otherCategory: SettingCategory = {
             type: "warning",
           },
         },
+        {
+          key: "qqmusicSearchMode",
+          type: "select",
+          binding: { store: "settings", path: "system.system.qqmusicSearchMode" },
+          options: [
+            { value: "mobile", labelKey: "settings.qqmusicSearchMode.mobile" },
+            { value: "lite", labelKey: "settings.qqmusicSearchMode.lite" },
+          ],
+          defaultValue: "mobile",
+        },
       ],
     },
     {

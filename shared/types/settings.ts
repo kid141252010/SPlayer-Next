@@ -429,6 +429,9 @@ export type NeteaseScrobbleMode = "legacy" | "ncbl";
 /** KG 登录版本 */
 export type KugouLoginVersion = "standard" | "concept";
 
+/** QM 搜索接口模式 */
+export type QQMusicSearchMode = "mobile" | "lite";
+
 /** 后端配置汇总 */
 export interface SystemConfig {
   /** 播放器配置 */
@@ -481,6 +484,8 @@ export interface SystemConfig {
     neteaseRealIp: boolean;
     /** KG 登录版本（standard 标准版 / concept 概念版） */
     kugouLoginVersion: KugouLoginVersion;
+    /** QM 搜索接口模式（mobile 移动端 / lite 极速版） */
+    qqmusicSearchMode: QQMusicSearchMode;
     /** 网络代理配置 */
     networkProxy: NetworkProxySettings;
     /** 听歌打卡开关 */

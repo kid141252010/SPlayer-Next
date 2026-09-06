@@ -1728,6 +1728,12 @@
       "standard": "标准版",
       "concept": "概念版"
     },
+    "qqmusicSearchMode": {
+      "label": "QM 搜索接口",
+      "description": "移动端接口功能完整但代理环境下易触发风控，极速版对网络环境容忍度更高",
+      "mobile": "移动端接口（默认）",
+      "lite": "极速版接口（推荐代理环境使用）"
+    },
     "neteaseScrobbleEnabled": {
       "label": "启用听歌打卡",
       "description": "播放达到一定时长后，自动向 NCM 上报听歌记录"

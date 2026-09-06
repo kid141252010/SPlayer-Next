@@ -159,6 +159,7 @@ export const defaultSystemConfig: SystemConfig = {
     agreedAgreementVersion: 1,
     neteaseRealIp: false,
     kugouLoginVersion: "standard",
+    qqmusicSearchMode: "mobile",
     networkProxy: {
       protocol: "off",
       host: "127.0.0.1",

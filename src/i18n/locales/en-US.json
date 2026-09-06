@@ -1740,6 +1740,12 @@
       "standard": "Standard",
       "concept": "Concept"
     },
+    "qqmusicSearchMode": {
+      "label": "QM Search Endpoint",
+      "description": "Mobile endpoint has full features but may trigger anti-scraping under proxy; Lite endpoint is lighter and more proxy-friendly",
+      "mobile": "Mobile Endpoint (Default)",
+      "lite": "Lite Endpoint (Recommended for Proxy)"
+    },
     "neteaseScrobbleEnabled": {
       "label": "Enable scrobble",
       "description": "Automatically report listening records to NCM after a track has played long enough"

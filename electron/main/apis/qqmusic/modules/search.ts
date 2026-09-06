@@ -5,14 +5,22 @@
 import { formatSingerName } from "../core/config";
 import { qmRequest } from "../core/request";
 import type { QMModule } from "../core/types";
+import { store } from "@main/store";
+import type { QQMusicSearchMode } from "@shared/types/settings";
 
 const secureUrl = (url: string | undefined): string => url?.replace(/^http:/, "https:") ?? "";
 const stripHighlight = (text: string | undefined): string => text?.replace(/<\/?em>/g, "") ?? "";
+
+const getSearchMode = (paramMode?: string): QQMusicSearchMode => {
+  if (paramMode === "lite" || paramMode === "mobile") return paramMode;
+  return (store.get("system.qqmusicSearchMode") as QQMusicSearchMode) || "mobile";
+};
 
 interface MobileSong {
   id?: number;
   mid?: string;
   title?: string;
+  name?: string;
   interval?: number;
   singer?: Array<{ id?: number; mid?: string; name?: string }>;
   album?: { mid?: string; name?: string; title?: string; pmid?: string };
@@ -41,7 +49,7 @@ interface MobileSearchResponse {
     singer?: MobileArtist[];
     item_songlist?: MobilePlaylist[];
   };
-  meta?: { sum?: number };
+  meta?: { sum?: number; estimate_sum?: number };
 }
 
 interface MobileAlbum {
@@ -100,8 +108,37 @@ const searchMobile = (keywords: string, page: number, limit: number, searchType:
     { session: false },
   );
 
-const searchSongs = async (keywords: string, page: number, limit: number) => {
-  const data = await searchMobile(keywords, page, limit, 0);
+const searchLite = (keywords: string, page: number, limit: number, searchType: number) =>
+  qmRequest<MobileSearchResponse>(
+    "music.search.SearchCgiService",
+    "DoSearchForQQMusicLite",
+    {
+      query: keywords,
+      page_num: page,
+      num_per_page: limit,
+      search_type: searchType,
+    },
+    { session: false },
+  );
+
+const searchByMode = (
+  keywords: string,
+  page: number,
+  limit: number,
+  searchType: number,
+  mode: QQMusicSearchMode,
+) =>
+  mode === "lite"
+    ? searchLite(keywords, page, limit, searchType)
+    : searchMobile(keywords, page, limit, searchType);
+
+const searchSongs = async (
+  keywords: string,
+  page: number,
+  limit: number,
+  mode: QQMusicSearchMode,
+) => {
+  const data = await searchByMode(keywords, page, limit, 0, mode);
   const songs = (data.body?.item_song ?? []).map((song) => {
     const albumMid = song.album?.mid ?? "";
     const albumPmid = song.album?.pmid ?? "";
@@ -109,10 +146,10 @@ const searchSongs = async (keywords: string, page: number, limit: number) => {
     return {
       id: String(song.id ?? ""),
       mid: song.mid ?? "",
-      name: song.title ?? "",
+      name: stripHighlight(song.title || song.name || ""),
       artist: formatSingerName(song.singer),
       artists: song.singer ?? [],
-      album: song.album?.name || song.album?.title || "",
+      album: stripHighlight(song.album?.name || song.album?.title || ""),
       albumMid,
       duration: (song.interval ?? 0) * 1000,
       mediaMid: song.file?.media_mid ?? "",
@@ -136,45 +173,76 @@ const searchSongs = async (keywords: string, page: number, limit: number) => {
         : "",
     };
   });
-  return { code: 200, total: data.meta?.sum ?? songs.length, songs };
+  return {
+    code: 200,
+    total: data.meta?.sum ?? data.meta?.estimate_sum ?? songs.length,
+    songs,
+  };
 };
 
-const searchAlbums = async (keywords: string, page: number, limit: number) => {
-  const data = await searchMobile(keywords, page, limit, 2);
+const searchAlbums = async (
+  keywords: string,
+  page: number,
+  limit: number,
+  mode: QQMusicSearchMode,
+) => {
+  const data = await searchByMode(keywords, page, limit, 2, mode);
   const albums = (data.body?.item_album ?? []).map((album) => ({
     id: album.albummid ?? String(album.id ?? ""),
-    name: album.name ?? "",
+    name: stripHighlight(album.name),
     cover: secureUrl(album.pic),
-    artist: album.singer || formatSingerName(album.singer_list),
+    artist: stripHighlight(album.singer || formatSingerName(album.singer_list)),
     artistMid: album.singer_list?.[0]?.mid ?? "",
     trackCount: album.song_num ?? 0,
   }));
-  return { code: 200, total: data.meta?.sum ?? albums.length, albums };
+  return {
+    code: 200,
+    total: data.meta?.sum ?? data.meta?.estimate_sum ?? albums.length,
+    albums,
+  };
 };
 
-const searchArtists = async (keywords: string, page: number, limit: number) => {
-  const data = await searchMobile(keywords, page, limit, 1);
+const searchArtists = async (
+  keywords: string,
+  page: number,
+  limit: number,
+  mode: QQMusicSearchMode,
+) => {
+  const data = await searchByMode(keywords, page, limit, 1, mode);
   const artists = (data.body?.singer ?? []).map((artist) => ({
     id: artist.singerMID ?? String(artist.singerID ?? ""),
-    name: artist.singerName ?? "",
+    name: stripHighlight(artist.singerName),
     cover: secureUrl(artist.singerPic || artist.iconurl),
     albumCount: artist.albumNum ?? 0,
     songCount: artist.songNum ?? 0,
   }));
-  return { code: 200, total: data.meta?.sum ?? artists.length, artists };
+  return {
+    code: 200,
+    total: data.meta?.sum ?? data.meta?.estimate_sum ?? artists.length,
+    artists,
+  };
 };
 
-const searchPlaylists = async (keywords: string, page: number, limit: number) => {
-  const data = await searchMobile(keywords, page, limit, 3);
+const searchPlaylists = async (
+  keywords: string,
+  page: number,
+  limit: number,
+  mode: QQMusicSearchMode,
+) => {
+  const data = await searchByMode(keywords, page, limit, 3, mode);
   const playlists = (data.body?.item_songlist ?? []).map((playlist) => ({
     id: playlist.dissid ?? "",
     name: stripHighlight(playlist.dissname),
     cover: secureUrl(playlist.logo || playlist.layer_url),
-    creator: playlist.nickname ?? "",
+    creator: stripHighlight(playlist.nickname),
     trackCount: playlist.songnum ?? 0,
     playCount: playlist.listennum ?? 0,
   }));
-  return { code: 200, total: data.meta?.sum ?? playlists.length, playlists };
+  return {
+    code: 200,
+    total: data.meta?.sum ?? data.meta?.estimate_sum ?? playlists.length,
+    playlists,
+  };
 };
 
 const search: QMModule = async (params) => {
@@ -183,17 +251,20 @@ const search: QMModule = async (params) => {
     page = 1,
     limit = 30,
     type = 0,
+    mode: paramMode,
   } = params as {
     keywords?: string;
     page?: number;
     limit?: number;
     type?: number;
+    mode?: string;
   };
   if (!keywords) return { code: 400, total: 0, message: "keywords required" };
-  if (type === 0) return searchSongs(keywords, page, limit);
-  if (type === 8) return searchAlbums(keywords, page, limit);
-  if (type === 9) return searchArtists(keywords, page, limit);
-  if (type === 2) return searchPlaylists(keywords, page, limit);
+  const mode = getSearchMode(paramMode);
+  if (type === 0) return searchSongs(keywords, page, limit, mode);
+  if (type === 8) return searchAlbums(keywords, page, limit, mode);
+  if (type === 9) return searchArtists(keywords, page, limit, mode);
+  if (type === 2) return searchPlaylists(keywords, page, limit, mode);
   return { code: 400, total: 0, message: `unsupported search type: ${type}` };
 };
 
