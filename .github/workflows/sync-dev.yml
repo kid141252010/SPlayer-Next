@@ -2,7 +2,7 @@ name: Sync Dev to Master
 
 on:
   schedule:
-    # 每天北京时间凌晨 03:00 自动检测同步 (UTC 19:00)
+    # 每天北京时间凌晨 03:00 自动运行 (UTC 19:00)
     - cron: "0 19 * * *"
   workflow_dispatch:
     inputs:
@@ -11,6 +11,15 @@ on:
         type: boolean
         required: true
         default: true
+
+# 授予仓库写入权限，确保能够正常 git push
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: sync-dev-to-master
+  cancel-in-progress: true
 
 jobs:
   sync:
@@ -22,7 +31,7 @@ jobs:
         with:
           ref: master
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
 
       - name: Setup Git identity
         run: |
