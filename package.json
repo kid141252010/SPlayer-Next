@@ -51,7 +51,8 @@
     "build:linux": "pnpm build && electron-builder --config electron-builder.config.ts --linux",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "docs:preview": "vitepress preview docs",
+    "sync:master": "tsx scripts/sync-master.ts"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

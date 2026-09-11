@@ -1,0 +1,81 @@
+name: Sync Dev to Master
+
+on:
+  schedule:
+    # 每天北京时间凌晨 03:00 自动检测同步 (UTC 19:00)
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+    inputs:
+      auto_push:
+        description: "合并并检查成功后自动推送到 master"
+        type: boolean
+        required: true
+        default: true
+
+jobs:
+  sync:
+    name: Sync upstream/dev into master
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Git identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Setup upstream remote
+        run: |
+          if ! git remote | grep -q "^upstream$"; then
+            git remote add upstream https://github.com/SPlayer-Dev/SPlayer-Next.git
+          fi
+          git fetch upstream dev
+          git fetch origin master
+
+      - name: Check for new commits
+        id: check_commits
+        run: |
+          COMMITS=$(git log master..upstream/dev --oneline)
+          if [ -z "$COMMITS" ]; then
+            echo "has_commits=false" >> $GITHUB_OUTPUT
+            echo "upstream/dev 的所有提交已包含在 master 中，无需合并。"
+          else
+            echo "has_commits=true" >> $GITHUB_OUTPUT
+            echo "发现待合并提交:"
+            echo "$COMMITS"
+          fi
+
+      - name: Merge upstream/dev
+        if: steps.check_commits.outputs.has_commits == 'true'
+        run: |
+          git checkout master
+          git merge upstream/dev -m "Merge branch 'upstream/dev' into master"
+
+      - name: Setup pnpm
+        if: steps.check_commits.outputs.has_commits == 'true'
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        if: steps.check_commits.outputs.has_commits == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.check_commits.outputs.has_commits == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify types
+        if: steps.check_commits.outputs.has_commits == 'true'
+        run: pnpm typecheck
+
+      - name: Push to master
+        if: steps.check_commits.outputs.has_commits == 'true' && (github.event_name == 'schedule' || inputs.auto_push == true)
+        run: |
+          git push origin master
