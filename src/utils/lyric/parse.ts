@@ -4,16 +4,22 @@ import { parseLRC } from "./parseLRC";
 import { parseQRC } from "./parseQRC";
 import { parseYRC } from "./parseYRC";
 import { parseKRC } from "./parseKRC";
-import { parseTTML } from "./parseTTML";
+import { parseTTML, extractTTMLSpatialOffset } from "./parseTTML";
 import { parseLyS } from "./parseLyS";
 import { parseSRT } from "./parseSRT";
 import { parseASS } from "./parseASS";
 import { normalizeKangxi } from "./kangxi";
 
+export { extractTTMLSpatialOffset };
+
 export interface ParseLyricOptions {
   detectBackground?: boolean;
   /** 是否剔除普通话汉语拼音音译（TTML） */
   filterPinyin?: boolean;
+  /** 是否应用杜比全景声（空间音频）时间轴偏移（TTML） */
+  applySpatialOffset?: boolean;
+  /** 检测到空间音频偏移时的回调 */
+  onSpatialOffset?: (offsetMs: number) => void;
 }
 
 /**
@@ -84,7 +90,11 @@ const parseContent = (
   const detectBackground = options.detectBackground !== false;
   switch (format) {
     case "ttml":
-      return parseTTML(text, preferredLang, { filterPinyin: options.filterPinyin });
+      return parseTTML(text, preferredLang, {
+        filterPinyin: options.filterPinyin,
+        applySpatialOffset: options.applySpatialOffset,
+        onSpatialOffset: options.onSpatialOffset,
+      });
     case "qrc":
       return parseQRC(text, detectBackground);
     case "krc":
@@ -115,20 +125,46 @@ export const parseLyric = (
   preferredLang = "",
   options: ParseLyricOptions = {},
 ): LyricLine[] => {
-  const lines = parseContent(normalizeKangxi(input.content), format, preferredLang, options);
+  let appliedOffsetMs = 0;
+  const lines = parseContent(normalizeKangxi(input.content), format, preferredLang, {
+    ...options,
+    onSpatialOffset: (offsetMs) => {
+      appliedOffsetMs = offsetMs;
+      options.onSpatialOffset?.(offsetMs);
+    },
+  });
+
+  // 杜比空间音频偏移补偿：若主歌词为 TTML 且应用了偏移，外部独立翻译与音译按相同偏移补偿时间戳以保持对齐
+  const effectiveOffset = options.applySpatialOffset ? appliedOffsetMs : 0;
   if (input.translation && input.translationFormat) {
-    pairTranslation(
-      lines,
-      parseContent(normalizeKangxi(input.translation), input.translationFormat, "", options),
-      "translatedLyric",
+    const transLines = parseContent(
+      normalizeKangxi(input.translation),
+      input.translationFormat,
+      "",
+      options,
     );
+    if (effectiveOffset !== 0) {
+      for (const line of transLines) {
+        line.startTime = Math.max(0, line.startTime + effectiveOffset);
+        line.endTime = Math.max(0, line.endTime + effectiveOffset);
+      }
+    }
+    pairTranslation(lines, transLines, "translatedLyric");
   }
   if (input.romaji && input.romajiFormat) {
-    pairTranslation(
-      lines,
-      parseContent(normalizeKangxi(input.romaji), input.romajiFormat, "", options),
-      "romanLyric",
+    const romajiLines = parseContent(
+      normalizeKangxi(input.romaji),
+      input.romajiFormat,
+      "",
+      options,
     );
+    if (effectiveOffset !== 0) {
+      for (const line of romajiLines) {
+        line.startTime = Math.max(0, line.startTime + effectiveOffset);
+        line.endTime = Math.max(0, line.endTime + effectiveOffset);
+      }
+    }
+    pairTranslation(lines, romajiLines, "romanLyric");
   }
   return lines;
 };

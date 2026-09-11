@@ -10,6 +10,7 @@ import { applyLyricExclude } from "@/utils/lyric/lyricStripper";
 import { normalizeLyricLines } from "@/utils/lyric/normalize";
 import { applyProfanityUncensor } from "@/utils/preset/profanity";
 import { applyLyricCjkTransform } from "@/utils/lyric/cjkTransform";
+import { isEAC3Codec } from "@/utils/quality";
 
 export const useMediaStore = defineStore("media", () => {
   watchLyricPreference();
@@ -40,6 +41,9 @@ export const useMediaStore = defineStore("media", () => {
 
   /** 当前歌词解析结果 */
   const parsedLyric = shallowRef<LyricLine[]>([]);
+
+  /** 当前歌词中生效的杜比全景声空间音频偏移（毫秒） */
+  const spatialLyricOffsetMs = ref(0);
 
   /** 当前歌词文件制作者列表 */
   const lyricAuthors = ref<string[]>([]);
@@ -84,6 +88,7 @@ export const useMediaStore = defineStore("media", () => {
    */
   const enrichTrack = (info: MediaInfo, newDetail?: TrackDetail): void => {
     if (!track.value) return;
+    const prevCodec = detail.value?.quality?.codec || track.value?.quality?.codec;
     const isStreaming = track.value.source === "streaming";
     // 标题为文件名去后缀派生（如拖拽播放）时，让位给引擎提取的内嵌标签标题
     const fileName = track.value.path?.split(/[\\/]/).pop() ?? "";
@@ -104,6 +109,15 @@ export const useMediaStore = defineStore("media", () => {
       quality: track.value.quality ?? info.quality,
     };
     if (newDetail) detail.value = newDetail;
+
+    const nextCodec = detail.value?.quality?.codec || track.value?.quality?.codec;
+    if (
+      activeLyric.value?.format === "ttml" &&
+      lyricContent.value &&
+      isEAC3Codec(prevCodec) !== isEAC3Codec(nextCodec)
+    ) {
+      setLyric(activeLyric.value, lyricContent.value);
+    }
   };
 
   /**
@@ -126,6 +140,7 @@ export const useMediaStore = defineStore("media", () => {
     activeLyric.value = null;
     lyricContent.value = null;
     parsedLyric.value = [];
+    spatialLyricOffsetMs.value = 0;
     lyricAuthors.value = [];
     lyricIndex.value = -1;
     lyricLoading.value = true;
@@ -156,12 +171,19 @@ export const useMediaStore = defineStore("media", () => {
    */
   const setLyric = (source: LyricData, input: LyricInput | null): void => {
     let nextLines: LyricLine[] = [];
+    let detectedSpatialOffset = 0;
     const settings = useSettingsStore();
     if (source && input) {
       try {
+        const currentCodec = detail.value?.quality?.codec || track.value?.quality?.codec;
+        const isDolby = isEAC3Codec(currentCodec);
         const lines = parseLyric(input, source.format, settings.locale, {
           detectBackground: settings.lyric.detectBackgroundLyrics,
           filterPinyin: settings.preset.noPinyin,
+          applySpatialOffset: isDolby,
+          onSpatialOffset: (offsetMs) => {
+            detectedSpatialOffset = offsetMs;
+          },
         });
         nextLines = applyLyricExclude(lines, track.value);
         normalizeLyricLines(nextLines);
@@ -180,6 +202,7 @@ export const useMediaStore = defineStore("media", () => {
     activeLyric.value = hasContent ? source : null;
     lyricContent.value = hasContent ? input : null;
     parsedLyric.value = nextLines;
+    spatialLyricOffsetMs.value = hasContent ? detectedSpatialOffset : 0;
     lyricAuthors.value =
       hasContent && source && input ? extractLyricAuthors(input.content, source.format) : [];
     lyricIndex.value = -1;
@@ -214,6 +237,7 @@ export const useMediaStore = defineStore("media", () => {
     activeLyric.value = null;
     lyricContent.value = null;
     parsedLyric.value = [];
+    spatialLyricOffsetMs.value = 0;
     lyricAuthors.value = [];
     lyricLoading.value = false;
     lyricIndex.value = -1;
@@ -228,6 +252,7 @@ export const useMediaStore = defineStore("media", () => {
     lyricContent,
     lyricFormat,
     parsedLyric,
+    spatialLyricOffsetMs,
     lyricAuthors,
     lyricLoading,
     lyricIndex,

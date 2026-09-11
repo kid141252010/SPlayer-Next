@@ -13,6 +13,24 @@ const LOSSLESS_CODECS = new Set(["flac", "alac", "ape", "wav", "aiff", "wavpack"
  */
 export const isLosslessCodec = (codec: string): boolean => LOSSLESS_CODECS.has(codec.toLowerCase());
 
+/**
+ * 判断编解码器是否为 EAC3 杜比格式（Dolby Digital Plus / Dolby Atmos）
+ * @param codec - 编解码器名称
+ * @returns 是否为 EAC3 格式
+ */
+export const isEAC3Codec = (codec?: string): boolean => {
+  if (!codec) return false;
+  const c = codec.trim().toLowerCase();
+  return (
+    c === "eac3" ||
+    c === "e-ac-3" ||
+    c === "ec-3" ||
+    c.includes("eac3") ||
+    c === "atmos" ||
+    c.includes("atmos")
+  );
+};
+
 /** 等级短码文案 */
 export const QUALITY_LABELS: Record<QualityLevel, string> = {
   "hi-res": "Hi-Res",

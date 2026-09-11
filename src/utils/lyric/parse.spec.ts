@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { bestExternalIndex, detectFormat, parseLyric } from "./parse";
+import { bestExternalIndex, detectFormat, extractTTMLSpatialOffset, parseLyric } from "./parse";
+import { isEAC3Codec } from "../quality";
 
 describe("lyric parse", () => {
   it("根据内容识别常见歌词格式", () => {
@@ -78,5 +79,117 @@ describe("lyric parse", () => {
       { startTime: 1_000, endTime: 2_000, word: "B" },
     ]);
     expect(line.endTime).toBe(2_000);
+  });
+
+  it("识别 EAC3 杜比全景声编码", () => {
+    expect(isEAC3Codec("eac3")).toBe(true);
+    expect(isEAC3Codec("EAC3")).toBe(true);
+    expect(isEAC3Codec("e-ac-3")).toBe(true);
+    expect(isEAC3Codec("ec-3")).toBe(true);
+    expect(isEAC3Codec("eac3_atmos")).toBe(true);
+    expect(isEAC3Codec("atmos")).toBe(true);
+
+    expect(isEAC3Codec("flac")).toBe(false);
+    expect(isEAC3Codec("mp3")).toBe(false);
+    expect(isEAC3Codec("aac")).toBe(false);
+    expect(isEAC3Codec(undefined)).toBe(false);
+  });
+
+  it("正确提取 TTML 空间音频歌词延迟元数据", () => {
+    const ttmlStandard = `
+      <tt xmlns="http://www.w3.org/ns/ttml">
+        <head>
+          <metadata>
+            <iTunesMetadata xmlns="http://music.apple.com/lyric-ttml-internal">
+              <audio lyricOffset="0.960" role="spatial"/>
+            </iTunesMetadata>
+          </metadata>
+        </head>
+      </tt>
+    `;
+    expect(extractTTMLSpatialOffset(ttmlStandard)).toBe(960);
+
+    const ttmlWithUnits = `
+      <tt xmlns="http://www.w3.org/ns/ttml" xmlns:itunes="http://music.apple.com/lyric-ttml-internal">
+        <head>
+          <metadata>
+            <itunes:iTunesMetadata>
+              <itunes:audio itunes:lyricOffset="1.25s" itunes:role="spatial"/>
+            </itunes:iTunesMetadata>
+          </metadata>
+        </head>
+      </tt>
+    `;
+    expect(extractTTMLSpatialOffset(ttmlWithUnits)).toBe(1250);
+
+    const ttmlMs = `
+      <tt xmlns="http://www.w3.org/ns/ttml">
+        <head><metadata><audio lyricOffset="500ms" role="spatial"/></metadata></head>
+      </tt>
+    `;
+    expect(extractTTMLSpatialOffset(ttmlMs)).toBe(500);
+
+    const ttmlStereoOnly = `
+      <tt xmlns="http://www.w3.org/ns/ttml">
+        <head><metadata><audio lyricOffset="0.500" role="stereo"/></metadata></head>
+      </tt>
+    `;
+    expect(extractTTMLSpatialOffset(ttmlStereoOnly)).toBe(0);
+  });
+
+  it("当启用杜比空间音频偏移时，行与字时间轴以及外部翻译同步补偿", () => {
+    const ttml = `
+      <tt xmlns="http://www.w3.org/ns/ttml" xmlns:itunes="http://music.apple.com/lyric-ttml-internal">
+        <head>
+          <metadata>
+            <iTunesMetadata xmlns="http://music.apple.com/lyric-ttml-internal">
+              <audio lyricOffset="0.960" role="spatial"/>
+            </iTunesMetadata>
+          </metadata>
+        </head>
+        <body>
+          <div>
+            <p begin="00:03.000" end="00:05.000">
+              <span begin="00:03.000" end="00:04.000">Hello </span>
+              <span begin="00:04.000" end="00:05.000">World</span>
+            </p>
+          </div>
+        </body>
+      </tt>
+    `;
+
+    // 立体声模式：未开启杜比偏移
+    const stereoLines = parseLyric({ content: ttml }, "ttml", "", {
+      applySpatialOffset: false,
+    });
+    expect(stereoLines[0].startTime).toBe(3000);
+    expect(stereoLines[0].endTime).toBe(5000);
+    expect(stereoLines[0].words[0].startTime).toBe(3000);
+    expect(stereoLines[0].words[0].endTime).toBe(4000);
+
+    // 杜比模式：开启杜比偏移，行与字时间轴推迟 960ms，外部立体声翻译成功补偿对齐
+    let offsetResult = 0;
+    const dolbyLines = parseLyric(
+      {
+        content: ttml,
+        translation: "[00:03.00]你好 世界",
+        translationFormat: "lrc",
+      },
+      "ttml",
+      "",
+      {
+        applySpatialOffset: true,
+        onSpatialOffset: (ms) => {
+          offsetResult = ms;
+        },
+      },
+    );
+
+    expect(offsetResult).toBe(960);
+    expect(dolbyLines[0].startTime).toBe(3960);
+    expect(dolbyLines[0].endTime).toBe(5960);
+    expect(dolbyLines[0].words[0].startTime).toBe(3960);
+    expect(dolbyLines[0].words[0].endTime).toBe(4960);
+    expect(dolbyLines[0].translatedLyric).toBe("你好 世界");
   });
 });
