@@ -33,7 +33,7 @@ import { startMcpServer, stopMcpServer } from "@main/services/mcp/http";
 import { setOrpheusProtocolRegistered } from "@main/services/orpheus";
 import { setTaskbarThumbnailEnabled } from "@main/services/thumbnail";
 import { applyChannelChange } from "@main/services/updater";
-import type { UpdateChannel } from "@shared/types/settings";
+import { UPDATE_CHANNELS, type UpdateChannel } from "@shared/types/settings";
 
 /**
  * 应用配置写入后的副作用
@@ -135,12 +135,7 @@ const applyConfigChange = (keyPath: string, value: unknown, previous: unknown): 
 export const registerConfigIpc = (): void => {
   ipcMain.handle("config:get", (_event, keyPath: string) => store.get(keyPath as ConfigPath));
   ipcMain.handle("config:set", (_event, keyPath: string, value: unknown) => {
-    if (
-      keyPath === "update.channel" &&
-      value !== "stable" &&
-      value !== "beta" &&
-      value !== "alpha"
-    ) {
+    if (keyPath === "update.channel" && !UPDATE_CHANNELS.some((channel) => channel === value)) {
       throw new Error(`无效的更新通道: ${String(value)}`);
     }
     const previous = store.get(keyPath as ConfigPath);

@@ -798,13 +798,23 @@
       "label": "自动播放",
       "description": "加载歌曲后自动开始播放"
     },
-    "fuckDjMode": {
-      "label": "Fuck DJ Mode",
-      "description": "歌曲名字带有 DJ 抖音 0.9 0.8 网红 车载 热歌 慢摇 自动跳过"
+    "skipKeywordsSongs": {
+      "label": "跳过指定关键词歌曲",
+      "description": "检测到歌曲标题或歌手名包含指定关键词时自动跳过",
+      "button": "管理",
+      "enable": "启用跳过关键词歌曲",
+      "enableDesc": "播放时若命中关键词列表则自动跳至下一首"
     },
-    "uncensorProfanity": {
-      "label": "Fuck ** Mode",
-      "description": "把歌词里的 f**k 等屏蔽词还原为原词"
+    "skipKeywordsRules": {
+      "label": "关键词列表",
+      "description": "自定义需要跳过的歌曲关键词列表",
+      "button": "管理",
+      "hint": "当歌曲标题或歌手名包含以下关键词时将自动跳过",
+      "placeholder": "输入关键词",
+      "add": "添加",
+      "clear": "清空当前列表",
+      "empty": "尚未配置任何关键词",
+      "duplicate": "已存在该关键词"
     },
     "hideVipTag": {
       "label": "隐藏 VIP 标签",
@@ -884,6 +894,10 @@
       "label": "输出设备",
       "description": "选择音频输出设备",
       "default": "系统默认"
+    },
+    "rememberDeviceVolume": {
+      "label": "独立设备音量记忆",
+      "description": "切换或插拔不同音频输出设备时，分别保存并恢复各自的音量大小"
     },
     "pauseOnDeviceSwitch": {
       "label": "切换时暂停播放",
@@ -1113,10 +1127,6 @@
       "label": "提前入场动画",
       "description": "尝试让歌词入场动画提前开始（最多 1 秒），使过渡更加平滑"
     },
-    "amllConvertExcessiveBackgroundLines": {
-      "label": "合并背景人声",
-      "description": "将多行连续背景人声转换为单行背景人声与主歌词行的形式"
-    },
     "amllSyncMainAndBackgroundLines": {
       "label": "同步背景人声时间",
       "description": "自动同步主歌词与背景人声的时间轴"
@@ -1164,17 +1174,25 @@
       "label": "显示翻译",
       "description": "显示歌词的翻译文本"
     },
-    "showRomanization": {
-      "label": "显示音译",
-      "description": "显示歌词的音译文本"
+    "showRuby": {
+      "label": "显示词内注音",
+      "description": "显示歌词中汉字词语的假名或拼音注音"
     },
-    "amllShowLineRomanization": {
+    "showRomanization": {
       "label": "显示逐行音译",
       "description": "显示歌词行的音译文本"
     },
-    "amllShowWordRomanization": {
+    "showWordRomanization": {
       "label": "显示逐词音译",
       "description": "在逐字歌词中，显示每个字词的音译文本"
+    },
+    "enableScale": {
+      "label": "歌词缩放",
+      "description": "聚焦播放行，非激活行轻微缩小"
+    },
+    "bgAlwaysBelow": {
+      "label": "背景歌词置于下方",
+      "description": "始终将背景和声歌词显示在主歌词行下方"
     },
     "enableWordHighlight": {
       "label": "逐字高亮",
@@ -1447,6 +1465,13 @@
       "solid": "纯色",
       "animation": "流体"
     },
+    "playerBgRenderer": {
+      "label": "渲染引擎",
+      "description": "选择流体背景渲染引擎",
+      "mesh": "网格渐变渲染器",
+      "isolation": "isolation 渲染器",
+      "pixi": "PixiJS 渲染器"
+    },
     "playerBgFlowSpeed": {
       "label": "流动速度",
       "description": "流体背景的动画流动速度"
@@ -1564,10 +1589,6 @@
       "confirmResetTitle": "确认恢复默认？",
       "confirmResetDesc": "分组、命名、排序与显隐都将重置为默认！",
       "featureDisabled": "功能未开启"
-    },
-    "showStatsInSidebar": {
-      "label": "显示播放统计入口",
-      "description": "在侧边栏显示播放统计页面入口"
     },
     "showQualitySwitch": {
       "label": "显示快捷音质切换",
@@ -1692,10 +1713,11 @@
     },
     "updateChannel": {
       "label": "更新通道",
-      "description": "选择正式版、Beta 预览版或 Alpha 内测版更新",
+      "description": "选择正式版、Beta 预览版、Alpha 内测版或 Nightly 持续构建更新",
       "stable": "正式版",
       "beta": "Beta 预览版",
-      "alpha": "Alpha 内测版"
+      "alpha": "Alpha 内测版",
+      "nightly": "Nightly 持续构建"
     },
     "checkUpdate": {
       "label": "检查更新",

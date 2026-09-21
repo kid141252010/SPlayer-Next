@@ -19,6 +19,7 @@ import type { SystemConfig, LocaleCode } from "@shared/types/settings";
 import { ALL_PLATFORMS } from "@shared/types/platform";
 import { defaultSystemConfig } from "@shared/defaults/settings";
 import { setByPath } from "@shared/utils/path";
+import { DEFAULT_SKIP_TRACK_KEYWORDS } from "@/utils/preset/skipKeywords";
 
 /**
  * 对账有序集合：保留存档中仍有效的项（顺序不变），
@@ -116,7 +117,6 @@ export const useSettingsStore = defineStore(
       sidebarKeepEmptyDivider: false,
       sidebarNameWithDivider: false,
       sidebarPlaylistOrder: { myLocal: [], myOnline: [], subscribed: [] },
-      showStatsInSidebar: true,
       showQualitySwitch: false,
       closeAction: "hide",
       rememberCloseChoice: false,
@@ -127,6 +127,7 @@ export const useSettingsStore = defineStore(
     /** 播放器 */
     const player = reactive<PlayerSettings>({
       playerBgType: "blur",
+      playerBgRenderer: "mesh",
       playerBgFps: 30,
       playerBgFlowSpeed: 4,
       playerBgRenderScale: 0.5,
@@ -140,6 +141,7 @@ export const useSettingsStore = defineStore(
       autoImmersive: true,
       outputDevice: null,
       pauseOnDeviceSwitch: false,
+      rememberDeviceVolume: false,
       enableSpectrum: false,
       spectrumBarWidth: 4,
       reverseSpectrum: false,
@@ -158,8 +160,8 @@ export const useSettingsStore = defineStore(
 
     /** 强迫症设置 */
     const preset = reactive<PresetSettings>({
-      fuckDjMode: false,
-      uncensorProfanity: false,
+      skipKeywordsSongs: false,
+      skipTrackKeywords: [...DEFAULT_SKIP_TRACK_KEYWORDS],
       hideVipTag: false,
       hideQualityTag: false,
       showSubtitle: true,
@@ -185,9 +187,11 @@ export const useSettingsStore = defineStore(
       fontFamilyKorean: "",
       fontFamilyChinese: "",
       showTranslation: true,
+      showRuby: true,
       showRomanization: true,
-      amllShowLineRomanization: true,
-      amllShowWordRomanization: true,
+      showWordRomanization: true,
+      enableScale: true,
+      bgAlwaysBelow: false,
       enableWordHighlight: true,
       enableFloatAnimation: false,
       enableEmphasizeEffect: false,
@@ -215,7 +219,6 @@ export const useSettingsStore = defineStore(
       amllScaleSpringSoft: false,
       amllCleanUnintentionalOverlaps: true,
       amllTryAdvanceStartTime: true,
-      amllConvertExcessiveBackgroundLines: true,
       amllSyncMainAndBackgroundLines: true,
       amllNormalizeSpaces: true,
       amllResetLineTimestamps: true,
@@ -373,6 +376,9 @@ export const useSettingsStore = defineStore(
         }
         if (typeof preset?.noPinyin !== "boolean") {
           preset.noPinyin = false;
+        }
+        if (!Array.isArray(preset.skipTrackKeywords)) {
+          preset.skipTrackKeywords = [...DEFAULT_SKIP_TRACK_KEYWORDS];
         }
         lyric.lyricSourceOrder = reconcileOrder(lyric.lyricSourceOrder, ALL_PLATFORMS);
         lyric.lyricFormatOrder = reconcileOrder(lyric.lyricFormatOrder, DEFAULT_LYRIC_FORMAT_ORDER);

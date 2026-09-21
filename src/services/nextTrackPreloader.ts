@@ -44,8 +44,6 @@ const buildContextKey = (track: Track): string => {
     track.cueAudioPath ?? "",
     settings.player.songLevel,
     settings.player.allowTrialPlay,
-    settings.player.preferPluginSource,
-    settings.preset.fuckDjMode,
     streaming.activeServerId ?? "",
     plugins.list
       .map((plugin) =>
@@ -152,7 +150,8 @@ export const scheduleNextTrackPreload = (): void => {
     playIndex: status.playIndex,
     queue: queue.queue.value,
     fmMode: status.fmMode,
-    fuckDjMode: settings.preset.fuckDjMode,
+    skipKeywordsSongs: settings.preset.skipKeywordsSongs,
+    skipTrackKeywords: settings.preset.skipTrackKeywords,
     shuffleMode: status.shuffleMode,
   });
 
@@ -217,8 +216,6 @@ export const installNextTrackPreloadWatchers = (): void => {
       settings.player.preloadNextTrack,
       settings.player.songLevel,
       settings.player.allowTrialPlay,
-      settings.player.preferPluginSource,
-      settings.preset.fuckDjMode,
       status.playIndex,
       status.fmMode,
       status.shuffleMode,
@@ -232,7 +229,6 @@ export const installNextTrackPreloadWatchers = (): void => {
       settings.system.lyric.enableOnlineTTMLLyric,
       settings.system.localLyric.enableLocalTTMLOverride,
       settings.system.localLyric.repoDir,
-      settings.system.localLyric.matchLevel,
       plugins.list
         .map((plugin) =>
           JSON.stringify([

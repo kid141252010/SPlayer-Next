@@ -32,6 +32,7 @@ import { appName, getSongCacheDir } from "@main/utils/config";
 import * as songCache from "@main/services/songCache";
 import { parseArtists, parseAlbum, formatArtists, artistNames } from "@main/utils/metadata";
 import { playerLog } from "@main/utils/logger";
+import { updatePowerBlocker, releasePowerBlocker } from "@main/utils/powerBlocker";
 import { ErrorCode } from "@shared/types/errors";
 import type {
   Artist,
@@ -116,6 +117,8 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
     switch (event.type) {
       case "stateChanged": {
         const state = (event.state ?? "idle") as PlayerState;
+        // 播放中阻止系统休眠，暂停/停止时释放唤醒锁，保证系统可正常休眠
+        updatePowerBlocker(state === "playing" || state === "loading");
         // 更新缩略图工具栏和托盘菜单
         getThumbar()?.updateThumbar(state === "playing");
         setTrayPlayState(state === "playing" ? "playing" : "paused");
@@ -747,7 +750,15 @@ export const registerPlayerIpc = (): void => {
       }
     } catch {}
   });
-
+  // 系统进入睡眠时暂停播放
+  powerMonitor.on("suspend", () => {
+    try {
+      getPlayer().pause();
+      playerLog.info("系统进入睡眠，已暂停播放");
+    } catch (error) {
+      playerLog.warn("睡眠时暂停播放失败:", error);
+    }
+  });
   // 系统休眠唤醒后重建音频输出设备
   const resumeHandler = async (): Promise<void> => {
     const inst = getPlayer();
@@ -776,6 +787,9 @@ export const registerPlayerIpc = (): void => {
     wsBroadcast(stoppedEvent);
   };
   powerMonitor.on("resume", resumeHandler);
-  // 退出前停止设备监听
-  app.on("before-quit", stopDeviceMonitoring);
+  // 退出前停止设备监听并释放休眠抑制
+  app.on("before-quit", () => {
+    stopDeviceMonitoring();
+    releasePowerBlocker();
+  });
 };

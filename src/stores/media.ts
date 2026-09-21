@@ -1,16 +1,18 @@
 import type { MediaInfo, PlaybackContext, Track, TrackDetail } from "@shared/types/player";
 import type { LyricData, LyricFormat, LyricInput, LyricLine } from "@shared/types/lyrics";
-import { findLyricIndex } from "@shared/utils/lyric";
 import { useSettingsStore } from "@/stores/settings";
 import { watchLyricPreference } from "@/services/lyric/loader";
-import { parseLyric } from "@/utils/lyric/parse";
-import { applyLyricLanguages } from "@/utils/lyric/language";
-import { extractLyricAuthors } from "@/utils/lyric/author";
+import {
+  applyLyricLanguages,
+  extractLyricAuthors,
+  findLyricIndex,
+  normalizeLyricLines,
+  parseLyric,
+} from "lyric-kit";
 import { applyLyricExclude } from "@/utils/lyric/lyricStripper";
-import { normalizeLyricLines } from "@/utils/lyric/normalize";
-import { applyProfanityUncensor } from "@/utils/preset/profanity";
 import { applyLyricCjkTransform } from "@/utils/lyric/cjkTransform";
 import { isEAC3Codec } from "@/utils/quality";
+import { applySpatialLyricOffset, extractTTMLSpatialOffset } from "@/utils/lyric/spatialOffset";
 
 export const useMediaStore = defineStore("media", () => {
   watchLyricPreference();
@@ -150,13 +152,9 @@ export const useMediaStore = defineStore("media", () => {
   /** 简繁转换竞态 token */
   let transformToken = 0;
 
-  // 监听简繁转换及强迫症设置变化并重新解析当前歌词
+  // 监听简繁转换设置变化并重新解析当前歌词
   watch(
-    () => [
-      useSettingsStore().lyric.cjkTransform,
-      useSettingsStore().preset.uncensorProfanity,
-      useSettingsStore().preset.noPinyin,
-    ],
+    () => useSettingsStore().lyric.cjkTransform,
     () => {
       if (activeLyric.value && lyricContent.value) {
         setLyric(activeLyric.value, lyricContent.value);
@@ -171,27 +169,41 @@ export const useMediaStore = defineStore("media", () => {
    */
   const setLyric = (source: LyricData, input: LyricInput | null): void => {
     let nextLines: LyricLine[] = [];
+    let authors: string[] = [];
     let detectedSpatialOffset = 0;
     const settings = useSettingsStore();
     if (source && input) {
       try {
         const currentCodec = detail.value?.quality?.codec || track.value?.quality?.codec;
         const isDolby = isEAC3Codec(currentCodec);
-        const lines = parseLyric(input, source.format, settings.locale, {
-          detectBackground: settings.lyric.detectBackgroundLyrics,
-          filterPinyin: settings.preset.noPinyin,
-          applySpatialOffset: isDolby,
-          onSpatialOffset: (offsetMs) => {
-            detectedSpatialOffset = offsetMs;
-          },
-        });
-        nextLines = applyLyricExclude(lines, track.value);
-        normalizeLyricLines(nextLines);
-        // Fuck Mode
-        if (settings.preset.uncensorProfanity) {
-          applyProfanityUncensor(nextLines);
+        if (source.format === "ttml") {
+          detectedSpatialOffset = extractTTMLSpatialOffset(input.content);
         }
+        const result = parseLyric(
+          {
+            content: input.content,
+            format: source.format,
+            translation: input.translation,
+            translationFormat: input.translationFormat,
+            romaji: input.romaji,
+            romajiFormat: input.romajiFormat,
+          },
+          {
+            detectBackground: settings.lyric.detectBackgroundLyrics,
+            preferredLang: settings.locale,
+            cleanKangxi: true,
+            extractMetadata: true,
+          },
+        );
+        nextLines = applyLyricExclude(result.lines, track.value);
+        if (isDolby && detectedSpatialOffset !== 0) {
+          applySpatialLyricOffset(nextLines, detectedSpatialOffset);
+        }
+        normalizeLyricLines(nextLines);
         applyLyricLanguages(nextLines);
+        authors = result.metadata.authors?.length
+          ? result.metadata.authors
+          : extractLyricAuthors(input.content, source.format);
       } catch (e) {
         console.error("[media] parse lyric failed:", e);
         nextLines = [];
@@ -203,8 +215,7 @@ export const useMediaStore = defineStore("media", () => {
     lyricContent.value = hasContent ? input : null;
     parsedLyric.value = nextLines;
     spatialLyricOffsetMs.value = hasContent ? detectedSpatialOffset : 0;
-    lyricAuthors.value =
-      hasContent && source && input ? extractLyricAuthors(input.content, source.format) : [];
+    lyricAuthors.value = hasContent && source && input ? authors : [];
     lyricIndex.value = -1;
     lyricLoading.value = false;
     syncToMain();

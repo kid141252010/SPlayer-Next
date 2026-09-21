@@ -810,13 +810,23 @@
       "label": "Auto Play",
       "description": "Automatically start playback after loading a track"
     },
-    "fuckDjMode": {
-      "label": "Fuck DJ Mode",
-      "description": "Auto skip songs with DJ, TikTok, 0.9, 0.8, viral, car, hot, slow rock in the title"
+    "skipKeywordsSongs": {
+      "label": "Skip Songs by Keywords",
+      "description": "Automatically skip tracks when title or artist matches specified keywords",
+      "button": "Manage",
+      "enable": "Enable Skip by Keywords",
+      "enableDesc": "Automatically skip to next track when keywords match"
     },
-    "uncensorProfanity": {
-      "label": "Fuck ** Mode",
-      "description": "Restore masked profanity in lyrics to original words"
+    "skipKeywordsRules": {
+      "label": "Keyword List",
+      "description": "Customize song keywords to skip",
+      "button": "Manage",
+      "hint": "Tracks containing these keywords in title or artist will be skipped",
+      "placeholder": "Enter keyword",
+      "add": "Add",
+      "clear": "Clear list",
+      "empty": "No keywords configured",
+      "duplicate": "Keyword already exists"
     },
     "hideVipTag": {
       "label": "Hide VIP Tag",
@@ -896,6 +906,10 @@
       "label": "Output Device",
       "description": "Select audio output device",
       "default": "System Default"
+    },
+    "rememberDeviceVolume": {
+      "label": "Remember Device Volume",
+      "description": "Independently save and restore volume for each audio output device"
     },
     "pauseOnDeviceSwitch": {
       "label": "Pause on Device Switch",
@@ -1125,10 +1139,6 @@
       "label": "Advance Animation Start Time",
       "description": "Advance lyric entry animation (up to 1s) for smoother transitions"
     },
-    "amllConvertExcessiveBackgroundLines": {
-      "label": "Convert Excessive Background Lines",
-      "description": "Convert consecutive multi-line background vocals into a single-line background vocal attached to the main line"
-    },
     "amllSyncMainAndBackgroundLines": {
       "label": "Sync Background Lines Timing",
       "description": "Synchronize timing between main lines and background vocal lines"
@@ -1176,17 +1186,25 @@
       "label": "Show Translation",
       "description": "Display translated lyrics"
     },
-    "showRomanization": {
-      "label": "Show Romanization",
-      "description": "Display romanized lyrics"
+    "showRuby": {
+      "label": "Show Ruby",
+      "description": "Display ruby annotation text (furigana/pinyin) above words"
     },
-    "amllShowLineRomanization": {
+    "showRomanization": {
       "label": "Show Line Romanization",
       "description": "Display romanized lyrics for each line"
     },
-    "amllShowWordRomanization": {
+    "showWordRomanization": {
       "label": "Show Word Romanization",
       "description": "Display romanized lyrics for each word in word-by-word lyrics"
+    },
+    "enableScale": {
+      "label": "Lyric Scale",
+      "description": "Scale down inactive lines slightly to highlight current line"
+    },
+    "bgAlwaysBelow": {
+      "label": "Background Lyrics Always Below",
+      "description": "Always place background vocal lines below the main lyric line"
     },
     "enableWordHighlight": {
       "label": "Word Highlight",
@@ -1459,6 +1477,13 @@
       "solid": "Solid",
       "animation": "Fluid"
     },
+    "playerBgRenderer": {
+      "label": "Render Engine",
+      "description": "Select the rendering engine for fluid animation background",
+      "mesh": "Mesh Gradient Renderer",
+      "isolation": "Isolation Renderer",
+      "pixi": "PixiJS Renderer"
+    },
     "playerBgFlowSpeed": {
       "label": "Flow Speed",
       "description": "Animation flow speed of the fluid background"
@@ -1576,10 +1601,6 @@
       "confirmResetTitle": "Reset to defaults?",
       "confirmResetDesc": "Groups, names, order and visibility will be reset to defaults!",
       "featureDisabled": "Feature disabled"
-    },
-    "showStatsInSidebar": {
-      "label": "Show Play Stats Entry",
-      "description": "Show the play statistics page entry in the sidebar"
     },
     "showQualitySwitch": {
       "label": "Show Quick Quality Switch",
@@ -1704,10 +1725,11 @@
     },
     "updateChannel": {
       "label": "Update Channel",
-      "description": "Choose Stable, Beta preview, or Alpha experimental updates",
+      "description": "Choose between Stable, Beta preview, Alpha internal, or Nightly updates",
       "stable": "Stable",
       "beta": "Beta Preview",
-      "alpha": "Alpha Experimental"
+      "alpha": "Alpha Experimental",
+      "nightly": "Nightly Build"
     },
     "checkUpdate": {
       "label": "Check for Updates",

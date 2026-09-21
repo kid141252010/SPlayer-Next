@@ -168,12 +168,6 @@ const appearanceCategory: SettingCategory = {
           component: SidebarCustomizeConfig,
         },
         {
-          key: "showStatsInSidebar",
-          type: "switch",
-          binding: { store: "settings", path: "appearance.showStatsInSidebar" },
-          defaultValue: true,
-        },
-        {
           key: "showQualitySwitch",
           type: "switch",
           binding: { store: "settings", path: "appearance.showQualitySwitch" },
@@ -247,6 +241,17 @@ const appearanceCategory: SettingCategory = {
           hideChildren: true,
           children: [
             {
+              key: "playerBgRenderer",
+              type: "select",
+              binding: { store: "settings", path: "player.playerBgRenderer" },
+              options: [
+                { value: "mesh", labelKey: "settings.playerBgRenderer.mesh" },
+                { value: "isolation", labelKey: "settings.playerBgRenderer.isolation" },
+                { value: "pixi", labelKey: "settings.playerBgRenderer.pixi" },
+              ],
+              defaultValue: "mesh",
+            },
+            {
               key: "playerBgFlowSpeed",
               type: "slider",
               binding: { store: "settings", path: "player.playerBgFlowSpeed" },
@@ -286,6 +291,7 @@ const appearanceCategory: SettingCategory = {
               key: "playerBgBeat",
               type: "switch",
               binding: { store: "settings", path: "player.playerBgBeat" },
+              visible: () => useSettingsStore().player.playerBgRenderer === "mesh",
               defaultValue: false,
             },
           ],

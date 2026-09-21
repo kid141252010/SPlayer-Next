@@ -12,11 +12,9 @@ import { useImmersiveMode } from "@/composables/useImmersiveMode";
 import { useTimeFormat } from "@/composables/useTimeFormat";
 import { useProgressLyric } from "@/composables/useProgressLyric";
 import Lyrics from "@/components/player/Lyrics/index.vue";
-import AMLLLyrics from "@/components/player/Lyrics/AMLLLyrics.vue";
 import PlaylistPickerDialog from "@/components/modals/PlaylistPickerDialog.vue";
 import { useWindowControls } from "@/composables/useWindowControls";
 import * as player from "@/core/player";
-import { openExternal } from "@/utils/url";
 import IconFavorite from "~icons/material-symbols/favorite-rounded";
 import IconFavoriteOutline from "~icons/material-symbols/favorite-outline-rounded";
 import IconLucideListPlus from "~icons/lucide/list-plus";
@@ -44,7 +42,7 @@ const {
 const { timeDisplay, toggleTimeFormat } = useTimeFormat();
 const { snapToNearestLyric } = useProgressLyric();
 
-const lyricRef = ref<InstanceType<typeof Lyrics> | InstanceType<typeof AMLLLyrics>>();
+const lyricRef = ref<InstanceType<typeof Lyrics>>();
 const lyricMounted = ref(false);
 const initialLyricTimeMs = ref(0);
 
@@ -62,12 +60,16 @@ const { start: startTick, stop: stopTick } = usePlaybackTime((currentMs) => {
 
 /** 展开后 */
 const onAfterEnter = () => {
-  initialLyricTimeMs.value = getCurrentTime() + status.lyricOffsetMs;
-  lyricMounted.value = true;
   nextTick(() => {
     lyricRef.value?.resume();
     startTick();
   });
+};
+
+/** 展开动画开始时就挂载歌词，给引擎预留初始化时间 */
+const onBeforeEnter = () => {
+  initialLyricTimeMs.value = getCurrentTime() + status.lyricOffsetMs;
+  lyricMounted.value = true;
 };
 
 /** 收起前 */
@@ -118,12 +120,6 @@ const handleLyricSeek = async (timeMs: number): Promise<void> => {
   await player.seek(timeMs);
   if (!isPlaying.value) await player.play();
 };
-
-const springConfig = computed(() => ({
-  mass: settings.lyric.springMass,
-  damping: settings.lyric.springDamping,
-  stiffness: settings.lyric.springStiffness,
-}));
 
 const lyricFontSize = computed(() =>
   settings.lyric.adaptiveFontSize
@@ -194,6 +190,7 @@ const showComments = (): void => {
       enter-from-class="translate-y-full"
       leave-to-class="translate-y-full"
       @after-enter="onAfterEnter"
+      @before-enter="onBeforeEnter"
       @before-leave="onBeforeLeave"
       @after-leave="onAfterLeave"
     >
@@ -301,6 +298,7 @@ const showComments = (): void => {
             <div
               class="lyric-area relative flex-1 min-h-0"
               :style="{
+                '--lp-credit-opacity': '1',
                 fontSize: lyricFontSize,
                 fontWeight: String(settings.lyric.fontWeight),
                 fontFamily: settings.lyric.fontFamily || undefined,
@@ -311,70 +309,14 @@ const showComments = (): void => {
                 mixBlendMode: settings.lyric.lyricBlendMode,
               }"
             >
-              <AMLLLyrics
-                v-if="lyricMounted && hasLyric && settings.lyric.engine === 'amll'"
-                ref="lyricRef"
-                :lyric-lines="media.parsedLyric"
-                :initial-time="initialLyricTimeMs"
-                :playing="isPlaying"
-                :align-position="settings.lyric.alignPosition"
-                :word-fade-width="settings.lyric.wordFadeWidth"
-                :hide-passed-lines="settings.lyric.hidePassedLines"
-                :enable-blur="settings.lyric.enableBlur"
-                :show-translation="settings.lyric.showTranslation"
-                :show-line-romanization="settings.lyric.amllShowLineRomanization"
-                :show-word-romanization="settings.lyric.amllShowWordRomanization"
-                @seek="handleLyricSeek"
-              >
-                <template #bottom>
-                  <div v-if="media.lyricAuthors.length > 0" class="lyric-credit-line">
-                    <span class="lyric-credit-prefix">{{ $t("player.lyricCredit") }}</span>
-                    <template v-for="(author, idx) in media.lyricAuthors" :key="author">
-                      <span v-if="idx > 0" class="mx-1">,</span>
-                      <span
-                        class="lp-content lyric-credit"
-                        @click.stop="openExternal(`https://github.com/${author}`)"
-                      >
-                        {{ "@" + author }}
-                      </span>
-                    </template>
-                  </div>
-                </template>
-              </AMLLLyrics>
               <Lyrics
-                v-else-if="lyricMounted && hasLyric"
+                v-if="lyricMounted && hasLyric"
                 ref="lyricRef"
                 :lyric-lines="media.parsedLyric"
                 :initial-time="initialLyricTimeMs"
                 :playing="isPlaying"
-                :align-position="settings.lyric.alignPosition"
-                :word-fade-width="settings.lyric.wordFadeWidth"
-                :spring-config="springConfig"
-                :inactive-alpha="settings.lyric.inactiveAlpha"
-                :hide-passed-lines="settings.lyric.hidePassedLines"
-                :enable-blur="settings.lyric.enableBlur"
-                :enable-word-highlight="settings.lyric.enableWordHighlight"
-                :enable-float-animation="settings.lyric.enableFloatAnimation"
-                :enable-emphasize-effect="settings.lyric.enableEmphasizeEffect"
-                :show-translation="settings.lyric.showTranslation"
-                :show-romanization="settings.lyric.showRomanization"
                 @seek="handleLyricSeek"
-              >
-                <template #bottom>
-                  <div v-if="media.lyricAuthors.length > 0" class="lyric-credit-line">
-                    <span class="lyric-credit-prefix">{{ $t("player.lyricCredit") }}</span>
-                    <template v-for="(author, idx) in media.lyricAuthors" :key="author">
-                      <span v-if="idx > 0" class="mx-1">,</span>
-                      <span
-                        class="lp-content lyric-credit"
-                        @click.stop="openExternal(`https://github.com/${author}`)"
-                      >
-                        {{ "@" + author }}
-                      </span>
-                    </template>
-                  </div>
-                </template>
-              </Lyrics>
+              />
               <div
                 v-else-if="lyricMounted"
                 class="w-full h-full flex items-center justify-center text-cover/30"
@@ -610,19 +552,5 @@ const showComments = (): void => {
     rgba(0, 0, 0, 0.04) 85%,
     rgba(0, 0, 0, 0) 100%
   );
-}
-
-.lyric-credit-line {
-  font-size: max(0.5em, 10px);
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-  text-align: left;
-  width: 100%;
-}
-
-.lyric-credit {
-  margin-left: 0.5em;
 }
 </style>

@@ -1,5 +1,5 @@
 import electronUpdater, { type UpdateInfo } from "electron-updater";
-import { shell } from "electron";
+import { app, shell } from "electron";
 import { sendToMain } from "@main/utils/broadcast";
 import { store } from "@main/store";
 import { isDev, isMac, isPortable, isAppX } from "@main/utils/config";
@@ -18,6 +18,12 @@ const canSelfInstall = !isMac && !isPortable && !isAppX;
 /** Releases 页 */
 const RELEASES_URL = "https://github.com/SPlayer-Dev/SPlayer-Next/releases";
 
+/** 仓库信息，切回 GitHub provider 时使用 */
+const GITHUB_REPO = { owner: "SPlayer-Dev", repo: "SPlayer-Next" } as const;
+
+/** nightly 固定滚动 tag 的发布资源地址 */
+const NIGHTLY_FEED_URL = `${RELEASES_URL}/download/nightly`;
+
 /** Microsoft Store 更新页 */
 const STORE_UPDATES_URL = "ms-windows-store://updates";
 
@@ -31,7 +37,7 @@ let manualCheck = false;
 let currentCheck: Promise<unknown> | null = null;
 
 /** 当前检查结束后需要执行的检查 */
-let pendingCheck: { manual: boolean; allowDowngrade: boolean } | null = null;
+let pendingCheck: { manual: boolean } | null = null;
 
 /** 最近一次检测到的可用版本 */
 let availableVersion: string | null = null;
@@ -46,18 +52,26 @@ const emit = (event: UpdateEvent): void => sendToMain("update:event", event);
  */
 const getChannel = (): UpdateChannel => {
   const channel = store.get("update.channel");
-  return channel === "beta" || channel === "alpha" ? channel : "stable";
+  if (channel === "beta" || channel === "alpha" || channel === "nightly") return channel;
+  if (app.getVersion().includes("-nightly.")) return "nightly";
+  return "stable";
 };
 
 /**
  * 将当前通道应用到 electron-updater
- * @param allowDowngrade - 是否允许本次检查安装更低版本
+ * nightly 发布在固定滚动 tag 上，该 tag 不是合法 semver，GitHub provider 会因此找不到
+ * release，故改用 generic provider 直接取清单；其余通道继续使用 GitHub provider
  */
-const applyChannel = (allowDowngrade = false): void => {
+const applyChannel = (): void => {
   const channel = getChannel();
   autoUpdater.channel = channel === "stable" ? "latest" : channel;
   autoUpdater.allowPrerelease = channel !== "stable";
-  autoUpdater.allowDowngrade = allowDowngrade;
+  autoUpdater.allowDowngrade = false;
+  autoUpdater.setFeedURL(
+    channel === "nightly"
+      ? { provider: "generic", url: NIGHTLY_FEED_URL }
+      : { provider: "github", ...GITHUB_REPO },
+  );
 };
 
 /**
@@ -114,17 +128,15 @@ const bindEvents = (): void => {
 /**
  * 执行更新检查
  * @param manual - 是否由用户手动触发
- * @param allowDowngrade - 是否明确允许本次检查安装更低版本
  */
-const runCheck = (manual: boolean, allowDowngrade?: boolean): void => {
+const runCheck = (manual: boolean): void => {
   if (currentCheck) {
     pendingCheck = {
       manual: manual || pendingCheck?.manual === true,
-      allowDowngrade: allowDowngrade ?? pendingCheck?.allowDowngrade ?? false,
     };
     return;
   }
-  applyChannel(allowDowngrade ?? false);
+  applyChannel();
   manualCheck = manual;
   currentCheck = autoUpdater
     .checkForUpdates()
@@ -133,7 +145,7 @@ const runCheck = (manual: boolean, allowDowngrade?: boolean): void => {
       currentCheck = null;
       const pending = pendingCheck;
       pendingCheck = null;
-      if (pending) runCheck(pending.manual, pending.allowDowngrade);
+      if (pending) runCheck(pending.manual);
     });
 };
 
@@ -157,14 +169,14 @@ export const downloadUpdate = (): void => {
 
 /**
  * 应用更新通道变更并立即重新检查
+ * 平滑过渡策略：切换通道不触发版本回退/降级，仅在目标通道有更高版本时提示更新
  * @param previous - 原通道
  * @param channel - 新通道
  */
 export const applyChannelChange = (previous: UpdateChannel, channel: UpdateChannel): void => {
   if (previous === channel) return;
   updaterLog.info(`切换更新通道: ${previous} -> ${channel}`);
-  const channelPriority: Record<UpdateChannel, number> = { stable: 0, beta: 1, alpha: 2 };
-  runCheck(true, channelPriority[channel] < channelPriority[previous]);
+  runCheck(true);
 };
 
 /** 退出并安装 */
@@ -175,9 +187,10 @@ export const quitAndInstall = (): void => {
 
 /** 打开下载页：AppX 引导 Store 更新，其余跳 Releases */
 export const openDownloadPage = (): void => {
-  const releaseUrl = availableVersion
-    ? `${RELEASES_URL}/tag/v${encodeURIComponent(availableVersion)}`
-    : RELEASES_URL;
+  // nightly 发布在固定 tag 上，无法用版本号拼出对应的 tag 链接
+  const isNightly = getChannel() === "nightly";
+  const tag = isNightly ? "nightly" : availableVersion ? `v${availableVersion}` : null;
+  const releaseUrl = tag ? `${RELEASES_URL}/tag/${encodeURIComponent(tag)}` : RELEASES_URL;
   void shell.openExternal(isAppX ? STORE_UPDATES_URL : releaseUrl);
 };
 
