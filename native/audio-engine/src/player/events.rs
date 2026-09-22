@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::shared::Shared;
+use crate::decoder::buffer::Shared;
 
 /// 播放器推送给 JS 侧的事件类型
 #[derive(Clone, Debug)]
