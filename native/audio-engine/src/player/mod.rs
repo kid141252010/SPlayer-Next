@@ -7,7 +7,7 @@ use ffmpeg_audio::HttpCancelHandle;
 use parking_lot::Mutex;
 use tracing::{debug, info};
 
-use crate::audio_output::{AudioOutput, OutputFailureCallback};
+use crate::audio_output::{AudioOutput, ExclusiveFallbackCallback, OutputFailureCallback};
 use crate::decoder;
 use crate::equalizer::{Equalizer, EQ_BAND_COUNT};
 use crate::fft::FftAnalyzer;
@@ -79,6 +79,10 @@ pub struct InnerPlayer {
     output_generation: Arc<AtomicU64>,
     /// 当前音频源的原始采样率
     original_sample_rate: u32,
+    /// 当前音频源的有效位深，独占模式协商候选的优先依据
+    original_bits: u32,
+    /// WASAPI 独占模式开关（仅 Windows 生效，重建设备时生效）
+    exclusive_mode: bool,
     /// 正在打开的网络音源中断句柄，确保切歌和 stop 能取消元数据探测
     pending_load_handle: Option<HttpCancelHandle>,
 }
@@ -91,22 +95,9 @@ const _: fn() = || {
 };
 
 impl InnerPlayer {
-    /// 未初始化时通过 `AudioOutput::new` 懒构造音频输出。
-    /// 设备失效时的重建由 `reinit_output` 显式处理，不在此函数内自动恢复
-    fn ensure_output(&mut self, requested_sample_rate: Option<u32>) -> Result<&AudioOutput> {
-        if self.output.is_none() {
-            let generation = self.reserve_output_generation();
-            let on_failure = self.make_failure_callback(generation);
-            self.output = Some(AudioOutput::new(
-                self.selected_device.as_deref(),
-                requested_sample_rate,
-                generation,
-                on_failure,
-            )?);
-        }
-        self.output
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("ensure_output 后置条件违反"))
+    /// 获取输出流使用的频谱分析器。
+    pub fn fft_handle(&self) -> Arc<FftAnalyzer> {
+        Arc::clone(&self.fft)
     }
 
     /// 构造输出失败回调：只发送轻量 `PlayerEvent::OutputFailed`，
@@ -123,25 +114,24 @@ impl InnerPlayer {
         })
     }
 
+    /// 构造独占模式回退回调：只发送轻量 `PlayerEvent::OutputFallback`
+    pub fn make_fallback_callback(&self, generation: u64) -> ExclusiveFallbackCallback {
+        let Some(cb) = self.event_callback.as_ref().map(Arc::clone) else {
+            return std::sync::Arc::new(|_| {});
+        };
+        let active_generation = Arc::clone(&self.output_generation);
+        std::sync::Arc::new(move |reason: &str| {
+            if active_generation.load(Ordering::Acquire) == generation {
+                cb(PlayerEvent::OutputFallback {
+                    reason: reason.to_string(),
+                });
+            }
+        })
+    }
+
     /// 预留下一代输出流，并立即使旧输出的回调失效。
     pub fn reserve_output_generation(&self) -> u64 {
         self.output_generation.fetch_add(1, Ordering::AcqRel) + 1
-    }
-
-    /// 当前实际输出流采样率（播放重采样目标）
-    pub fn output_sample_rate(&self) -> u32 {
-        self.output
-            .as_ref()
-            .map(|out| out.sample_rate())
-            .unwrap_or(decoder::DEFAULT_TARGET_SAMPLE_RATE)
-    }
-
-    /// 当前实际输出流声道数
-    pub fn output_channels(&self) -> u16 {
-        self.output
-            .as_ref()
-            .map(AudioOutput::channels)
-            .unwrap_or(decoder::DEFAULT_OUTPUT_CHANNELS)
     }
 
     pub fn new() -> Result<Self> {
@@ -185,6 +175,8 @@ impl InnerPlayer {
             load_token: Arc::new(AtomicU64::new(0)),
             output_generation: Arc::new(AtomicU64::new(0)),
             original_sample_rate: decoder::DEFAULT_TARGET_SAMPLE_RATE,
+            original_bits: 16,
+            exclusive_mode: false,
             pending_load_handle: None,
         })
     }
@@ -193,6 +185,17 @@ impl InnerPlayer {
     pub fn set_output_device(&mut self, device_id: Option<String>) {
         info!(device = ?device_id, "切换输出设备");
         self.selected_device = device_id;
+    }
+
+    /// 设置独占模式开关（下一次重建设备时生效）
+    pub fn set_exclusive_mode(&mut self, enabled: bool) {
+        info!(enabled, "切换音频输出模式");
+        self.exclusive_mode = enabled;
+    }
+
+    /// 独占模式开关是否已启用
+    pub fn is_exclusive_mode(&self) -> bool {
+        self.exclusive_mode
     }
 
     /// 获取当前选择的输出设备（None = 跟随系统默认）

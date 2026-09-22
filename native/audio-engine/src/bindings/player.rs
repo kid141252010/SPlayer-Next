@@ -8,6 +8,7 @@ use napi_derive::napi;
 use parking_lot::Mutex;
 use tracing::{info, warn};
 
+use crate::playback::PlaybackHandle;
 use crate::player::{self, InnerPlayer, PlayerEvent, PlayerState, SeekTake};
 use crate::{audio_output, decoder, device_watcher};
 
@@ -19,9 +20,14 @@ enum SeekOutcome {
     Resumed {
         shared: Arc<crate::shared::Shared>,
         handle: JoinHandle<crate::decoder::DecoderData>,
+        output: Box<audio_output::AudioOutput>,
+        playback: Arc<PlaybackHandle>,
     },
     /// seek 失败，需要 fallback 到完整 load
     Fallback,
+    OutputFailed {
+        error: anyhow::Error,
+    },
 }
 
 /// 输出恢复阶段 2 的输出
@@ -31,6 +37,7 @@ enum ReinitOutcome {
         shared: Arc<crate::shared::Shared>,
         handle: JoinHandle<crate::decoder::DecoderData>,
         output: Box<audio_output::AudioOutput>,
+        playback: Arc<PlaybackHandle>,
     },
     /// 无法从原位置恢复解码（或输出采样率已变），需要重新加载音源
     Reload {
@@ -115,7 +122,7 @@ pub struct JsFftData {
 #[napi(object)]
 #[derive(Default)]
 pub struct JsPlayerEvent {
-    /// 事件类型："stateChanged" | "ended" | "sourceError" | "position" | "fftData" | "outputStalled" | "outputFailed"
+    /// 事件类型："stateChanged" | "ended" | "sourceError" | "position" | "fftData" | "outputStalled" | "outputFailed" | "outputFallback"
     #[napi(js_name = "type")]
     pub event_type: String,
     /// 状态（仅 stateChanged 时有值）
@@ -126,6 +133,8 @@ pub struct JsPlayerEvent {
     pub duration: Option<f64>,
     /// FFT 频谱数据（仅 fftData 时有值，128 个频段，值域 0.0 ~ 1.0）
     pub fft_data: Option<JsFftData>,
+    /// 回退原因分类键（仅 outputFallback 时有值：deviceBusy / formatUnsupported / unavailable）
+    pub reason: Option<String>,
 }
 
 /// 播放器状态快照
@@ -189,6 +198,8 @@ impl AudioPlayer {
             output_generation,
             on_failure,
             device_id,
+            exclusive_mode,
+            on_fallback,
         ) = {
             let mut player = self.inner.lock();
             let position = player.position();
@@ -196,6 +207,8 @@ impl AudioPlayer {
             let device_id = player.selected_device().map(String::from);
             let output_generation = player.reserve_output_generation();
             let on_failure = player.make_failure_callback(output_generation);
+            let on_fallback = player.make_fallback_callback(output_generation);
+            let exclusive_mode = player.is_exclusive_mode();
             let seek_take = player.take_for_async_seek();
             let fallback_source = player.current_source().map(String::from);
             (
@@ -206,6 +219,8 @@ impl AudioPlayer {
                 output_generation,
                 on_failure,
                 device_id,
+                exclusive_mode,
+                on_fallback,
             )
         };
 
@@ -217,8 +232,9 @@ impl AudioPlayer {
                 current_source,
                 was_playing,
                 original_sample_rate,
-                output_sample_rate: _,
-                output_channels: _,
+                original_bits,
+                output: old_output,
+                fft,
                 token,
                 equalizer,
                 tempo,
@@ -226,13 +242,16 @@ impl AudioPlayer {
 
             let outcome: ReinitOutcome = tokio::task::spawn_blocking(move || {
                 let decoder_data = old_threads.join_aux().and_then(|h| h.join().ok());
+                drop(old_output);
 
                 // 优先按音源原始采样率协商新设备；设备不支持时回退到新设备默认格式
                 let output = match audio_output::AudioOutput::new(
                     device_id.as_deref(),
                     Some(original_sample_rate),
+                    Some(original_bits),
                     output_generation,
                     on_failure,
+                    exclusive_mode.then_some(&on_fallback),
                 ) {
                     Ok(output) => output,
                     Err(error) => return ReinitOutcome::OutputFailed { error },
@@ -249,6 +268,10 @@ impl AudioPlayer {
                         was_playing,
                     };
                 }
+                let (output, shared, playback) = match PlaybackHandle::prepare(output, fft) {
+                    Ok(prepared) => prepared,
+                    Err(error) => return ReinitOutcome::OutputFailed { error },
+                };
                 if let Err(error) =
                     decoder_data.reconfigure_player_output(output.sample_rate(), output.channels())
                 {
@@ -259,7 +282,6 @@ impl AudioPlayer {
                     };
                 }
 
-                let shared = crate::shared::Shared::new(output.sample_rate(), output.channels());
                 shared.set_normalization_enabled(normalization_enabled);
                 shared.set_normalization_gain(normalization_gain);
                 equalizer
@@ -290,6 +312,7 @@ impl AudioPlayer {
                     shared,
                     handle,
                     output: Box::new(output),
+                    playback,
                 }
             })
             .await
@@ -300,10 +323,11 @@ impl AudioPlayer {
                     shared,
                     handle,
                     output,
+                    playback,
                 } => {
                     let mut player = self.inner.lock();
                     let committed = player
-                        .commit_seeked(token, position, shared, handle, Some(*output))
+                        .commit_seeked(token, position, shared, handle, *output, playback)
                         .into_napi()?;
                     if !committed {
                         info!("reinit 已被更新的 load/seek/stop 取代，丢弃结果");
@@ -420,6 +444,11 @@ impl AudioPlayer {
                     event_type: "outputFailed".into(),
                     ..Default::default()
                 },
+                PlayerEvent::OutputFallback { reason } => JsPlayerEvent {
+                    event_type: "outputFallback".into(),
+                    reason: Some(reason),
+                    ..Default::default()
+                },
             };
             tsfn.call(js_event, ThreadsafeFunctionCallMode::NonBlocking);
         });
@@ -461,9 +490,9 @@ impl AudioPlayer {
     /// @param auto_play - 是否自动播放，false 时加载后立即暂停
     ///
     /// 异步三段式：
-    /// 1. 主线程持锁瞬间（微秒级）：take 旧解码线程 handle + 拿参数（cover_dir / 归一化开关）
-    /// 2. spawn_blocking 工作线程（**不持有 inner 引用**）：读取音源采样率、协商输出流并启动解码
-    /// 3. 主线程持锁瞬间：提交输出流、构造 sink + attach + emit stateChanged
+    /// 主线程只提取旧资源和配置，不在持锁时等待设备或解码 IO。
+    /// 工作线程读取音源、打开暂停的输出流，按最终输出格式启动解码。
+    /// 主线程校验代次后提交资源并恢复播放，过期任务的输出保持静音。
     /// 持锁阶段都是纯内存操作，主线程其它同步 NAPI 调用最多等几微秒，不会被 IO 卡住
     #[napi]
     pub async fn load(
@@ -471,8 +500,6 @@ impl AudioPlayer {
         source: String,
         #[napi(ts_arg_type = "boolean")] auto_play: Option<bool>,
     ) -> Result<JsMusicMetadata> {
-        use crate::shared::Shared;
-
         let auto_play = auto_play.unwrap_or(true);
         info!(source = %source, auto_play, "加载音频源");
 
@@ -486,6 +513,9 @@ impl AudioPlayer {
             device_id,
             output_generation,
             failure_callback,
+            fallback_callback,
+            exclusive_mode,
+            fft,
             equalizer,
             tempo,
         ) = {
@@ -493,6 +523,8 @@ impl AudioPlayer {
             let (old_threads, token) = player.take_for_async_load(handle.clone());
             let output_generation = player.reserve_output_generation();
             let failure_callback = player.make_failure_callback(output_generation);
+            let fallback_callback = player.make_fallback_callback(output_generation);
+            let exclusive_mode = player.is_exclusive_mode();
             (
                 old_threads,
                 token,
@@ -502,6 +534,9 @@ impl AudioPlayer {
                 player.selected_device().map(String::from),
                 output_generation,
                 failure_callback,
+                fallback_callback,
+                exclusive_mode,
+                player.fft_handle(),
                 player.equalizer_handle(),
                 player.tempo_handle(),
             )
@@ -522,10 +557,12 @@ impl AudioPlayer {
             let output = audio_output::AudioOutput::new(
                 device_id.as_deref(),
                 Some(prepared.original_sample_rate()),
+                Some(prepared.bits_per_sample()),
                 output_generation,
                 failure_callback,
+                exclusive_mode.then_some(&fallback_callback),
             )?;
-            let shared = Shared::new(output.sample_rate(), output.channels());
+            let (output, shared, playback) = PlaybackHandle::prepare(output, fft)?;
             shared.set_normalization_enabled(normalization_enabled);
             equalizer
                 .lock()
@@ -537,12 +574,12 @@ impl AudioPlayer {
             tempo.lock().reset();
             let (metadata, decode_handle, cancel) =
                 decoder::start_prepared_decode(prepared, Arc::clone(&shared), equalizer, tempo)?;
-            Ok::<_, anyhow::Error>((metadata, decode_handle, shared, output, cancel))
+            Ok::<_, anyhow::Error>((metadata, decode_handle, shared, output, playback, cancel))
         })
         .await
         .map_err(|e| Error::from_reason(format!("load task join error: {e}")))?;
 
-        let (metadata, decode_handle, shared, output, cancel) = match result {
+        let (metadata, decode_handle, shared, output, playback, cancel) = match result {
             Ok(result) => result,
             Err(error) => {
                 let mut player = self.inner.lock();
@@ -566,6 +603,7 @@ impl AudioPlayer {
                         decode_handle,
                         shared,
                         output,
+                        playback,
                         cancel,
                     },
                 )
@@ -662,8 +700,6 @@ impl AudioPlayer {
     /// seek 失败时 fallback 到完整 load
     #[napi]
     pub async fn seek(&self, position: f64) -> Result<()> {
-        use crate::shared::Shared;
-
         let take = {
             let mut player = self.inner.lock();
             player.take_for_async_seek()
@@ -682,8 +718,9 @@ impl AudioPlayer {
             current_source,
             was_playing,
             original_sample_rate: _,
-            output_sample_rate,
-            output_channels,
+            original_bits: _,
+            output,
+            fft,
             token,
             equalizer,
             tempo,
@@ -698,8 +735,20 @@ impl AudioPlayer {
             if !decoder_data.seek(position) {
                 return SeekOutcome::Fallback;
             }
-            // 沿用实际输出流采样率，与复用的 DecoderData 重采样器目标一致
-            let shared = Shared::new(output_sample_rate, output_channels);
+            let previous_format = (output.sample_rate(), output.channels());
+            let (output, shared, playback) = match PlaybackHandle::prepare(output, fft) {
+                Ok(prepared) => prepared,
+                Err(error) => return SeekOutcome::OutputFailed { error },
+            };
+            let output_sample_rate = output.sample_rate();
+            let output_channels = output.channels();
+            if previous_format != (output_sample_rate, output_channels)
+                && decoder_data
+                    .reconfigure_player_output(output_sample_rate, output_channels)
+                    .is_err()
+            {
+                return SeekOutcome::Fallback;
+            }
             shared.set_normalization_enabled(normalization_enabled);
             shared.set_normalization_gain(normalization_gain);
             equalizer
@@ -718,21 +767,39 @@ impl AudioPlayer {
                         return SeekOutcome::Fallback;
                     }
                 };
-            SeekOutcome::Resumed { shared, handle }
+            SeekOutcome::Resumed {
+                shared,
+                handle,
+                output: Box::new(output),
+                playback,
+            }
         })
         .await
         .map_err(|e| Error::from_reason(format!("seek task join error: {e}")))?;
 
         match outcome {
-            SeekOutcome::Resumed { shared, handle } => {
+            SeekOutcome::Resumed {
+                shared,
+                handle,
+                output,
+                playback,
+            } => {
                 let mut player = self.inner.lock();
                 let committed = player
-                    .commit_seeked(token, position, shared, handle, None)
+                    .commit_seeked(token, position, shared, handle, *output, playback)
                     .into_napi()?;
                 if !committed {
                     info!(position, "seek 已被更新的 load/seek/stop 取代，丢弃结果");
                 }
                 Ok(())
+            }
+            SeekOutcome::OutputFailed { error } => {
+                let mut player = self.inner.lock();
+                if !player.is_load_token_current(token) {
+                    return Ok(());
+                }
+                player.enter_paused_for_recovery();
+                Err(error).into_napi()
             }
             SeekOutcome::Fallback => {
                 // seek 期间已被新的 load/stop 取代时不再回退重载，避免复活旧源
@@ -932,6 +999,15 @@ impl AudioPlayer {
     #[napi]
     pub fn get_selected_device_name(&self) -> Option<String> {
         self.inner.lock().selected_device().map(String::from)
+    }
+
+    /// 设置音频输出模式为 WASAPI 独占（仅 Windows 生效，立即重建设备）
+    ///
+    /// 设备被占用或格式不支持时自动回退共享模式，并通过 outputFallback 事件通知
+    #[napi]
+    pub async fn set_exclusive_mode(&self, enabled: bool) -> Result<()> {
+        self.inner.lock().set_exclusive_mode(enabled);
+        self.reinit_output().await
     }
 
     /// 设置播放速度（自动 clamp 到 [0.5, 2.0]）

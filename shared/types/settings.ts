@@ -36,6 +36,9 @@ export interface EqualizerSettings {
   preamp: number;
 }
 
+/** 音频输出模式 */
+export type AudioOutputMode = "shared" | "exclusive";
+
 /** 播放器配置 */
 export interface PlayerSettings {
   /** 加载后自动播放 */
@@ -52,6 +55,8 @@ export interface PlayerSettings {
   volume: number;
   /** 音量均衡（响度归一化） */
   loudnessNormalization: boolean;
+  /** 音频输出模式：共享（默认）/ WASAPI 独占（仅 Windows） */
+  audioOutputMode: AudioOutputMode;
   /** 均衡器配置 */
   equalizer: EqualizerSettings;
   /** 按 `{Track.id}|{歌词源}` 记忆的歌词偏移（ms，正值为歌词提前）；为 0 时不写入 */

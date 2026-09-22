@@ -14,6 +14,7 @@ import {
   setEqualizerEnabled,
   setEqualizerBands,
   setPreampGain,
+  setExclusiveMode,
 } from "@main/services/engine";
 import {
   setTaskbarProgress,
@@ -71,6 +72,12 @@ const applyConfigChange = (keyPath: string, value: unknown, previous: unknown): 
       break;
     case "player.equalizer.preamp":
       setPreampGain(value as number);
+      break;
+    case "player.audioOutputMode":
+      // 独占模式仅 Windows 引擎支持；切模式后重建输出立即生效
+      if (isWin) {
+        setExclusiveMode(value === "exclusive");
+      }
       break;
     case "system.taskbarProgress":
       if (!value) setTaskbarProgress(-1);
