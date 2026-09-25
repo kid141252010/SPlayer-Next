@@ -22,6 +22,7 @@ const PLATFORM_TO_PLUGIN_SOURCE: Record<string, string> = {
   netease: "wy",
   qqmusic: "tx",
   kugou: "kg",
+  applemusic: "am",
 };
 
 /**

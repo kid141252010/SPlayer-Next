@@ -35,6 +35,21 @@ const RULES: Array<{ source: TrackSource; pattern: RegExp; typeMap: Record<strin
  */
 export const parseMusicLink = (input: string): ParsedLink | null => {
   const trimmed = input.trim();
+
+  // 匹配 Apple Music 链接
+  const amMatch = trimmed.match(
+    /music\.apple\.com(?:\/[a-z]{2})?\/(album|song|artist|playlist)(?:\/[^/?#]+)?\/([^/?#]+)/i,
+  );
+  if (amMatch) {
+    const rawType = amMatch[1].toLowerCase();
+    const resourceId = amMatch[2];
+    const songParam = trimmed.match(/[?&]i=(\d+)/);
+    if (songParam?.[1]) {
+      return { type: "song", id: songParam[1], source: "applemusic" };
+    }
+    return { type: rawType as LinkType, id: resourceId, source: "applemusic" };
+  }
+
   for (const rule of RULES) {
     const match = trimmed.match(rule.pattern);
     if (!match) continue;

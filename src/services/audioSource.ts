@@ -16,6 +16,7 @@ const PLATFORM_TO_PLUGIN_SOURCE: Record<Platform, string> = {
   netease: "wy",
   qqmusic: "tx",
   kugou: "kg",
+  applemusic: "am",
 };
 
 /** 解析选项 */
@@ -35,7 +36,7 @@ export interface ResolveTrackSourceOptions {
  * @param source - 要检查的 source
  */
 const isOnlinePlatform = (source: TrackSource): source is Platform =>
-  source === "netease" || source === "qqmusic" || source === "kugou";
+  source === "netease" || source === "qqmusic" || source === "kugou" || source === "applemusic";
 
 /**
  * 派生缓存键
@@ -123,6 +124,7 @@ export const resolveByPlugin = async (
       albumName: track.album?.name ?? "",
       albumId: track.album?.id ?? "",
       picUrl: track.cover ?? null,
+      ...(track.isrc ? { isrc: track.isrc } : {}),
       ...(hash ? { hash } : {}),
     },
   };
