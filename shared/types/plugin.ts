@@ -203,6 +203,8 @@ export interface MusicUrlReq {
     songmid: string;
     name?: string;
     singer?: string;
+    /** Apple Music 商店地区代码（如 cn / us / tr 等），由宿主透传 */
+    storefront?: string;
     [key: string]: unknown;
   };
 }
@@ -470,7 +472,7 @@ export interface PluginResolveUrlArgs {
   pluginId: string;
   source: string;
   quality?: PluginQuality;
-  musicInfo: { songmid: string; [key: string]: unknown };
+  musicInfo: { songmid: string; storefront?: string; [key: string]: unknown };
 }
 
 export interface PluginInvokeMenuArgs {

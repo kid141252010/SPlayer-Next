@@ -94,16 +94,17 @@ Only one handler exists per action; a later registration replaces the previous o
 
 `musicInfo.id`, `songmid`, and `songId` are aliases for the same platform track ID.
 
-| Field      | Type             | Description                                       |
-| ---------- | ---------------- | ------------------------------------------------- |
-| `id`       | `string`         | Platform track ID                                 |
-| `songmid`  | `string`         | Alias of `id`                                     |
-| `songId`   | `string`         | Alias of `id`                                     |
-| `name`     | `string`         | Track title                                       |
-| `singer`   | `string`         | Artists joined with `/`                           |
-| `source`   | `string`         | Source key                                        |
-| `interval` | `string \| null` | Duration as `mm:ss`, or `null`                    |
-| `meta`     | `object`         | Additional `albumName`, `albumId`, `picUrl`, etc. |
+| Field        | Type                  | Description                                                             |
+| ------------ | --------------------- | ----------------------------------------------------------------------- |
+| `id`         | `string`              | Platform track ID                                                       |
+| `songmid`    | `string`              | Alias of `id`                                                           |
+| `songId`     | `string`              | Alias of `id`                                                           |
+| `name`       | `string`              | Track title                                                             |
+| `singer`     | `string`              | Artists joined with `/`                                                 |
+| `source`     | `string`              | Source key                                                              |
+| `interval`   | `string \| null`      | Duration as `mm:ss`, or `null`                                          |
+| `storefront` | `string \| undefined` | Storefront code (e.g. `cn` / `us`, Apple Music only)                    |
+| `meta`       | `object`              | Additional `albumName`, `albumId`, `picUrl`, `isrc`, `storefront`, etc. |
 
 Return:
 
