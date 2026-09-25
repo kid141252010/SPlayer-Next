@@ -4,6 +4,7 @@ import { useStatusStore } from "@/stores/status";
 import { getHotSearches, type HotSearchItem } from "@/apis/search/hot";
 import { getSearchSuggest, type SuggestData, type SuggestSimpleItem } from "@/apis/search/suggest";
 import { songsByIds as getNeteaseSongsByIds } from "@/apis/song/netease";
+import { songDetail as getAppleMusicSongDetail } from "@/apis/song/applemusic";
 import { formatCompact } from "@/utils/format";
 import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
 import { parseMusicLink, type LinkType } from "@/utils/link";
@@ -126,8 +127,13 @@ const navigateToResource = async (
   switch (kind) {
     case "song":
       try {
-        const [track] = await getNeteaseSongsByIds([Number(id)]);
-        if (track) await player.playNow(track);
+        if (source === "netease") {
+          const [track] = await getNeteaseSongsByIds([Number(id)]);
+          if (track) await player.playNow(track);
+        } else if (source === "applemusic") {
+          const track = await getAppleMusicSongDetail(id);
+          if (track) await player.playNow(track);
+        }
       } catch (err) {
         console.warn("[NavSearch] play song failed:", err);
       }

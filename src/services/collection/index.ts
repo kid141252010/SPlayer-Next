@@ -4,6 +4,7 @@ import { loadLocalCollection } from "./local";
 import { loadNeteaseCollection } from "./netease";
 import { loadQQMusicCollection } from "./qqmusic";
 import { loadKugouCollection } from "./kugou";
+import { loadAppleMusicCollection } from "./applemusic";
 import { loadStreamingCollection } from "./streaming";
 import type { LoadCollectionOptions } from "./types";
 
@@ -20,5 +21,6 @@ export const loadCollection = async (
   if (source === "netease") return loadNeteaseCollection(type, id, options);
   if (source === "qqmusic") return loadQQMusicCollection(type, id, options);
   if (source === "kugou") return loadKugouCollection(type, id, options);
+  if (source === "applemusic") return loadAppleMusicCollection(type, id, options);
   options.onUpdate(null);
 };

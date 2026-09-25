@@ -489,6 +489,8 @@ export interface SystemConfig {
     neteaseRealIp: boolean;
     /** KG 登录版本（standard 标准版 / concept 概念版） */
     kugouLoginVersion: KugouLoginVersion;
+    /** AM Storefront 地区代码（如 cn / us / tr / jp / kr 等） */
+    amStorefront: string;
     /** 网络代理配置 */
     networkProxy: NetworkProxySettings;
     /** 听歌打卡开关 */

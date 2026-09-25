@@ -1,5 +1,6 @@
 import type { SettingCategory } from "@/types/settings-schema";
 import PlatformAccount from "@/components/settings/custom/PlatformAccount.vue";
+import AmStorefrontConfig from "@/components/settings/custom/AmStorefrontConfig.vue";
 import SkipKeywordsConfig from "@/components/settings/custom/SkipKeywordsConfig.vue";
 import IconLucideSettings from "~icons/lucide/settings";
 
@@ -57,6 +58,13 @@ const otherCategory: SettingCategory = {
             contentKey: "settings.confirm.kugouLoginVersionContent",
             type: "warning",
           },
+        },
+        {
+          key: "amStorefront",
+          type: "custom",
+          component: AmStorefrontConfig,
+          binding: { store: "settings", path: "system.system.amStorefront" },
+          defaultValue: "cn",
         },
       ],
     },

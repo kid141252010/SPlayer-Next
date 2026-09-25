@@ -14,6 +14,8 @@ export const getTrackShareUrl = (track: Track | null | undefined): string | null
       return `https://y.qq.com/n/ryqq_v2/songDetail/${track.id}`;
     case "kugou":
       return `https://www.kugou.com/mixsong/${track.id}.html`;
+    case "applemusic":
+      return `https://music.apple.com/song/${track.id}`;
     default:
       return null;
   }
@@ -30,6 +32,7 @@ export const getCollectionShareUrl = (collection: Collection | null | undefined)
       netease: `https://music.163.com/#/album?id=${collection.id}`,
       qqmusic: `https://y.qq.com/n/ryqq_v2/albumDetail/${collection.id}`,
       kugou: `https://www.kugou.com/album/info/${collection.id}/`,
+      applemusic: `https://music.apple.com/album/${collection.id}`,
       streaming: null,
       local: null,
     },
@@ -37,6 +40,7 @@ export const getCollectionShareUrl = (collection: Collection | null | undefined)
       netease: `https://music.163.com/#/playlist?id=${collection.id}`,
       qqmusic: `https://y.qq.com/n/ryqq_v2/playlist/${collection.id}`,
       kugou: `https://www.kugou.com/songlist/${collection.id}/`,
+      applemusic: `https://music.apple.com/playlist/${collection.id}`,
       streaming: null,
       local: null,
     },
@@ -44,6 +48,7 @@ export const getCollectionShareUrl = (collection: Collection | null | undefined)
       netease: `https://music.163.com/#/djradio?id=${collection.id}`,
       qqmusic: `https://y.qq.com/n/ryqq_v2/player_radio#id=${collection.id}`,
       kugou: `https://www.kugou.com/song/#fm_id=${collection.id}`,
+      applemusic: null,
       streaming: null,
       local: null,
     },
@@ -51,6 +56,7 @@ export const getCollectionShareUrl = (collection: Collection | null | undefined)
       netease: null,
       qqmusic: null,
       kugou: null,
+      applemusic: null,
       streaming: null,
       local: null,
     },

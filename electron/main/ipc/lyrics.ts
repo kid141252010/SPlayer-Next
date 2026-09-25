@@ -53,6 +53,8 @@ const resolveById = async (platform: Platform, id: string): Promise<LyricMatchRe
         return { ok: true, data: await qqmusic.getByPlatformId(id) };
       case "kugou":
         return { ok: true, data: await kugou.getByPlatformId(id) };
+      case "applemusic":
+        return { ok: false, error: "applemusic native lyrics not supported, use plugin" };
       default:
         return { ok: false, error: `unsupported platform: ${platform}` };
     }
@@ -72,6 +74,8 @@ const resolveByQuery = async (platform: Platform, track: Track): Promise<LyricMa
         return { ok: true, data: await qqmusic.getByQuery(track) };
       case "kugou":
         return { ok: true, data: await kugou.getByQuery(track) };
+      case "applemusic":
+        return { ok: false, error: "applemusic native lyrics not supported, use plugin" };
       default:
         return { ok: false, error: `unsupported platform: ${platform}` };
     }

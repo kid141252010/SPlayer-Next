@@ -1791,6 +1791,18 @@
       "standard": "Standard",
       "concept": "Concept"
     },
+    "amStorefront": {
+      "label": "AM Storefront Region",
+      "description": "Set the target country or region for Apple Music search and metadata retrieval",
+      "cn": "Mainland China (cn)",
+      "us": "United States (us)",
+      "tr": "Turkey (tr)",
+      "jp": "Japan (jp)",
+      "kr": "South Korea (kr)",
+      "custom": "Custom",
+      "customPlaceholder": "2 letters",
+      "invalidCode": "Please enter a valid 2-letter country/region code (e.g. hk, tw, gb)"
+    },
     "neteaseScrobbleEnabled": {
       "label": "Enable scrobble",
       "description": "Automatically report listening records to NCM after a track has played long enough"
