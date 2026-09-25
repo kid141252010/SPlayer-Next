@@ -1798,10 +1798,7 @@
       "us": "United States (us)",
       "tr": "Turkey (tr)",
       "jp": "Japan (jp)",
-      "kr": "South Korea (kr)",
-      "custom": "Custom",
-      "customPlaceholder": "2 letters",
-      "invalidCode": "Please enter a valid 2-letter country/region code (e.g. hk, tw, gb)"
+      "kr": "South Korea (kr)"
     },
     "neteaseScrobbleEnabled": {
       "label": "Enable scrobble",

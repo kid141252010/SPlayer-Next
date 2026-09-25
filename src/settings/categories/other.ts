@@ -1,6 +1,5 @@
 import type { SettingCategory } from "@/types/settings-schema";
 import PlatformAccount from "@/components/settings/custom/PlatformAccount.vue";
-import AmStorefrontConfig from "@/components/settings/custom/AmStorefrontConfig.vue";
 import SkipKeywordsConfig from "@/components/settings/custom/SkipKeywordsConfig.vue";
 import IconLucideSettings from "~icons/lucide/settings";
 
@@ -61,9 +60,15 @@ const otherCategory: SettingCategory = {
         },
         {
           key: "amStorefront",
-          type: "custom",
-          component: AmStorefrontConfig,
+          type: "select",
           binding: { store: "settings", path: "system.system.amStorefront" },
+          options: [
+            { value: "cn", labelKey: "settings.amStorefront.cn" },
+            { value: "us", labelKey: "settings.amStorefront.us" },
+            { value: "tr", labelKey: "settings.amStorefront.tr" },
+            { value: "jp", labelKey: "settings.amStorefront.jp" },
+            { value: "kr", labelKey: "settings.amStorefront.kr" },
+          ],
           defaultValue: "cn",
         },
       ],

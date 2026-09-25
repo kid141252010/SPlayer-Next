@@ -99,54 +99,71 @@ export const search = async (params: SearchParams): Promise<SearchResult<unknown
   };
   const amType = typeMap[type] || "songs";
 
+  // Apple Music catalog search limit 参数最大为 25
+  const safeLimit = Math.min(Math.max(1, limit), 25);
+
   const res = await requestCatalog<AMSearchResponse>("/search", {
     term: keyword.trim(),
     types: amType,
     offset,
-    limit,
+    limit: safeLimit,
   });
 
   if (type === "song") {
     const songData = res.results?.songs;
     const items = (songData?.data || []).map(transformAMSong);
-    const total = songData?.total ?? items.length;
+    const hasMore =
+      !!songData?.next ||
+      (typeof songData?.total === "number" && offset + items.length < songData.total);
+    const total = songData?.total ?? (hasMore ? offset + items.length + 1 : offset + items.length);
     return {
       items,
       total,
-      hasMore: !!songData?.next || offset + items.length < total,
+      hasMore,
     };
   }
 
   if (type === "album") {
     const albumData = res.results?.albums;
     const items = (albumData?.data || []).map(transformAMAlbum);
-    const total = albumData?.total ?? items.length;
+    const hasMore =
+      !!albumData?.next ||
+      (typeof albumData?.total === "number" && offset + items.length < albumData.total);
+    const total = albumData?.total ?? (hasMore ? offset + items.length + 1 : offset + items.length);
     return {
       items,
       total,
-      hasMore: !!albumData?.next || offset + items.length < total,
+      hasMore,
     };
   }
 
   if (type === "artist") {
     const artistData = res.results?.artists;
     const items = (artistData?.data || []).map(transformAMArtist);
-    const total = artistData?.total ?? items.length;
+    const hasMore =
+      !!artistData?.next ||
+      (typeof artistData?.total === "number" && offset + items.length < artistData.total);
+    const total =
+      artistData?.total ?? (hasMore ? offset + items.length + 1 : offset + items.length);
     return {
       items,
       total,
-      hasMore: !!artistData?.next || offset + items.length < total,
+      hasMore,
     };
   }
 
   if (type === "playlist") {
     const playlistData = res.results?.playlists;
     const items = (playlistData?.data || []).map(transformAMPlaylist);
-    const total = playlistData?.total ?? items.length;
+    const hasMore =
+      !!playlistData?.next ||
+      (typeof playlistData?.total === "number" && offset + items.length < playlistData.total);
+    const total =
+      playlistData?.total ?? (hasMore ? offset + items.length + 1 : offset + items.length);
     return {
       items,
       total,
-      hasMore: !!playlistData?.next || offset + items.length < total,
+      hasMore,
     };
   }
 

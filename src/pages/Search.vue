@@ -213,7 +213,7 @@ const playbackContext = computed<PlaybackContext>(() => ({
           </span>
         </h1>
         <!-- 平台切换 -->
-        <div class="shrink-0 w-40">
+        <div class="shrink-0 w-60">
           <STabs
             :model-value="status.searchPlatform"
             :tabs="platformTabs"
