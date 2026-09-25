@@ -16,14 +16,14 @@ export const DEFAULT_STOREFRONT = "cn";
 
 /**
  * 获取当前生效的 storefront（2位字母小写）
- * @returns 规范化的 storefront，若未配置或非法则返回 "cn"
+ * @returns 规范化的 storefront，若未配置或不在预设列表中则返回默认 "cn"
  */
 export const getAMStorefront = (): string => {
   try {
     const raw = store.get("system.amStorefront" as never) as string | undefined;
     if (typeof raw === "string") {
       const trimmed = raw.trim().toLowerCase();
-      if (/^[a-z]{2}$/.test(trimmed)) {
+      if ((PRESET_STOREFRONTS as readonly string[]).includes(trimmed)) {
         return trimmed;
       }
     }

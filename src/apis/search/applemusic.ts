@@ -3,6 +3,9 @@ import type { CoverItem } from "@/types/artist";
 import { applemusic } from "@/apis/applemusic";
 import type { SearchResult } from "./index";
 
+/** Apple Music catalog search 最大支持 25 条每页 */
+const clampLimit = (limit: number): number => Math.min(Math.max(1, limit), 25);
+
 export const songs = async (
   keyword: string,
   offset: number,
@@ -12,7 +15,7 @@ export const songs = async (
     keyword,
     type: "song",
     offset,
-    limit,
+    limit: clampLimit(limit),
   });
 };
 
@@ -25,7 +28,7 @@ export const albums = async (
     keyword,
     type: "album",
     offset,
-    limit,
+    limit: clampLimit(limit),
   });
   const items: CoverItem[] = res.items.map((item) => ({
     id: item.id || "",
@@ -50,7 +53,7 @@ export const artists = async (
     keyword,
     type: "artist",
     offset,
-    limit,
+    limit: clampLimit(limit),
   });
   const items: CoverItem[] = res.items.map((item) => ({
     id: item.id || "",
@@ -75,7 +78,7 @@ export const playlists = async (
     keyword,
     type: "playlist",
     offset,
-    limit,
+    limit: clampLimit(limit),
   });
   const items: CoverItem[] = res.items.map((item) => ({
     id: item.id || "",

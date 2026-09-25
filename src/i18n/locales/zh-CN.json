@@ -1798,10 +1798,7 @@
       "us": "美国 (us)",
       "tr": "土耳其 (tr)",
       "jp": "日本 (jp)",
-      "kr": "韩国 (kr)",
-      "custom": "自定义",
-      "customPlaceholder": "两字代码",
-      "invalidCode": "请输入有效的2位字母国家/地区代码（如 hk, tw, gb）"
+      "kr": "韩国 (kr)"
     },
     "neteaseScrobbleEnabled": {
       "label": "启用听歌打卡",

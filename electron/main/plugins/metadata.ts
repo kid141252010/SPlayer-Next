@@ -42,6 +42,9 @@ const findMatch = async (
       singer: track.artists.map((artist) => artist.name).join("/"),
       album: track.album?.name,
       durationMs: track.duration,
+      platform: track.source,
+      source: track.source,
+      isrc: track.isrc,
     };
   }
   const keyword = `${track.title} ${track.artists.map((artist) => artist.name).join(" ")}`.trim();
