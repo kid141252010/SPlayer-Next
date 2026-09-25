@@ -107,6 +107,11 @@ export const resolveByPlugin = async (
   const isHash =
     typeof songId === "string" && songId.length === 32 && /^[0-9a-fA-F]{32}$/.test(songId);
   const hash = isHash || track.source === "kugou" ? songId : undefined;
+  const settings = useSettingsStore();
+  const amStorefront =
+    settings.system.system?.amStorefront ??
+    (settings.system as unknown as { amStorefront?: string }).amStorefront ??
+    "cn";
   const musicInfo = {
     id: songId,
     songmid: songId,
@@ -116,6 +121,7 @@ export const resolveByPlugin = async (
     source: pluginSource,
     interval,
     img: track.cover ?? null,
+    storefront: track.source === "applemusic" ? amStorefront : undefined,
     ...(hash ? { hash } : {}),
     albumId: track.album?.id ?? "",
     albumName: track.album?.name ?? "",
@@ -125,6 +131,7 @@ export const resolveByPlugin = async (
       albumId: track.album?.id ?? "",
       picUrl: track.cover ?? null,
       ...(track.isrc ? { isrc: track.isrc } : {}),
+      ...(track.source === "applemusic" ? { storefront: amStorefront } : {}),
       ...(hash ? { hash } : {}),
     },
   };

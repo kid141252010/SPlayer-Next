@@ -118,16 +118,17 @@ splayer.register({
 
 `musicInfo` 的实际字段（`id` / `songmid` / `songId` 为同一个**平台歌曲 ID** 的三种别名，兼容不同年代的脚本）：
 
-| 字段       | 类型             | 说明                                            |
-| ---------- | ---------------- | ----------------------------------------------- |
-| `id`       | `string`         | 平台歌曲 ID                                     |
-| `songmid`  | `string`         | 同 `id`（别名）                                 |
-| `songId`   | `string`         | 同 `id`（别名）                                 |
-| `name`     | `string`         | 歌名                                            |
-| `singer`   | `string`         | 艺术家，多位用 `/` 连接                         |
-| `source`   | `string`         | source key，同 `req.source`                     |
-| `interval` | `string \| null` | 时长 `mm:ss`，未知为 `null`                     |
-| `meta`     | `object`         | 附加信息：`albumName` / `albumId` / `picUrl` 等 |
+| 字段         | 类型                  | 说明                                                                    |
+| ------------ | --------------------- | ----------------------------------------------------------------------- |
+| `id`         | `string`              | 平台歌曲 ID                                                             |
+| `songmid`    | `string`              | 同 `id`（别名）                                                         |
+| `songId`     | `string`              | 同 `id`（别名）                                                         |
+| `name`       | `string`              | 歌名                                                                    |
+| `singer`     | `string`              | 艺术家，多位用 `/` 连接                                                 |
+| `source`     | `string`              | source key，同 `req.source`                                             |
+| `interval`   | `string \| null`      | 时长 `mm:ss`，未知为 `null`                                             |
+| `storefront` | `string \| undefined` | 商店地区代码（如 `cn` / `us`，当前仅 Apple Music 平台透传）             |
+| `meta`       | `object`              | 附加信息：`albumName` / `albumId` / `picUrl` / `isrc` / `storefront` 等 |
 
 ::: tip
 多数音源接口只需要 `songmid`（平台歌曲 ID）与 `quality` 就能换地址。`name` / `singer` / `interval` 适合做接口要求的校验或日志。
