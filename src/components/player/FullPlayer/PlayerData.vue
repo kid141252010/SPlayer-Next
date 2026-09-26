@@ -10,6 +10,7 @@ import {
   navigateToResource,
   type ResourceNavigationTarget,
 } from "@/utils/navigate";
+import { fetchSongAlbums, fetchSongArtists } from "@/apis/song/applemusic";
 import { getValidArtists } from "@shared/utils/track";
 
 const { t } = useI18n();
@@ -53,7 +54,12 @@ const artistTarget = (artist: Artist): ResourceNavigationTarget => ({
 });
 
 /** 歌手是否可跳转 */
-const isArtistLinkable = (artist: Artist): boolean => canNavigateToResource(artistTarget(artist));
+const isArtistLinkable = (artist: Artist): boolean => {
+  if (displayTrack.value?.source === "applemusic" && (artist.id || displayTrack.value.id)) {
+    return true;
+  }
+  return canNavigateToResource(artistTarget(artist));
+};
 
 /** 当前专辑详情页跳转目标 */
 const albumTarget = computed<ResourceNavigationTarget | null>(() => {
@@ -68,13 +74,47 @@ const albumTarget = computed<ResourceNavigationTarget | null>(() => {
 });
 
 /** 专辑是否可跳转 */
-const isAlbumLinkable = computed(() =>
-  albumTarget.value ? canNavigateToResource(albumTarget.value) : false,
-);
+const isAlbumLinkable = computed(() => {
+  if (!displayTrack.value?.album?.name) return false;
+  if (
+    displayTrack.value.source === "applemusic" &&
+    (displayTrack.value.album.id || displayTrack.value.id)
+  ) {
+    return true;
+  }
+  return albumTarget.value ? canNavigateToResource(albumTarget.value) : false;
+});
 
 /** 跳转成功后收起全屏播放器 */
-const goToResource = (target: ResourceNavigationTarget | null): void => {
-  if (target && navigateToResource(target)) status.isPlayerExpanded = false;
+const goToResource = async (target: ResourceNavigationTarget | null): Promise<void> => {
+  if (!target) return;
+  const track = displayTrack.value;
+  if (track?.source === "applemusic" && !target.id && track.id) {
+    if (target.type === "album") {
+      try {
+        const albums = await fetchSongAlbums(track.id);
+        if (albums[0]?.id) {
+          if (track.album) track.album.id = albums[0].id;
+          target.id = albums[0].id;
+          if (albums[0].name) target.name = albums[0].name;
+        }
+      } catch (err) {
+        console.warn("[PlayerData] resolve song album failed:", err);
+      }
+    } else if (target.type === "artist") {
+      try {
+        const artists = await fetchSongArtists(track.id);
+        const match = artists.find((a) => a.name === target.name) || artists[0];
+        if (match?.id) {
+          target.id = match.id;
+          if (match.name) target.name = match.name;
+        }
+      } catch (err) {
+        console.warn("[PlayerData] resolve song artist failed:", err);
+      }
+    }
+  }
+  if (navigateToResource(target)) status.isPlayerExpanded = false;
 };
 
 /** 来源标签 */

@@ -33,6 +33,7 @@ import {
   captureOrpheusUrl,
 } from "@main/services/orpheus";
 import { extractAudioFiles, captureAudioFiles } from "@main/services/externalFile";
+import { syncProxyEnv } from "@main/utils/proxy";
 
 /**
  * 配置 Chromium 启动参数以优化内存占用
@@ -104,6 +105,8 @@ export const initApp = (): void => {
   // 其他初始化
   app.whenReady().then(() => {
     electronApp.setAppUserModelId("top.imsyy.splayer-next");
+    // 同步代理环境变量到主进程及原生引擎
+    syncProxyEnv();
     // 注册 cache:// 协议处理
     handleCacheProtocol();
     app.on("browser-window-created", (_, window) => {

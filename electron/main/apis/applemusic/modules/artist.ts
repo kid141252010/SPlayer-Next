@@ -29,6 +29,7 @@ export const getArtistDetail = async (id: string): Promise<ArtistDetailResult | 
   if (!id) return null;
   const res = await requestCatalog<ArtistResponse>(`/artists/${id}`, {
     views: "top-songs,full-albums",
+    "relate[songs]": "albums,artists",
   });
   const item = res.data?.[0];
   if (!item) return null;
@@ -39,7 +40,13 @@ export const getArtistDetail = async (id: string): Promise<ArtistDetailResult | 
 
   return {
     artist,
-    songs: songItems.map(transformAMSong),
+    songs: songItems.map((s) => {
+      const track = transformAMSong(s);
+      if (track.artists.length > 0 && !track.artists[0].id) {
+        track.artists[0].id = artist.id;
+      }
+      return track;
+    }),
     albums: albumItems.map(transformAMAlbum),
     description: item.attributes.editorialNotes?.standard || item.attributes.editorialNotes?.short,
   };

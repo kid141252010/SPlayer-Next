@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PlaybackContext, TrackSource } from "@shared/types/player";
+import type { Artist, PlaybackContext, TrackSource } from "@shared/types/player";
 import type { Collection, CollectionType } from "@/types/collection";
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
 import { loadCollection as loadCollectionService } from "@/services/collection";
@@ -7,6 +7,7 @@ import { getCollectionShareUrl } from "@/utils/format/shareUrl";
 import { useCopyText } from "@/composables/useCopyText";
 import { useCollectionSubscribe } from "@/composables/collection/useCollectionSubscribe";
 import { usePlaylistManage } from "@/composables/collection/usePlaylistManage";
+import { navigateToArtist } from "@/utils/navigate";
 import SongList from "@/components/list/SongList.vue";
 import { formatTime } from "@/utils/time";
 import * as player from "@/core/player";
@@ -125,6 +126,22 @@ const artistText = computed(() => {
 const creatorText = computed(() => {
   return artistText.value || collection.value?.creator || "";
 });
+
+/** 歌手是否可跳转 */
+const isArtistLinkable = (artist: Artist): boolean => {
+  if (!artist.name) return false;
+  const s = collection.value?.source;
+  return s === "local" || !!artist.id;
+};
+
+/** 跳转到歌手详情页 */
+const goArtist = (artist: Artist): void => {
+  if (!isArtistLinkable(artist) || !collection.value) return;
+  navigateToArtist(artist.name, {
+    source: collection.value.source,
+    artistId: artist.id,
+  });
+};
 
 /** 更新时间文本 */
 const updateTimeText = computed(() => {
@@ -322,7 +339,25 @@ onBeforeUnmount(() => {
                 >
                   <span v-if="creatorText" class="flex items-center gap-1 min-w-0">
                     <IconLucideUser class="shrink-0" />
-                    <span class="truncate">{{ creatorText }}</span>
+                    <template v-if="collection.type === 'album' && collection.artists?.length">
+                      <span class="truncate">
+                        <span
+                          v-for="(artist, index) in collection.artists"
+                          :key="index"
+                          :class="[
+                            isArtistLinkable(artist)
+                              ? 'cursor-pointer hover:underline hover:text-on-surface'
+                              : '',
+                          ]"
+                          @click="goArtist(artist)"
+                        >
+                          {{ artist.name }}{{ index < collection.artists.length - 1 ? " / " : "" }}
+                        </span>
+                      </span>
+                    </template>
+                    <template v-else>
+                      <span class="truncate">{{ creatorText }}</span>
+                    </template>
                   </span>
                   <span class="flex items-center gap-1 shrink-0">
                     <IconLucideListMusic class="shrink-0" />

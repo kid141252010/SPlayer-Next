@@ -12,9 +12,13 @@ import { toast } from "@/composables/useToast";
 import { buildDownloadQualityItems } from "@/composables/useDownload";
 import { getTrackShareUrl } from "@/utils/format/shareUrl";
 import { openExternal } from "@/utils/url";
+import { navigateToAlbum, navigateToArtist } from "@/utils/navigate";
+import { fetchSongAlbums, fetchSongArtists } from "@/apis/song/applemusic";
 import IconPlay from "~icons/lucide/play";
 import IconListEnd from "~icons/lucide/list-end";
 import IconListPlus from "~icons/lucide/list-plus";
+import IconDisc3 from "~icons/lucide/disc-3";
+import IconUser from "~icons/lucide/user";
 import IconFolderOpen from "~icons/lucide/folder-open";
 import IconSquarePen from "~icons/lucide/square-pen";
 import IconDownload from "~icons/lucide/download";
@@ -77,6 +81,17 @@ export const useTrackMenu = (
     const showCloudRemove = isCloudView && track.value?.cloud === true;
     const canAddToPlaylist = source === "local" || source === "netease";
     const isOnline = source !== "local" && source !== "streaming";
+    const isAlbumLinkable =
+      !!track.value?.album?.name &&
+      (source === "local" ||
+        !!track.value?.album.id ||
+        (source === "applemusic" && !!track.value?.id));
+    const isArtistLinkable =
+      !!track.value?.artists?.length &&
+      !!track.value?.artists[0]?.name &&
+      (source === "local" ||
+        !!track.value?.artists[0].id ||
+        (source === "applemusic" && !!track.value?.id));
     const base: DropdownMenuItem[] = [
       { key: "play", label: t("songList.context.play"), icon: markRaw(IconPlay), show: showPlay },
       {
@@ -91,6 +106,18 @@ export const useTrackMenu = (
         icon: markRaw(IconListPlus),
         separator: showPlay,
         show: canAddToPlaylist,
+      },
+      {
+        key: "goToAlbum",
+        label: t("songList.context.goToAlbum"),
+        icon: markRaw(IconDisc3),
+        show: isAlbumLinkable,
+      },
+      {
+        key: "goToArtist",
+        label: t("songList.context.goToArtist"),
+        icon: markRaw(IconUser),
+        show: isArtistLinkable,
       },
       {
         key: "showInExplorer",
@@ -234,6 +261,54 @@ export const useTrackMenu = (
       case "addToPlaylist":
         options.onAddToPlaylist?.(current);
         break;
+      case "goToAlbum": {
+        if (!current.album?.name) break;
+        if (current.source === "applemusic" && !current.album?.id && current.id) {
+          try {
+            const albums = await fetchSongAlbums(current.id);
+            if (albums[0]?.id) {
+              if (current.album) current.album.id = albums[0].id;
+              navigateToAlbum(albums[0].name || current.album.name, {
+                source: current.source,
+                albumId: albums[0].id,
+              });
+              break;
+            }
+          } catch (err) {
+            console.warn("[useTrackMenu] resolve song album failed:", err);
+          }
+        }
+        navigateToAlbum(current.album.name, {
+          source: current.source,
+          albumId: current.album.id,
+        });
+        break;
+      }
+      case "goToArtist": {
+        const firstArtist = current.artists?.[0];
+        if (!firstArtist?.name) break;
+        if (current.source === "applemusic" && !firstArtist.id && current.id) {
+          try {
+            const artists = await fetchSongArtists(current.id);
+            const target = artists.find((a) => a.name === firstArtist.name) || artists[0];
+            if (target?.id) {
+              firstArtist.id = target.id;
+              navigateToArtist(target.name || firstArtist.name, {
+                source: current.source,
+                artistId: target.id,
+              });
+              break;
+            }
+          } catch (err) {
+            console.warn("[useTrackMenu] resolve song artist failed:", err);
+          }
+        }
+        navigateToArtist(firstArtist.name, {
+          source: current.source,
+          artistId: firstArtist.id,
+        });
+        break;
+      }
       case "showInExplorer":
         if (current.cueAudioPath ?? current.path) {
           window.api.system.showInExplorer((current.cueAudioPath ?? current.path)!);

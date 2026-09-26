@@ -532,6 +532,8 @@
     "context": {
       "play": "播放",
       "playNext": "下一首播放",
+      "goToAlbum": "前往专辑",
+      "goToArtist": "前往歌手",
       "showInExplorer": "打开文件位置",
       "copyPath": "复制文件路径",
       "editTags": "编辑元数据",

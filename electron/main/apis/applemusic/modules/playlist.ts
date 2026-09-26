@@ -18,7 +18,9 @@ export interface PlaylistDetailResult {
 
 export const getPlaylistDetail = async (id: string): Promise<PlaylistDetailResult | null> => {
   if (!id) return null;
-  const res = await requestCatalog<PlaylistResponse>(`/playlists/${id}`);
+  const res = await requestCatalog<PlaylistResponse>(`/playlists/${id}`, {
+    "relate[songs]": "albums,artists",
+  });
   const item = res.data?.[0];
   if (!item) return null;
 

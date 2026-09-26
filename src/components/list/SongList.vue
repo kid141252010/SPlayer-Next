@@ -15,6 +15,7 @@ import { formatTime } from "@/utils/time";
 import { formatFileSize } from "@/utils/format";
 import { isLosslessQuality, getQualityLabel } from "@/utils/quality";
 import { navigateToAlbum, navigateToArtist } from "@/utils/navigate";
+import { fetchSongAlbums, fetchSongArtists } from "@/apis/song/applemusic";
 import type { SVirtualListExposed } from "@/components/ui/SVirtualList.vue";
 import * as player from "@/core/player";
 import IconArrowUpDown from "~icons/lucide/arrow-up-down";
@@ -98,27 +99,58 @@ const textCollator = new Intl.Collator(undefined, {
 /** 当前播放歌曲 ID */
 const playingId = computed(() => media.track?.id);
 
-/** 专辑是否可跳转：本地不要求 id，其他源需要 album.id */
+/** 专辑是否可跳转：本地不要求 id，AM 源有歌曲 id 也可动态解析，其他源需要 album.id */
 const isAlbumLinkable = (item: Track): boolean => {
   if (!item.album?.name) return false;
-  return item.source === "local" || !!item.album.id;
+  return item.source === "local" || !!item.album.id || (item.source === "applemusic" && !!item.id);
 };
 
-/** 歌手是否可跳转：本地不要求 id，其他源需要 artist.id */
+/** 歌手是否可跳转：本地不要求 id，AM 源有歌曲 id 也可动态解析，其他源需要 artist.id */
 const isArtistLinkable = (item: Track, artist: Artist): boolean => {
   if (!artist.name) return false;
-  return item.source === "local" || !!artist.id;
+  return item.source === "local" || !!artist.id || (item.source === "applemusic" && !!item.id);
 };
 
 /** 跳转到歌手页 */
-const goArtist = (item: Track, artist: Artist): void => {
+const goArtist = async (item: Track, artist: Artist): Promise<void> => {
   if (!isArtistLinkable(item, artist)) return;
+  if (item.source === "applemusic" && !artist.id && item.id) {
+    try {
+      const artists = await fetchSongArtists(item.id);
+      const target = artists.find((a) => a.name === artist.name) || artists[0];
+      if (target?.id) {
+        artist.id = target.id;
+        navigateToArtist(target.name || artist.name, {
+          source: item.source,
+          artistId: target.id,
+        });
+        return;
+      }
+    } catch (err) {
+      console.warn("[SongList] resolve song artist failed:", err);
+    }
+  }
   navigateToArtist(artist.name, { source: item.source, artistId: artist.id });
 };
 
 /** 跳转到专辑页 */
-const goAlbum = (item: Track): void => {
+const goAlbum = async (item: Track): Promise<void> => {
   if (!isAlbumLinkable(item)) return;
+  if (item.source === "applemusic" && !item.album?.id && item.id) {
+    try {
+      const albums = await fetchSongAlbums(item.id);
+      if (albums[0]?.id) {
+        if (item.album) item.album.id = albums[0].id;
+        navigateToAlbum(albums[0].name || item.album?.name, {
+          source: item.source,
+          albumId: albums[0].id,
+        });
+        return;
+      }
+    } catch (err) {
+      console.warn("[SongList] resolve song album failed:", err);
+    }
+  }
   navigateToAlbum(item.album?.name, { source: item.source, albumId: item.album?.id });
 };
 

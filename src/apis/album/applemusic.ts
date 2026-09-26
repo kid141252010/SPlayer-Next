@@ -1,9 +1,10 @@
-import type { Album, Track } from "@shared/types/player";
+import type { Album, Artist, Track } from "@shared/types/player";
 import { applemusic } from "@/apis/applemusic";
 
 export interface AppleMusicAlbumDetailResponse {
   album: Album;
   songs: Track[];
+  artists?: Artist[];
 }
 
 /**
@@ -14,7 +15,7 @@ export interface AppleMusicAlbumDetailResponse {
 export const fetchAppleMusicAlbum = async (
   id: string,
   fallbackName: string,
-): Promise<{ album: Album; tracks: Track[]; description?: string }> => {
+): Promise<{ album: Album; tracks: Track[]; artists?: Artist[]; description?: string }> => {
   const res = await applemusic.album<AppleMusicAlbumDetailResponse>({ id });
   return {
     album: {
@@ -22,5 +23,6 @@ export const fetchAppleMusicAlbum = async (
       name: res.album.name || fallbackName,
     },
     tracks: res.songs || [],
+    artists: res.artists,
   };
 };
