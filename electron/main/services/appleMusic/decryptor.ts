@@ -39,6 +39,17 @@ export class AmDecryptor {
   private wasmInitPromise: Promise<WasmExports> | null = null;
 
   /**
+   * 初始化并预热 WASM 运行时环境
+   */
+  public async warmup(): Promise<void> {
+    try {
+      await this.getWasm();
+    } catch (err) {
+      amLog.warn("[decryptor] hook.wasm 预热失败", err);
+    }
+  }
+
+  /**
    * 初始化并获取 WASM 导出实例
    * @returns WASM 导出对象
    */
@@ -80,23 +91,6 @@ export class AmDecryptor {
   }
 
   /**
-   * 在 WASM 线性内存中操作数据，自动完成分配与释放
-   * @param w - WASM 导出对象
-   * @param bytes - 需要传入的二进制字节
-   * @param fn - 处理函数，提供分配后的首地址与长度
-   */
-  private inWasm(w: WasmExports, bytes: Uint8Array, fn: (ptr: number, len: number) => void): void {
-    const ptr = w.hook_alloc(bytes.length);
-    try {
-      new Uint8Array(w.memory.buffer, ptr, bytes.length).set(bytes);
-      fn(ptr, bytes.length);
-      bytes.set(new Uint8Array(w.memory.buffer, ptr, bytes.length));
-    } finally {
-      w.hook_free(ptr, bytes.length);
-    }
-  }
-
-  /**
    * 修补 fMP4 Init Segment（抹除 DRM 伪装盒与标记）
    * @param initBuf - 原始 Init Segment 字节
    * @returns 修补后的 Init Segment
@@ -104,16 +98,20 @@ export class AmDecryptor {
   public async patchInit(initBuf: Buffer): Promise<Buffer> {
     const w = await this.getWasm();
     const copy = Buffer.from(initBuf);
+    const len = copy.length;
+    const ptr = w.hook_alloc(len);
     try {
-      this.inWasm(w, copy, (ptr, len) => {
-        w.hook_patch_init(ptr, len);
-      });
+      new Uint8Array(w.memory.buffer, ptr, len).set(copy);
+      w.hook_patch_init(ptr, len);
+      copy.set(new Uint8Array(w.memory.buffer, ptr, len));
       return copy;
     } catch (err) {
       if (err instanceof WebAssembly.RuntimeError) {
         this.reset();
       }
       throw err;
+    } finally {
+      w.hook_free(ptr, len);
     }
   }
 
@@ -125,11 +123,12 @@ export class AmDecryptor {
   public async loadTemplate(templateJson: string): Promise<number> {
     const w = await this.getWasm();
     const encoded = new TextEncoder().encode(templateJson);
+    const len = encoded.length;
+    const ptr = w.hook_alloc(len);
     let handle = 0;
     try {
-      this.inWasm(w, encoded, (ptr, len) => {
-        handle = w.hook_template_load(ptr, len);
-      });
+      new Uint8Array(w.memory.buffer, ptr, len).set(encoded);
+      handle = w.hook_template_load(ptr, len);
       if (!handle) {
         throw new Error(`加载解密模板失败: ${this.lastError(w)}`);
       }
@@ -139,6 +138,8 @@ export class AmDecryptor {
         this.reset();
       }
       throw err;
+    } finally {
+      w.hook_free(ptr, len);
     }
   }
 
@@ -174,26 +175,39 @@ export class AmDecryptor {
    */
   public async decryptFragment(handle: number, fragBuf: Buffer, initBuf?: Buffer): Promise<Buffer> {
     const w = await this.getWasm();
-    const copy = Buffer.from(fragBuf);
+    const fragLen = fragBuf.length;
+    const fragPtr = w.hook_alloc(fragLen);
+    let initPtr = 0;
+    const initLen = initBuf && initBuf.length > 0 ? initBuf.length : 0;
+
     try {
-      this.inWasm(w, copy, (ptr, len) => {
-        if (handle) {
-          const ok = w.hook_decrypt_fragment(handle, ptr, len);
-          if (!ok) throw new Error(`切片解密失败: ${this.lastError(w)}`);
-        }
-        if (initBuf && initBuf.length > 0) {
-          this.inWasm(w, initBuf, (initPtr, initLen) => {
-            const ok = w.hook_repair_alac(ptr, len, initPtr, initLen);
-            if (!ok) throw new Error(`ALAC 结构修复失败: ${this.lastError(w)}`);
-          });
-        }
-      });
-      return copy;
+      new Uint8Array(w.memory.buffer, fragPtr, fragLen).set(fragBuf);
+
+      if (handle) {
+        const ok = w.hook_decrypt_fragment(handle, fragPtr, fragLen);
+        if (!ok) throw new Error(`切片解密失败: ${this.lastError(w)}`);
+      }
+
+      if (initLen > 0 && initBuf) {
+        initPtr = w.hook_alloc(initLen);
+        // 注意：hook_alloc 可能触发 WASM memory grow，每次访问需从 w.memory.buffer 重新生成视图
+        new Uint8Array(w.memory.buffer, initPtr, initLen).set(initBuf);
+        const ok = w.hook_repair_alac(fragPtr, fragLen, initPtr, initLen);
+        if (!ok) throw new Error(`ALAC 结构修复失败: ${this.lastError(w)}`);
+      }
+
+      fragBuf.set(new Uint8Array(w.memory.buffer, fragPtr, fragLen));
+      return fragBuf;
     } catch (err) {
       if (err instanceof WebAssembly.RuntimeError) {
         this.reset();
       }
       throw err;
+    } finally {
+      if (initPtr && initLen > 0) {
+        w.hook_free(initPtr, initLen);
+      }
+      w.hook_free(fragPtr, fragLen);
     }
   }
 
