@@ -84,6 +84,8 @@ export const syncProxyEnv = (): void => {
     process.env.http_proxy = proxyUrl;
     process.env.https_proxy = proxyUrl;
     process.env.all_proxy = proxyUrl;
+    process.env.NO_PROXY = "localhost,127.0.0.1,::1";
+    process.env.no_proxy = "localhost,127.0.0.1,::1";
     systemLog.info(`[proxy] 环境变量已同步代理: ${proxyUrl}`);
   } else {
     delete process.env.HTTP_PROXY;
@@ -92,11 +94,30 @@ export const syncProxyEnv = (): void => {
     delete process.env.http_proxy;
     delete process.env.https_proxy;
     delete process.env.all_proxy;
+    delete process.env.NO_PROXY;
+    delete process.env.no_proxy;
     systemLog.info("[proxy] 环境变量代理已清空 (直连)");
   }
 };
 
-const getProxyDispatcher = (): Dispatcher => {
+/** 判断是否属于无需通过网络代理的直连地址（回环地址或 Apple 官方 CDN） */
+export const isDirectUrl = (input: string | URL): boolean => {
+  try {
+    const urlStr = typeof input === "string" ? input : input.href;
+    const u = new URL(urlStr);
+    const host = u.hostname.toLowerCase();
+    if (host === "127.0.0.1" || host === "localhost" || host === "::1") return true;
+    if (host.endsWith(".apple.com") || host.endsWith(".itunes.apple.com") || host === "apple.com") {
+      return true;
+    }
+  } catch {
+    // 忽略异常
+  }
+  return false;
+};
+
+const getProxyDispatcher = (input?: string | URL): Dispatcher => {
+  if (input && isDirectUrl(input)) return getDefaultDispatcher();
   const url = getEffectiveProxyUrl();
   if (!url) return getDefaultDispatcher();
   if (!proxyAgent || proxyAgentUrl !== url) {
@@ -110,7 +131,7 @@ const getProxyDispatcher = (): Dispatcher => {
 
 /** Node fetch 包装：统一使用 undici 并注入支持 legacy SSL 的 dispatcher */
 export const fetchWithProxy = (input: string | URL, init?: RequestInit): Promise<Response> => {
-  const dispatcher = getProxyDispatcher();
+  const dispatcher = getProxyDispatcher(input);
   return undiciFetch(input, { ...(init as RequestInit), dispatcher } as Parameters<
     typeof undiciFetch
   >[1]) as unknown as Promise<Response>;

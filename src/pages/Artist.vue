@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PlaybackContext, TrackSource } from "@shared/types/player";
+import type { PlaybackContext, TrackSource, Track } from "@shared/types/player";
 import type { ArtistProfile, CoverItem } from "@/types/artist";
 import { useSettingsStore } from "@/stores/settings";
 import { useUserStore } from "@/stores/user";
@@ -7,6 +7,10 @@ import { toast } from "@/composables/useToast";
 import { loadArtist as loadArtistService } from "@/services/artistLoader";
 import { fetchArtistSongs } from "@/apis/artist/netease";
 import { fetchQQMusicArtistSongs } from "@/apis/artist/qqmusic";
+import {
+  fetchAppleMusicArtistSongs,
+  fetchAppleMusicArtistReleases,
+} from "@/apis/artist/applemusic";
 import { navigateToAlbum } from "@/utils/navigate";
 import SongList from "@/components/list/SongList.vue";
 import { formatTime } from "@/utils/time";
@@ -42,9 +46,18 @@ const loading = ref(false);
 const error = ref("");
 /** 取消当次加载 */
 let loadAbort: AbortController | null = null;
-/** 是否还有更多 */
+/** 是否还有更多歌曲 */
 const hasMoreSongs = ref(false);
 const loadingMore = ref(false);
+
+/** 唱片分类是否还有更多 */
+const hasMoreReleases = reactive<Record<string, boolean>>({
+  albums: false,
+  singles: false,
+  liveAlbums: false,
+  compilations: false,
+});
+const loadingMoreReleases = ref(false);
 
 /** 在线头像未到位时，用任一曲目的封面顶替 */
 const fallbackTrackCover = computed(() => artist.value?.tracks.find((t) => t.cover)?.cover);
@@ -70,6 +83,10 @@ const loadArtist = async (): Promise<void> => {
   loading.value = true;
   error.value = "";
   hasMoreSongs.value = false;
+  hasMoreReleases.albums = false;
+  hasMoreReleases.singles = false;
+  hasMoreReleases.liveAlbums = false;
+  hasMoreReleases.compilations = false;
 
   try {
     await loadArtistService(source, id, {
@@ -78,12 +95,18 @@ const loadArtist = async (): Promise<void> => {
       onUpdate: (next) => {
         if (myAbort.signal.aborted) return;
         artist.value = next;
-        if (
-          next &&
-          ((source === "netease" && next.tracks.length >= 50) ||
-            (source === "qqmusic" && next.tracks.length < next.trackCount))
-        ) {
-          hasMoreSongs.value = true;
+        if (next) {
+          if (source === "netease" && next.tracks.length >= 50) {
+            hasMoreSongs.value = true;
+          } else if (source === "qqmusic" && next.tracks.length < next.trackCount) {
+            hasMoreSongs.value = true;
+          } else if (source === "applemusic") {
+            hasMoreSongs.value = next.hasMore?.songs ?? false;
+            hasMoreReleases.albums = next.hasMore?.albums ?? false;
+            hasMoreReleases.singles = next.hasMore?.singles ?? false;
+            hasMoreReleases.liveAlbums = next.hasMore?.liveAlbums ?? false;
+            hasMoreReleases.compilations = next.hasMore?.compilations ?? false;
+          }
         }
       },
     });
@@ -95,10 +118,10 @@ const loadArtist = async (): Promise<void> => {
   }
 };
 
-/** 触底加载 */
+/** 触底加载歌曲 */
 const onReachBottom = async (): Promise<void> => {
   if (
-    (source !== "netease" && source !== "qqmusic") ||
+    (source !== "netease" && source !== "qqmusic" && source !== "applemusic") ||
     !hasMoreSongs.value ||
     loadingMore.value ||
     !artist.value
@@ -107,10 +130,26 @@ const onReachBottom = async (): Promise<void> => {
   const current = artist.value;
   loadingMore.value = true;
   try {
-    const { tracks, more } =
-      source === "qqmusic"
-        ? await fetchQQMusicArtistSongs(decodeURIComponent(id), current.tracks.length)
-        : await fetchArtistSongs(decodeURIComponent(id), current.tracks.length);
+    let tracks: Track[] = [];
+    let more = false;
+    if (source === "applemusic") {
+      const res = await fetchAppleMusicArtistSongs(
+        decodeURIComponent(id),
+        current.tracks.length,
+        25,
+      );
+      tracks = res.tracks;
+      more = res.more;
+    } else if (source === "qqmusic") {
+      const res = await fetchQQMusicArtistSongs(decodeURIComponent(id), current.tracks.length);
+      tracks = res.tracks;
+      more = res.more;
+    } else {
+      const res = await fetchArtistSongs(decodeURIComponent(id), current.tracks.length);
+      tracks = res.tracks;
+      more = res.more;
+    }
+
     if (loadAbort?.signal.aborted || artist.value?.id !== current.id) return;
     if (tracks.length === 0) {
       hasMoreSongs.value = false;
@@ -124,6 +163,56 @@ const onReachBottom = async (): Promise<void> => {
     hasMoreSongs.value = more;
   } finally {
     loadingMore.value = false;
+  }
+};
+
+const RELEASE_VIEW_MAP: Record<
+  string,
+  "full-albums" | "singles" | "live-albums" | "compilation-albums"
+> = {
+  albums: "full-albums",
+  singles: "singles",
+  liveAlbums: "live-albums",
+  compilations: "compilation-albums",
+};
+
+/** 触底加载唱片（专辑/单曲/Live/合辑） */
+const onReachBottomReleases = async (
+  tabKey: "albums" | "singles" | "liveAlbums" | "compilations",
+): Promise<void> => {
+  if (
+    source !== "applemusic" ||
+    !hasMoreReleases[tabKey] ||
+    loadingMoreReleases.value ||
+    !artist.value
+  )
+    return;
+
+  const view = RELEASE_VIEW_MAP[tabKey];
+  if (!view) return;
+
+  const current = artist.value;
+  const currentList = (current[tabKey] || []) as CoverItem[];
+  loadingMoreReleases.value = true;
+  try {
+    const { items, more } = await fetchAppleMusicArtistReleases(
+      decodeURIComponent(id),
+      view,
+      currentList.length,
+      25,
+    );
+    if (loadAbort?.signal.aborted || artist.value?.id !== current.id) return;
+    if (items.length === 0) {
+      hasMoreReleases[tabKey] = false;
+      return;
+    }
+    artist.value = {
+      ...current,
+      [tabKey]: [...currentList, ...items],
+    };
+    hasMoreReleases[tabKey] = more;
+  } finally {
+    loadingMoreReleases.value = false;
   }
 };
 
@@ -192,16 +281,25 @@ const handleMoreMenu = (key: string) => {
   if (key === "batchManage") songListRef.value?.enterBatch();
 };
 
-type ArtistTab = "songs" | "albums";
+type ArtistTab = "songs" | "albums" | "singles" | "liveAlbums" | "compilations";
 
-const ARTIST_TAB_KEYS: readonly ArtistTab[] = ["songs", "albums"];
+const ARTIST_TAB_KEYS: readonly ArtistTab[] = [
+  "songs",
+  "albums",
+  "singles",
+  "liveAlbums",
+  "compilations",
+];
 
 /** 当前 tab */
 const activeTab = computed<ArtistTab>(() => {
   const tab = route.query.tab;
-  return typeof tab === "string" && (ARTIST_TAB_KEYS as readonly string[]).includes(tab)
-    ? (tab as ArtistTab)
-    : "songs";
+  const valid = typeof tab === "string" && (ARTIST_TAB_KEYS as readonly string[]).includes(tab);
+  if (!valid) return "songs";
+  if (artist.value && !tabs.value.some((t) => t.key === tab)) {
+    return "songs";
+  }
+  return tab as ArtistTab;
 });
 
 const onTabSwitch = (key: string): void => {
@@ -209,24 +307,40 @@ const onTabSwitch = (key: string): void => {
 };
 
 watch(activeTab, (tab) => {
-  if (tab === "albums") collapsed.value = true;
+  if (tab !== "songs") collapsed.value = true;
 });
 
 const tabs = computed(() => {
   const items = [{ key: "songs", label: t("artist.songs") }];
-  if (artist.value?.albums.length) {
+  if (artist.value?.albums?.length) {
     items.push({ key: "albums", label: t("artist.albums") });
+  }
+  if (artist.value?.singles?.length) {
+    items.push({ key: "singles", label: t("artist.singles") });
+  }
+  if (artist.value?.liveAlbums?.length) {
+    items.push({ key: "liveAlbums", label: t("artist.liveAlbums") });
+  }
+  if (artist.value?.compilations?.length) {
+    items.push({ key: "compilations", label: t("artist.compilations") });
   }
   return items;
 });
 
-const albumItems = computed<CoverItem[]>(() => {
-  if (!artist.value?.albums.length) return [];
-  return artist.value.albums.map((item) => ({
+const formatCoverList = (items?: CoverItem[]): CoverItem[] => {
+  if (!items?.length) return [];
+  return items.map((item) => ({
     ...item,
-    subtitle: t("common.totalSongs", { count: item.trackCount }),
+    subtitle:
+      item.subtitle ||
+      (item.trackCount ? t("common.totalSongs", { count: item.trackCount }) : undefined),
   }));
-});
+};
+
+const albumItems = computed<CoverItem[]>(() => formatCoverList(artist.value?.albums));
+const singleItems = computed<CoverItem[]>(() => formatCoverList(artist.value?.singles));
+const liveAlbumItems = computed<CoverItem[]>(() => formatCoverList(artist.value?.liveAlbums));
+const compilationItems = computed<CoverItem[]>(() => formatCoverList(artist.value?.compilations));
 </script>
 
 <template>
@@ -377,6 +491,45 @@ const albumItems = computed<CoverItem[]>(() => {
               :items="albumItems"
               :padding-x="20"
               :padding-bottom="24"
+              :has-more="hasMoreReleases.albums"
+              :loading-more="loadingMoreReleases"
+              @reach-bottom="() => onReachBottomReleases('albums')"
+              @click="(item) => navigateToAlbum(item.title, { source, albumId: item.id })"
+            />
+          </div>
+          <!-- 单曲与 EP 网格 -->
+          <div v-else-if="activeTab === 'singles'" key="singles" class="flex-1 min-h-0">
+            <CoverList
+              :items="singleItems"
+              :padding-x="20"
+              :padding-bottom="24"
+              :has-more="hasMoreReleases.singles"
+              :loading-more="loadingMoreReleases"
+              @reach-bottom="() => onReachBottomReleases('singles')"
+              @click="(item) => navigateToAlbum(item.title, { source, albumId: item.id })"
+            />
+          </div>
+          <!-- 现场专辑网格 -->
+          <div v-else-if="activeTab === 'liveAlbums'" key="liveAlbums" class="flex-1 min-h-0">
+            <CoverList
+              :items="liveAlbumItems"
+              :padding-x="20"
+              :padding-bottom="24"
+              :has-more="hasMoreReleases.liveAlbums"
+              :loading-more="loadingMoreReleases"
+              @reach-bottom="() => onReachBottomReleases('liveAlbums')"
+              @click="(item) => navigateToAlbum(item.title, { source, albumId: item.id })"
+            />
+          </div>
+          <!-- 合辑网格 -->
+          <div v-else-if="activeTab === 'compilations'" key="compilations" class="flex-1 min-h-0">
+            <CoverList
+              :items="compilationItems"
+              :padding-x="20"
+              :padding-bottom="24"
+              :has-more="hasMoreReleases.compilations"
+              :loading-more="loadingMoreReleases"
+              @reach-bottom="() => onReachBottomReleases('compilations')"
               @click="(item) => navigateToAlbum(item.title, { source, albumId: item.id })"
             />
           </div>

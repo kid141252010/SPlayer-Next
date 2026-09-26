@@ -23,6 +23,7 @@ export const getSongDetail = async (id: string): Promise<Track | null> => {
   if (!id) return null;
   const res = await requestCatalog<SongsResponse>(`/songs/${id}`, {
     include: "albums,artists",
+    extend: "artistUrl",
   });
   const item = res.data?.[0];
   return item ? transformAMSong(item) : null;
@@ -33,6 +34,7 @@ export const getSongsDetail = async (ids: string[]): Promise<Track[]> => {
   const res = await requestCatalog<SongsResponse>("/songs", {
     ids: ids.join(","),
     include: "albums,artists",
+    extend: "artistUrl",
   });
   return (res.data || []).map(transformAMSong);
 };

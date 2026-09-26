@@ -30,8 +30,10 @@ const MAX_SESSIONS = 2;
 const MAX_CACHED_FRAGMENTS = 8;
 /** 滑动窗口前向预取切片数 */
 const PREFETCH_AHEAD = 2;
-/** 单次请求超时时间（毫秒） */
-const DEFAULT_TIMEOUT_MS = 10_000;
+/** 单次普通请求超时时间（毫秒） */
+const DEFAULT_TIMEOUT_MS = 15_000;
+/** 分片下载请求超时时间（毫秒），确保无损与高解析度音频切片有充裕缓冲时间 */
+const FRAGMENT_TIMEOUT_MS = 30_000;
 /** 网络请求最大失败重试次数 */
 const MAX_NETWORK_RETRIES = 2;
 
@@ -140,17 +142,19 @@ const getOrCreateSession = (
  * @param url - 请求目标 URL
  * @param init - 请求配置
  * @param retries - 重试次数
+ * @param timeoutMs - 超时时间（毫秒）
  * @returns 响应对象
  */
 const fetchWithRetry = async (
   url: string,
   init?: RequestInit,
   retries = MAX_NETWORK_RETRIES,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<Response> => {
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const timeoutSignal = AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
+      const timeoutSignal = AbortSignal.timeout(timeoutMs);
       const combinedSignal = init?.signal
         ? AbortSignal.any([init.signal, timeoutSignal])
         : timeoutSignal;
@@ -205,6 +209,7 @@ const fetchByteRangeWithRetry = async (
       signal,
     },
     MAX_NETWORK_RETRIES,
+    FRAGMENT_TIMEOUT_MS,
   );
 
   if (!res.ok && res.status !== 206) {
@@ -260,9 +265,14 @@ const ensureSessionReady = async (session: StreamSession): Promise<ParsedMediaPl
           headers.Authorization = session.authHeader;
         }
         const keyRes = await fetchWithRetry(keyReqUrl, { headers });
-        if (!keyRes.ok) throw new Error(`拉取解密密钥模板失败 HTTP ${keyRes.status}`);
+        if (!keyRes.ok) {
+          throw new Error(`拉取解密密钥模板失败 HTTP ${keyRes.status} (${keyReqUrl})`);
+        }
         session.keyTemplateJson = await keyRes.text();
-        session.trackHandle = await amDecryptor.loadTemplate(session.keyTemplateJson);
+        session.trackHandle = await amDecryptor.loadTemplate(session.keyTemplateJson, {
+          adamId: session.adamId,
+          keyUri: playlist.keyUri,
+        });
       })();
 
       const fixedTask = (async () => {
@@ -562,7 +572,7 @@ export class AppleMusicProxyServer {
       res.end();
     } catch (err) {
       if (!isClientClosed) {
-        amLog.error("[proxy] 推流过程中发生错误", err);
+        amLog.error(`[proxy] 推流过程中发生错误 (adamId: ${adamId})`, err);
       }
       if (!res.destroyed) {
         res.destroy(err instanceof Error ? err : new Error(String(err)));

@@ -24,14 +24,27 @@ export const transformAMSong = (item: AMSong): Track => {
     item.relationships?.albums?.data?.[0]?.id || attr.url?.match(/\/album\/(?:[^/]+\/)?(\d+)/)?.[1];
 
   // 解析歌手 ID：优先 relationships.artists.data[0].id，兜底从 artistUrl 中正则提取
+  const artistRelationship = item.relationships?.artists?.data?.[0];
   const artistId =
-    item.relationships?.artists?.data?.[0]?.id ||
-    attr.artistUrl?.match(/\/artist\/(?:[^/]+\/)?(\d+)/)?.[1];
+    artistRelationship?.id || attr.artistUrl?.match(/\/artist\/(?:[^/]+\/)?(\d+)/)?.[1];
+
+  let artists: Artist[] = [];
+  if (item.relationships?.artists?.data?.length) {
+    artists = item.relationships.artists.data
+      .map((a, idx) => ({
+        id: a.id,
+        name: (a as any).attributes?.name || (idx === 0 ? attr.artistName : ""),
+      }))
+      .filter((a) => a.name);
+  }
+  if (!artists.length && attr.artistName) {
+    artists = [{ id: artistId, name: attr.artistName }];
+  }
 
   return {
     id: item.id,
     title: attr.name || "",
-    artists: attr.artistName ? [{ id: artistId, name: attr.artistName }] : [],
+    artists,
     album: attr.albumName
       ? {
           id: albumId,
@@ -95,7 +108,7 @@ export interface SearchParams {
 }
 
 export const search = async (params: SearchParams): Promise<SearchResult<unknown>> => {
-  const { keyword, type = "song", offset = 0, limit = 20 } = params;
+  const { keyword, type = "song", offset = 0, limit = 25 } = params;
   if (!keyword?.trim()) {
     return { items: [], total: 0, hasMore: false };
   }
@@ -120,6 +133,7 @@ export const search = async (params: SearchParams): Promise<SearchResult<unknown
   };
   if (type === "song") {
     searchParams["relate[songs]"] = "albums,artists";
+    searchParams["extend"] = "artistUrl";
   }
 
   const res = await requestCatalog<AMSearchResponse>("/search", searchParams);

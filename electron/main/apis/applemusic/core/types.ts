@@ -78,6 +78,8 @@ export type AMAlbum = AMResource<AMAlbumAttributes> & {
     };
     tracks?: {
       data?: AMSong[];
+      href?: string;
+      next?: string;
     };
   };
 };
@@ -118,6 +120,8 @@ export type AMPlaylist = AMResource<AMPlaylistAttributes> & {
   relationships?: {
     tracks?: {
       data?: AMSong[];
+      href?: string;
+      next?: string;
     };
   };
 };

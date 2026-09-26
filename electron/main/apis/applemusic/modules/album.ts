@@ -4,8 +4,8 @@
 
 import type { Album, Artist, Track } from "@shared/types/player";
 import { formatAMOriginalArtworkUrl } from "../core/artwork";
-import { requestCatalog } from "../core/request";
-import type { AMAlbum } from "../core/types";
+import { requestAppleMusic, requestCatalog } from "../core/request";
+import type { AMAlbum, AMSong } from "../core/types";
 import { transformAMAlbum, transformAMSong } from "./search";
 
 interface AlbumResponse {
@@ -21,7 +21,9 @@ export interface AlbumDetailResult {
 export const getAlbumDetail = async (id: string): Promise<AlbumDetailResult | null> => {
   if (!id) return null;
   const res = await requestCatalog<AlbumResponse>(`/albums/${id}`, {
+    include: "artists",
     "relate[songs]": "artists",
+    extend: "artistUrl",
   });
   const item = res.data?.[0];
   if (!item) return null;
@@ -29,7 +31,23 @@ export const getAlbumDetail = async (id: string): Promise<AlbumDetailResult | nu
   const album = transformAMAlbum(item);
   const albumArtistId = item.relationships?.artists?.data?.[0]?.id;
   const albumCoverOriginal = formatAMOriginalArtworkUrl(item.attributes.artwork?.url);
-  const trackItems = item.relationships?.tracks?.data || [];
+
+  const trackItems = [...(item.relationships?.tracks?.data || [])];
+  let nextTracksUrl = item.relationships?.tracks?.next;
+  while (nextTracksUrl) {
+    try {
+      const nextRes = await requestAppleMusic<{ data?: AMSong[]; next?: string }>({
+        path: nextTracksUrl,
+      });
+      if (nextRes.data?.length) {
+        trackItems.push(...nextRes.data);
+      }
+      nextTracksUrl = nextRes.next;
+    } catch {
+      break;
+    }
+  }
+
   const songs = trackItems.map((trackItem) => {
     const track = transformAMSong(trackItem);
     // 补齐所属专辑
@@ -53,7 +71,7 @@ export const getAlbumDetail = async (id: string): Promise<AlbumDetailResult | nu
   const artists: Artist[] =
     item.relationships?.artists?.data?.map((a) => ({
       id: a.id,
-      name: artistName,
+      name: (a as any).attributes?.name || artistName,
     })) || (albumArtistId ? [{ id: albumArtistId, name: artistName }] : []);
 
   return {

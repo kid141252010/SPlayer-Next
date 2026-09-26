@@ -5,7 +5,7 @@
 import { search, type SearchParams } from "./search";
 import { getSongAlbums, getSongArtists, getSongDetail, getSongsDetail } from "./song";
 import { getAlbumDetail } from "./album";
-import { getArtistDetail } from "./artist";
+import { getArtistDetail, getArtistView, type ArtistViewParams } from "./artist";
 import { getPlaylistDetail } from "./playlist";
 
 export const modules = {
@@ -16,6 +16,7 @@ export const modules = {
   songArtists: (params: { id: string }) => getSongArtists(params.id),
   album: (params: { id: string }) => getAlbumDetail(params.id),
   artist: (params: { id: string }) => getArtistDetail(params.id),
+  artistView: (params: ArtistViewParams) => getArtistView(params),
   playlist: (params: { id: string }) => getPlaylistDetail(params.id),
 };
 
