@@ -81,6 +81,11 @@ const config: Configuration = {
       filter: ["afp.mjs", "afp.wasm.mjs"],
     },
     {
+      from: "resources/apple-music",
+      to: "apple-music",
+      filter: ["hook.wasm"],
+    },
+    {
       from: "native/media-ctrl",
       to: "native",
       filter: ["*.node"],

@@ -17,6 +17,7 @@ import {
   pluginStorageSet,
 } from "./storage";
 import { playerControl } from "@main/services/playerControl";
+import { appleMusicProxy } from "@main/services/appleMusic";
 
 /** 处理一次 plugin→host 调用 */
 export const dispatchHostCall = async (
@@ -92,6 +93,13 @@ export const dispatchHostCall = async (
       case "player.getPosition":
         data = playerControl.getPosition();
         break;
+      case "appleMusic.getStreamUrl": {
+        const adamId = String(args[0]);
+        const m3u8Url = String(args[1]);
+        const upstreamUrl = String(args[2]);
+        data = await appleMusicProxy.getStreamUrl(adamId, m3u8Url, upstreamUrl);
+        break;
+      }
       default:
         throw Object.assign(new Error(`unknown host method: ${method}`), {
           code: PluginErrorCodes.UNKNOWN,

@@ -34,6 +34,7 @@ import {
 } from "@main/services/orpheus";
 import { extractAudioFiles, captureAudioFiles } from "@main/services/externalFile";
 import { syncProxyEnv } from "@main/utils/proxy";
+import { initAppleMusicService, disposeAppleMusicService } from "@main/services/appleMusic";
 
 /**
  * 配置 Chromium 启动参数以优化内存占用
@@ -145,6 +146,8 @@ export const initApp = (): void => {
     void startMcpServer();
     // 初始化自动更新
     initUpdater();
+    // 启动 Apple Music 本地流媒体代理
+    void initAppleMusicService();
     // 周期记录各进程内存
     setTimeout(logProcessMemory, MEMORY_LOG_FIRST_DELAY_MS);
     setInterval(logProcessMemory, MEMORY_LOG_INTERVAL_MS);
@@ -174,5 +177,6 @@ export const initApp = (): void => {
     void pluginRegistry.shutdown();
     disposePlaybackBridge();
     disposeUpdater();
+    disposeAppleMusicService();
   });
 };

@@ -283,6 +283,15 @@ const buildSplayer = (record: PluginContextRecord, spec: LoadSpec): HostApi => (
     getPosition: () => hostCall(record, "player.getPosition", []) as Promise<number>,
   },
 
+  appleMusic: {
+    getStreamUrl: (adamId: string, m3u8Url: string, upstreamUrl: string): Promise<string> =>
+      hostCall(record, "appleMusic.getStreamUrl", [
+        adamId,
+        m3u8Url,
+        upstreamUrl,
+      ]) as Promise<string>,
+  },
+
   onSettingChange: (key: string, handler: (value: unknown) => void) => {
     const list = record.settingChangeHandlers.get(key) ?? [];
     list.push(handler);
