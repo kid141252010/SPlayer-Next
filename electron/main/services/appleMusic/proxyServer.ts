@@ -18,7 +18,9 @@ interface StreamSession {
 
 /** 缓存最近解析的媒体会话，避免频繁重复解析清单元数据与反复向 CDN 拉取 */
 const sessionCache = new Map<string, StreamSession>();
-const MAX_SESSIONS = 16;
+const MAX_SESSIONS = 2;
+/** 单个会话最多内存驻留的切片数，避免高码率无损音频占用过多内存 */
+const MAX_CACHED_FRAGMENTS = 6;
 
 /**
  * 获取或创建流会话
@@ -122,6 +124,10 @@ const getDecryptedSegment = (
       return amDecryptor.decryptFragment(handle || 0, raw, session.patchedInit);
     })();
 
+    if (session.fragCache.size >= MAX_CACHED_FRAGMENTS) {
+      const oldestKey = session.fragCache.keys().next().value;
+      if (oldestKey !== undefined) session.fragCache.delete(oldestKey);
+    }
     session.fragCache.set(seg.start, inFlight);
     // 若请求失败，不缓存错误，以便下一次重试
     inFlight.catch(() => {
