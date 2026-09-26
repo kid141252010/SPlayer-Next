@@ -2256,7 +2256,10 @@
     "label": "Artists",
     "songs": "Songs",
     "totalArtists": "{count} artists",
-    "albums": "Albums"
+    "albums": "Albums",
+    "singles": "Singles & EPs",
+    "liveAlbums": "Live Albums",
+    "compilations": "Compilations"
   },
   "album": {
     "label": "Albums"

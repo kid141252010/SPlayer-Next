@@ -37,6 +37,7 @@ const resolveWasmPath = (): string => {
 export class AmDecryptor {
   private wasm: WasmExports | null = null;
   private wasmInitPromise: Promise<WasmExports> | null = null;
+  private fixedTemplateObj: Record<string, unknown> | null = null;
 
   /**
    * 初始化并预热 WASM 运行时环境
@@ -63,6 +64,23 @@ export class AmDecryptor {
         throw new Error(`hook.wasm 资源文件不存在: ${wasmPath}`);
       }
       const buffer = await fs.promises.readFile(wasmPath);
+
+      // 提取内置固定模板 JSON 作为缺省上下文（供无完整上下文的上游合成完整模板）
+      try {
+        const str = buffer.toString("latin1");
+        const target = '"rcx": "0x97"';
+        const idx = str.indexOf(target);
+        if (idx !== -1) {
+          const start = str.lastIndexOf("{", idx);
+          const end = str.indexOf("}", idx);
+          if (start !== -1 && end !== -1) {
+            this.fixedTemplateObj = JSON.parse(str.slice(start, end + 1));
+          }
+        }
+      } catch (err) {
+        amLog.warn("[decryptor] 解析内置固定模板元数据异常", err);
+      }
+
       const { instance } = await WebAssembly.instantiate(buffer, {});
       const exports = instance.exports as unknown as WasmExports;
       this.wasm = exports;
@@ -117,12 +135,46 @@ export class AmDecryptor {
 
   /**
    * 载入轨道解密模板 JSON
-   * @param templateJson - 上游 /key 返回的模板 JSON 文本
+   * 自动兼容完整的 am-hook 模板与 wrapper-manager 精简 contentKey 响应
+   * @param templateInput - 上游 /key 返回的模板 JSON 文本或对象
+   * @param overrides - 可选的元数据覆盖字段（adamId, keyUri）
    * @returns 模板句柄
    */
-  public async loadTemplate(templateJson: string): Promise<number> {
+  public async loadTemplate(
+    templateInput: string | Record<string, unknown>,
+    overrides?: { adamId?: string; keyUri?: string },
+  ): Promise<number> {
     const w = await this.getWasm();
-    const encoded = new TextEncoder().encode(templateJson);
+    let finalJsonStr =
+      typeof templateInput === "string" ? templateInput.trim() : JSON.stringify(templateInput);
+
+    try {
+      const parsed = typeof templateInput === "string" ? JSON.parse(templateInput) : templateInput;
+      const payload =
+        parsed && typeof parsed === "object" && "data" in parsed && parsed.data
+          ? (parsed.data as Record<string, unknown>)
+          : (parsed as Record<string, unknown>);
+
+      // 若上游仅返回 contentKey（无 ctx/state 执行上下文），基于内置固定模板合成合法结构
+      if (
+        payload &&
+        (!payload.ctx || !payload.state) &&
+        payload.contentKey &&
+        this.fixedTemplateObj
+      ) {
+        const merged = {
+          ...this.fixedTemplateObj,
+          adamId: overrides?.adamId ?? payload.adamId ?? this.fixedTemplateObj.adamId,
+          keyUri: overrides?.keyUri ?? payload.keyUri ?? this.fixedTemplateObj.keyUri,
+          contentKey: payload.contentKey,
+        };
+        finalJsonStr = JSON.stringify(merged);
+      }
+    } catch {
+      // 保持原始字符串传递
+    }
+
+    const encoded = new TextEncoder().encode(finalJsonStr);
     const len = encoded.length;
     const ptr = w.hook_alloc(len);
     let handle = 0;

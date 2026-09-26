@@ -2244,7 +2244,10 @@
     "label": "艺术家",
     "songs": "歌曲",
     "totalArtists": "共 {count} 位",
-    "albums": "专辑"
+    "albums": "专辑",
+    "singles": "单曲与 EP",
+    "liveAlbums": "现场专辑",
+    "compilations": "合辑"
   },
   "album": {
     "label": "专辑"
