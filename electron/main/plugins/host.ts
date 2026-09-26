@@ -97,7 +97,8 @@ export const dispatchHostCall = async (
         const adamId = String(args[0]);
         const m3u8Url = String(args[1]);
         const upstreamUrl = String(args[2]);
-        data = await appleMusicProxy.getStreamUrl(adamId, m3u8Url, upstreamUrl);
+        const token = args[3] !== undefined && args[3] !== null ? String(args[3]) : undefined;
+        data = await appleMusicProxy.getStreamUrl(adamId, m3u8Url, upstreamUrl, token);
         break;
       }
       default:

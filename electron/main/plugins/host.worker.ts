@@ -284,11 +284,17 @@ const buildSplayer = (record: PluginContextRecord, spec: LoadSpec): HostApi => (
   },
 
   appleMusic: {
-    getStreamUrl: (adamId: string, m3u8Url: string, upstreamUrl: string): Promise<string> =>
+    getStreamUrl: (
+      adamId: string,
+      m3u8Url: string,
+      upstreamUrl: string,
+      token?: string,
+    ): Promise<string> =>
       hostCall(record, "appleMusic.getStreamUrl", [
         adamId,
         m3u8Url,
         upstreamUrl,
+        token,
       ]) as Promise<string>,
   },
 

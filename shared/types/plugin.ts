@@ -379,7 +379,12 @@ export interface HostApi {
 
   /** Apple Music 本地流媒体代理扩展 */
   appleMusic?: {
-    getStreamUrl: (adamId: string, m3u8Url: string, upstreamUrl: string) => Promise<string>;
+    getStreamUrl: (
+      adamId: string,
+      m3u8Url: string,
+      upstreamUrl: string,
+      token?: string,
+    ) => Promise<string>;
   };
 }
 
