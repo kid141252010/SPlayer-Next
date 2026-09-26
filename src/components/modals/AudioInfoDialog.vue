@@ -96,24 +96,28 @@ const formatChannels = (channelCount?: number): string => {
   return `${t("quality.multiChannel")} · ${channelCount}`;
 };
 
-/** 核心参数小卡片数据 */
+/** 核心参数小卡片数据（展示当前音源真实规格） */
 const coreCards = computed(() => {
   const currentQuality = quality.value;
   const currentStream = streamInfo.value;
 
-  const outputSampleRate = currentStream?.outputSampleRate || currentQuality?.sampleRate;
-  const outputBitDepth =
-    currentStream?.outputBits ||
+  const trackSampleRate =
+    currentQuality?.sampleRate ||
+    currentStream?.sourceSampleRate ||
+    currentStream?.outputSampleRate;
+  const trackBitDepth =
     (currentQuality?.bitsPerSample && currentQuality.bitsPerSample > 0
       ? currentQuality.bitsPerSample
-      : 0);
-  const outputChannels = currentStream?.outputChannels || currentQuality?.channels;
+      : 0) ||
+    currentStream?.sourceBits ||
+    0;
+  const trackChannels = currentQuality?.channels || currentStream?.outputChannels;
 
   return [
-    { label: t("quality.sampleRate"), value: formatSampleRate(outputSampleRate) },
-    { label: t("quality.bitDepth"), value: formatBitDepth(outputBitDepth) },
+    { label: t("quality.sampleRate"), value: formatSampleRate(trackSampleRate) },
+    { label: t("quality.bitDepth"), value: formatBitDepth(trackBitDepth) },
     { label: t("quality.bitRate"), value: formatBitRate(currentQuality?.bitRate) },
-    { label: t("quality.channels"), value: formatChannels(outputChannels) },
+    { label: t("quality.channels"), value: formatChannels(trackChannels) },
   ];
 });
 
