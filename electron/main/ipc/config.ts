@@ -35,6 +35,7 @@ import { setOrpheusProtocolRegistered } from "@main/services/orpheus";
 import { setTaskbarThumbnailEnabled } from "@main/services/thumbnail";
 import { applyChannelChange } from "@main/services/updater";
 import { UPDATE_CHANNELS, type UpdateChannel } from "@shared/types/settings";
+import { syncProxyEnv } from "@main/utils/proxy";
 
 /**
  * 应用配置写入后的副作用
@@ -135,6 +136,10 @@ const applyConfigChange = (keyPath: string, value: unknown, previous: unknown): 
   // 任务栏歌词配置变更广播到所有窗口（仅 Windows）
   if (isWin && keyPath.startsWith("taskbarLyric.")) {
     broadcast("taskbarLyric:configChange", store.get("taskbarLyric"));
+  }
+  // 网络代理配置变更，实时同步环境变量
+  if (keyPath.startsWith("system.networkProxy")) {
+    syncProxyEnv();
   }
 };
 

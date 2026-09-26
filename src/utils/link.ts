@@ -38,7 +38,7 @@ export const parseMusicLink = (input: string): ParsedLink | null => {
 
   // 匹配 Apple Music 链接
   const amMatch = trimmed.match(
-    /music\.apple\.com(?:\/[a-z]{2})?\/(album|song|artist|playlist)(?:\/[^/?#]+)?\/([^/?#]+)/i,
+    /music\.apple\.com(?:\/[a-z]{2}(?:-[a-z0-9]+)*)?\/(album|song|artist|playlist)(?:\/[^/?#]+)?\/([^/?#]+)/i,
   );
   if (amMatch) {
     const rawType = amMatch[1].toLowerCase();

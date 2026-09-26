@@ -18,7 +18,10 @@ export const loadAppleMusicCollection = async (
   const fallbackName = options.fallbackName ?? originalId;
 
   if (type === "album") {
-    const { album, tracks, description } = await fetchAppleMusicAlbum(originalId, fallbackName);
+    const { album, tracks, artists, description } = await fetchAppleMusicAlbum(
+      originalId,
+      fallbackName,
+    );
     if (!options.signal?.aborted) {
       options.onUpdate({
         id: album.id ?? originalId,
@@ -29,6 +32,7 @@ export const loadAppleMusicCollection = async (
         creator: album.artist,
         description,
         tracks,
+        artists: artists?.length ? artists : album.artist ? [{ name: album.artist }] : [],
         trackCount: album.trackCount ?? tracks.length,
       });
     }

@@ -30,6 +30,7 @@ export interface AMSongAttributes {
   releaseDate?: string;
   genreNames?: string[];
   url?: string;
+  artistUrl?: string;
   previews?: AMPreview[];
 }
 
@@ -44,7 +45,18 @@ export interface AMResource<T> {
   >;
 }
 
-export type AMSong = AMResource<AMSongAttributes>;
+export type AMSong = AMResource<AMSongAttributes> & {
+  relationships?: {
+    albums?: {
+      data?: Array<AMResource<AMAlbumAttributes>>;
+      href?: string;
+    };
+    artists?: {
+      data?: Array<AMResource<AMArtistAttributes>>;
+      href?: string;
+    };
+  };
+};
 
 export interface AMAlbumAttributes {
   name: string;
@@ -60,6 +72,10 @@ export interface AMAlbumAttributes {
 
 export type AMAlbum = AMResource<AMAlbumAttributes> & {
   relationships?: {
+    artists?: {
+      data?: Array<AMResource<AMArtistAttributes>>;
+      href?: string;
+    };
     tracks?: {
       data?: AMSong[];
     };

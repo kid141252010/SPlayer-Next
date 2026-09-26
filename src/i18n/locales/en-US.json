@@ -544,6 +544,8 @@
     "context": {
       "play": "Play",
       "playNext": "Play Next",
+      "goToAlbum": "Go to album",
+      "goToArtist": "Go to artist",
       "showInExplorer": "Open Location",
       "copyPath": "Copy File Path",
       "editTags": "Edit Metadata",

@@ -42,6 +42,7 @@ export const requestAppleMusic = async <T>(options: AMRequestOptions): Promise<T
       headers: {
         Authorization: `Bearer ${token}`,
         Origin: APPLE_MUSIC_WEB_ORIGIN,
+        Referer: `${APPLE_MUSIC_WEB_ORIGIN}/`,
         Accept: "application/json",
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -76,10 +77,18 @@ export const requestCatalog = async <T>(
   subPath: string,
   params?: Record<string, string | number | boolean | undefined>,
 ): Promise<T> => {
-  const storefront = getAMStorefront();
+  const customStorefront = typeof params?.storefront === "string" ? params.storefront : undefined;
+  const storefront = customStorefront || getAMStorefront();
+  const restParams = params ? { ...params } : undefined;
+  if (restParams && "storefront" in restParams) {
+    delete restParams.storefront;
+  }
   const normalizedSubPath = subPath.startsWith("/") ? subPath : `/${subPath}`;
+  const reqPath = normalizedSubPath.startsWith("/catalog/")
+    ? normalizedSubPath
+    : `/catalog/${storefront}${normalizedSubPath}`;
   return requestAppleMusic<T>({
-    path: `/catalog/${storefront}${normalizedSubPath}`,
-    params,
+    path: reqPath,
+    params: restParams,
   });
 };

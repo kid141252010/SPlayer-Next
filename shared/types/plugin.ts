@@ -376,6 +376,11 @@ export interface HostApi {
 
   /** 控制类设置变更回调：用户改设置后触发 */
   onSettingChange: (key: string, handler: (value: unknown) => void) => void;
+
+  /** Apple Music 本地流媒体代理扩展 */
+  appleMusic?: {
+    getStreamUrl: (adamId: string, m3u8Url: string, upstreamUrl: string) => Promise<string>;
+  };
 }
 
 /* ========== 沙箱 ↔ 主进程消息协议 ========== */
@@ -464,7 +469,8 @@ export type HostCallMethod =
   | "player.prev"
   | "player.seek"
   | "player.setVolume"
-  | "player.getPosition";
+  | "player.getPosition"
+  | "appleMusic.getStreamUrl";
 
 /* ========== 渲染端 ↔ 主进程的 IPC 请求参数 ========== */
 

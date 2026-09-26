@@ -4,6 +4,7 @@ import { useStatusStore } from "@/stores/status";
 import { useMediaStore } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
 import { navigateToArtist } from "@/utils/navigate";
+import { fetchSongArtists } from "@/apis/song/applemusic";
 import { getValidArtists } from "@shared/utils/track";
 
 withDefaults(
@@ -43,12 +44,38 @@ const currentBarLyric = computed(() => {
   };
 });
 
-/** 歌手是否可跳转：非本地需有真实 id */
+/** 歌手是否可跳转：非本地需有真实 id（或 AM 具备歌曲 id） */
 const isArtistLinkable = (artist: Artist): boolean => {
   if (!artist.name) return false;
-  const source = media.track?.source;
-  if (source && source !== "local") return !!artist.id;
+  const track = media.track;
+  if (track?.source === "applemusic") return !!artist.id || !!track.id;
+  if (track?.source && track.source !== "local") return !!artist.id;
   return true;
+};
+
+const goArtist = async (artist: Artist): Promise<void> => {
+  if (!isArtistLinkable(artist)) return;
+  const track = media.track;
+  if (track?.source === "applemusic" && !artist.id && track.id) {
+    try {
+      const artists = await fetchSongArtists(track.id);
+      const target = artists.find((a) => a.name === artist.name) || artists[0];
+      if (target?.id) {
+        artist.id = target.id;
+        navigateToArtist(target.name || artist.name, {
+          source: track.source,
+          artistId: target.id,
+        });
+        return;
+      }
+    } catch (err) {
+      console.warn("[TrackInfo] resolve song artist failed:", err);
+    }
+  }
+  navigateToArtist(artist.name, {
+    source: media.track?.source,
+    artistId: artist.id,
+  });
 };
 </script>
 
@@ -108,13 +135,7 @@ const isArtistLinkable = (artist: Artist): boolean => {
                       ? 'cursor-pointer transition-opacity hover:opacity-70'
                       : ''
                   "
-                  @click.stop="
-                    isArtistLinkable(artist) &&
-                    navigateToArtist(artist.name, {
-                      source: media.track?.source,
-                      artistId: artist.id,
-                    })
-                  "
+                  @click.stop="goArtist(artist)"
                 >
                   {{ artist.name }}
                 </span>

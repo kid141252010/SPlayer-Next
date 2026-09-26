@@ -1,8 +1,9 @@
+import { execSync } from "node:child_process";
+import crypto from "node:crypto";
 import { store } from "@main/store";
 import { systemLog } from "@main/utils/logger";
 import { fetch as undiciFetch, Agent, ProxyAgent, Socks5ProxyAgent } from "undici";
 import type { Dispatcher } from "undici";
-import crypto from "node:crypto";
 
 const PROXY_TEST_URL = "https://www.baidu.com";
 
@@ -35,8 +36,68 @@ export const getNetworkProxyUrl = (): string | null => {
   return `${config.protocol}://${host}:${port}`;
 };
 
+/** 从 Windows 注册表读取当前系统代理配置（非 Windows 或未启用时返回 null） */
+export const getSystemProxyUrl = (): string | null => {
+  if (process.platform !== "win32") return null;
+  try {
+    const output = execSync(
+      'reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings"',
+      { encoding: "utf-8", timeout: 2000, stdio: ["ignore", "pipe", "ignore"] },
+    );
+    const enabledMatch = output.match(/ProxyEnable\s+REG_DWORD\s+0x([0-9a-fA-F]+)/i);
+    const isEnabled = enabledMatch ? parseInt(enabledMatch[1], 16) === 1 : false;
+    if (!isEnabled) return null;
+
+    const serverMatch = output.match(/ProxyServer\s+REG_SZ\s+([^\r\n]+)/i);
+    if (!serverMatch || !serverMatch[1]) return null;
+
+    const raw = serverMatch[1].trim();
+    if (raw.includes("=")) {
+      const httpPart = raw.split(";").find((s) => s.trim().startsWith("http="));
+      if (httpPart) {
+        const val = httpPart.split("=")[1]?.trim();
+        return val
+          ? val.startsWith("http://") || val.startsWith("https://")
+            ? val
+            : `http://${val}`
+          : null;
+      }
+    }
+    return raw.startsWith("http://") || raw.startsWith("https://") ? raw : `http://${raw}`;
+  } catch {
+    return null;
+  }
+};
+
+/** 当前生效的有效代理地址（优先应用手动配置，其次回退系统代理） */
+export const getEffectiveProxyUrl = (): string | null => {
+  return getNetworkProxyUrl() ?? getSystemProxyUrl();
+};
+
+/** 同步代理设置到进程环境变量，确保 Rust reqwest 等原生模块及子进程生效 */
+export const syncProxyEnv = (): void => {
+  const proxyUrl = getEffectiveProxyUrl();
+  if (proxyUrl) {
+    process.env.HTTP_PROXY = proxyUrl;
+    process.env.HTTPS_PROXY = proxyUrl;
+    process.env.ALL_PROXY = proxyUrl;
+    process.env.http_proxy = proxyUrl;
+    process.env.https_proxy = proxyUrl;
+    process.env.all_proxy = proxyUrl;
+    systemLog.info(`[proxy] 环境变量已同步代理: ${proxyUrl}`);
+  } else {
+    delete process.env.HTTP_PROXY;
+    delete process.env.HTTPS_PROXY;
+    delete process.env.ALL_PROXY;
+    delete process.env.http_proxy;
+    delete process.env.https_proxy;
+    delete process.env.all_proxy;
+    systemLog.info("[proxy] 环境变量代理已清空 (直连)");
+  }
+};
+
 const getProxyDispatcher = (): Dispatcher => {
-  const url = getNetworkProxyUrl();
+  const url = getEffectiveProxyUrl();
   if (!url) return getDefaultDispatcher();
   if (!proxyAgent || proxyAgentUrl !== url) {
     proxyAgent?.close().catch(() => {});

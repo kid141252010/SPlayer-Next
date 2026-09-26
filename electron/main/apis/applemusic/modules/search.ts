@@ -19,12 +19,22 @@ export const transformAMSong = (item: AMSong): Track => {
   const cover = formatAMArtworkUrl(attr.artwork?.url, 300);
   const coverOriginal = formatAMOriginalArtworkUrl(attr.artwork?.url);
 
+  // 解析专辑 ID：优先 relationships.albums.data[0].id，兜底从 url 中正则提取
+  const albumId =
+    item.relationships?.albums?.data?.[0]?.id || attr.url?.match(/\/album\/(?:[^/]+\/)?(\d+)/)?.[1];
+
+  // 解析歌手 ID：优先 relationships.artists.data[0].id，兜底从 artistUrl 中正则提取
+  const artistId =
+    item.relationships?.artists?.data?.[0]?.id ||
+    attr.artistUrl?.match(/\/artist\/(?:[^/]+\/)?(\d+)/)?.[1];
+
   return {
     id: item.id,
     title: attr.name || "",
-    artists: attr.artistName ? [{ name: attr.artistName }] : [],
+    artists: attr.artistName ? [{ id: artistId, name: attr.artistName }] : [],
     album: attr.albumName
       ? {
+          id: albumId,
           name: attr.albumName,
           cover,
           artist: attr.artistName,
@@ -102,12 +112,17 @@ export const search = async (params: SearchParams): Promise<SearchResult<unknown
   // Apple Music catalog search limit 参数最大为 25
   const safeLimit = Math.min(Math.max(1, limit), 25);
 
-  const res = await requestCatalog<AMSearchResponse>("/search", {
+  const searchParams: Record<string, string | number | boolean | undefined> = {
     term: keyword.trim(),
     types: amType,
     offset,
     limit: safeLimit,
-  });
+  };
+  if (type === "song") {
+    searchParams["relate[songs]"] = "albums,artists";
+  }
+
+  const res = await requestCatalog<AMSearchResponse>("/search", searchParams);
 
   if (type === "song") {
     const songData = res.results?.songs;
