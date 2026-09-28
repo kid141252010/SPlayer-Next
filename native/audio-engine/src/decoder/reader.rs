@@ -59,6 +59,23 @@ impl<T: Read + Seek> LazySeekHttpSource<T> {
 
 impl<T: Read + Seek> Read for LazySeekHttpSource<T> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        // 当获知总大小且当前读取偏移位于文件最末尾极窄区间（如倒数 64 字节以内）时，
+        // 属于 FFmpeg 解封装器（如 mov_read_mfra）对文件尾索引（mfra）或标签的探测。
+        // 流媒体与 fMP4 媒体尾部无此类索引，直接以内存零填充响应，
+        // 消除向末尾发起的网络 Seek，防止当前 HTTP 连接被掐断和触发昂贵的重连。
+        if let Some(total) = self.total_size {
+            if total > 64 && self.virtual_pos >= total - 64 {
+                let available = total.saturating_sub(self.virtual_pos) as usize;
+                let to_read = buf.len().min(available);
+                if to_read == 0 {
+                    return Ok(0);
+                }
+                buf[..to_read].fill(0);
+                self.virtual_pos += to_read as u64;
+                return Ok(to_read);
+            }
+        }
+
         if self.virtual_pos != self.actual_pos {
             self.inner.seek(SeekFrom::Start(self.virtual_pos))?;
             self.actual_pos = self.virtual_pos;
