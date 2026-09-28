@@ -110,6 +110,20 @@ const goArtist = async (artist: Artist): Promise<void> => {
           >
             {{ media.track.title }}
           </SMarquee>
+          <span
+            v-if="media.track.contentRating === 'explicit' || media.track.explicit"
+            class="shrink-0 self-center px-1 rounded text-[10px] leading-[14px] font-bold border border-solid text-on-surface-variant/70 border-on-surface-variant/30 select-none"
+            title="Explicit"
+          >
+            E
+          </span>
+          <span
+            v-else-if="media.track.contentRating === 'clean'"
+            class="shrink-0 self-center px-1 rounded text-[9px] leading-[14px] font-bold border border-solid text-on-surface-variant/60 border-on-surface-variant/25 select-none"
+            title="Clean"
+          >
+            CLEAN
+          </span>
           <slot name="title-trailing" />
         </div>
         <Transition name="slide-up" mode="out-in">

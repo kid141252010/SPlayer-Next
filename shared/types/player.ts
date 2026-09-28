@@ -49,6 +49,10 @@ export interface Album {
   trackCount?: number;
   /** 发行年份 */
   year?: number;
+  /** 内容分级 / 脏话标记 */
+  contentRating?: "clean" | "explicit";
+  /** 脏话标记（是否为 Explicit 显式内容） */
+  explicit?: boolean;
 }
 
 /** 歌单 */
@@ -60,6 +64,10 @@ export interface Playlist {
   trackCount?: number;
   /** 创建者 */
   owner?: string;
+  /** 内容分级 / 脏话标记 */
+  contentRating?: "clean" | "explicit";
+  /** 脏话标记（是否为 Explicit 显式内容） */
+  explicit?: boolean;
 }
 
 /** 音质信息 */
@@ -134,6 +142,14 @@ export interface Track {
   cloud?: boolean;
   /** 国际标准音像制品编码（ISRC） */
   isrc?: string;
+  /**
+   * 内容分级 / 脏话标记
+   * - "explicit": 脏话/成人显式内容
+   * - "clean": 洁版/过滤版内容
+   */
+  contentRating?: "clean" | "explicit";
+  /** 脏话标记（是否为 Explicit 显式内容） */
+  explicit?: boolean;
 }
 
 /** 播放队列项，将曲目元数据与本次播放上下文分离 */

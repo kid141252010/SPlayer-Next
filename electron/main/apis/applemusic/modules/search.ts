@@ -41,6 +41,13 @@ export const transformAMSong = (item: AMSong): Track => {
     artists = [{ id: artistId, name: attr.artistName }];
   }
 
+  const contentRating =
+    attr.contentRating === "explicit" || attr.contentRating === "clean"
+      ? attr.contentRating
+      : undefined;
+  const explicit =
+    contentRating === "explicit" ? true : contentRating === "clean" ? false : undefined;
+
   return {
     id: item.id,
     title: attr.name || "",
@@ -59,6 +66,8 @@ export const transformAMSong = (item: AMSong): Track => {
     source: "applemusic",
     track: attr.trackNumber,
     isrc: attr.isrc,
+    contentRating,
+    explicit,
   };
 };
 
@@ -66,6 +75,12 @@ export const transformAMSong = (item: AMSong): Track => {
 export const transformAMAlbum = (item: AMAlbum): Album => {
   const attr = item.attributes;
   const year = attr.releaseDate ? parseInt(attr.releaseDate.slice(0, 4), 10) : undefined;
+  const contentRating =
+    attr.contentRating === "explicit" || attr.contentRating === "clean"
+      ? attr.contentRating
+      : undefined;
+  const explicit =
+    contentRating === "explicit" ? true : contentRating === "clean" ? false : undefined;
 
   return {
     id: item.id,
@@ -74,6 +89,8 @@ export const transformAMAlbum = (item: AMAlbum): Album => {
     cover: formatAMArtworkUrl(attr.artwork?.url, 300),
     trackCount: attr.trackCount,
     year: Number.isFinite(year) ? year : undefined,
+    contentRating,
+    explicit,
   };
 };
 
@@ -90,6 +107,13 @@ export const transformAMArtist = (item: AMArtist): Artist => {
 /** 歌单数据转换 */
 export const transformAMPlaylist = (item: AMPlaylist): Playlist => {
   const attr = item.attributes;
+  const contentRating =
+    attr.contentRating === "explicit" || attr.contentRating === "clean"
+      ? attr.contentRating
+      : undefined;
+  const explicit =
+    contentRating === "explicit" ? true : contentRating === "clean" ? false : undefined;
+
   return {
     id: item.id,
     name: attr.name || "",
@@ -97,6 +121,8 @@ export const transformAMPlaylist = (item: AMPlaylist): Playlist => {
     description: attr.description?.standard || attr.description?.short || "",
     trackCount: attr.trackCount,
     owner: attr.curatorName,
+    contentRating,
+    explicit,
   };
 };
 

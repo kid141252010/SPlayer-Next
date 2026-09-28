@@ -96,7 +96,23 @@ const {
               />
               <SImg :src="item.cover" class="size-12 rounded-lg shrink-0" />
               <div class="flex-1 min-w-0">
-                <div class="text-base truncate font-medium leading-snug">{{ item.title }}</div>
+                <div class="flex items-center gap-1 min-w-0">
+                  <div class="text-base truncate font-medium leading-snug">{{ item.title }}</div>
+                  <span
+                    v-if="item.contentRating === 'explicit' || item.explicit"
+                    class="shrink-0 px-1 rounded text-[10px] leading-[14px] font-bold border border-solid text-cover/70 border-cover/30 select-none"
+                    title="Explicit"
+                  >
+                    E
+                  </span>
+                  <span
+                    v-else-if="item.contentRating === 'clean'"
+                    class="shrink-0 px-1 rounded text-[9px] leading-[14px] font-bold border border-solid text-cover/60 border-cover/25 select-none"
+                    title="Clean"
+                  >
+                    CLEAN
+                  </span>
+                </div>
                 <div
                   class="text-sm truncate leading-snug mt-0.5"
                   :class="index === statusStore.playIndex ? 'text-cover/70' : 'text-cover/55'"
