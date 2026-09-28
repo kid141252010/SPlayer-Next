@@ -445,11 +445,11 @@ export class AppleMusicProxyServer {
       params.set("token", resolvedToken);
     }
 
-    // 快速预热并尝试提取总长度（给 350ms race 窗口，超时不阻塞放行）
+    // 快速预热并尝试提取总长度（给 800ms race 窗口，超时不阻塞放行）
     try {
       const playlist = await Promise.race([
         ensureSessionReady(session),
-        new Promise<null>((r) => setTimeout(() => r(null), 350)),
+        new Promise<null>((r) => setTimeout(() => r(null), 800)),
       ]);
       if (playlist?.totalSize) {
         params.set("size", String(playlist.totalSize));
@@ -542,6 +542,26 @@ export class AppleMusicProxyServer {
       }
 
       const contentLength = endOffset - startOffset + 1;
+
+      // 检查当前请求是否属于客户端在首播尚未获取到曲目密钥时的末尾探针（如 FFmpeg 盲测 mfra/sidx 索引）
+      const isProbeRequest =
+        startOffset > (playlist.segments[0]?.end ?? 0) && session.trackHandle === undefined;
+
+      if (isProbeRequest) {
+        // 对于尚未获得曲目密钥且跳过首片向后发起的探针请求，由于 HLS fMP4 无末尾 mfra 索引，
+        // 瞬间返回零填充 Buffer 供解封装器快速判定无索引并退回起点，避免阻塞首播死等上游网络握手
+        const probeLen = Math.min(contentLength, 65536);
+        const probeChunk = Buffer.alloc(probeLen);
+        res.writeHead(206, {
+          "Content-Range": `bytes ${startOffset}-${startOffset + probeLen - 1}/${totalSize}`,
+          "Accept-Ranges": "bytes",
+          "Content-Length": probeLen,
+          "Content-Type": "audio/mp4",
+          "Cache-Control": "no-cache",
+        });
+        res.end(probeChunk);
+        return;
+      }
 
       res.writeHead(206, {
         "Content-Range": `bytes ${startOffset}-${endOffset}/${totalSize}`,
