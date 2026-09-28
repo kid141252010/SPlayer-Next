@@ -231,6 +231,64 @@ const fetchByteRangeWithRetry = async (
 };
 
 /**
+ * 向 MP4 Init Segment（moov 容器中的 mvhd, tkhd, mdhd）注入曲目真实总时长
+ * 使 FFmpeg 解封装器在首播无需扫描文件尾部即可瞬间原生识别出完整曲目时长
+ * @param initBuf - 已修补的 Init Segment 内存 Buffer
+ * @param durationSecs - 曲目真实总秒数（来自 M3U8 清单累加）
+ * @returns 注入时长后的 Buffer
+ */
+const injectDurationToInit = (initBuf: Buffer, durationSecs: number): Buffer => {
+  if (durationSecs <= 0) return initBuf;
+  const copy = Buffer.from(initBuf);
+
+  // 1. mvhd (Movie Header Box)
+  const mvhdIdx = copy.indexOf("mvhd");
+  let movieTimescale = 48000;
+  if (mvhdIdx >= 4) {
+    const ver = copy.readUInt8(mvhdIdx + 4);
+    if (ver === 0) {
+      movieTimescale = copy.readUInt32BE(mvhdIdx + 16);
+      const targetDuration = Math.round(durationSecs * movieTimescale);
+      copy.writeUInt32BE(targetDuration, mvhdIdx + 20);
+    } else if (ver === 1) {
+      movieTimescale = copy.readUInt32BE(mvhdIdx + 24);
+      const targetDuration = BigInt(Math.round(durationSecs * movieTimescale));
+      copy.writeBigUInt64BE(targetDuration, mvhdIdx + 28);
+    }
+  }
+
+  // 2. tkhd (Track Header Box)
+  const tkhdIdx = copy.indexOf("tkhd");
+  if (tkhdIdx >= 4) {
+    const ver = copy.readUInt8(tkhdIdx + 4);
+    if (ver === 0) {
+      const targetDuration = Math.round(durationSecs * movieTimescale);
+      copy.writeUInt32BE(targetDuration, tkhdIdx + 20);
+    } else if (ver === 1) {
+      const targetDuration = BigInt(Math.round(durationSecs * movieTimescale));
+      copy.writeBigUInt64BE(targetDuration, tkhdIdx + 28);
+    }
+  }
+
+  // 3. mdhd (Media Header Box)
+  const mdhdIdx = copy.indexOf("mdhd");
+  if (mdhdIdx >= 4) {
+    const ver = copy.readUInt8(mdhdIdx + 4);
+    if (ver === 0) {
+      const mdhdTimescale = copy.readUInt32BE(mdhdIdx + 16);
+      const targetDuration = Math.round(durationSecs * mdhdTimescale);
+      copy.writeUInt32BE(targetDuration, mdhdIdx + 20);
+    } else if (ver === 1) {
+      const mdhdTimescale = copy.readUInt32BE(mdhdIdx + 24);
+      const targetDuration = BigInt(Math.round(durationSecs * mdhdTimescale));
+      copy.writeBigUInt64BE(targetDuration, mdhdIdx + 28);
+    }
+  }
+
+  return copy;
+};
+
+/**
  * 并发安全地初始化会话并准备元数据（M3U8 解析、Init 段修补、密钥模板加载并发进行）
  * @param session - 媒体流会话
  * @returns 解析后的播放列表结构
@@ -256,7 +314,8 @@ const ensureSessionReady = async (session: StreamSession): Promise<ParsedMediaPl
           playlist.init.start,
           playlist.init.end,
         );
-        session.patchedInit = await amDecryptor.patchInit(rawInit);
+        const patched = await amDecryptor.patchInit(rawInit);
+        session.patchedInit = injectDurationToInit(patched, playlist.duration);
       })();
 
       const fixedTask = (async () => {
@@ -454,6 +513,9 @@ export class AppleMusicProxyServer {
       if (playlist?.totalSize) {
         params.set("size", String(playlist.totalSize));
       }
+      if (playlist?.duration && playlist.duration > 0) {
+        params.set("duration", String(playlist.duration));
+      }
       if (playlist && playlist.segments.length > 0) {
         void getDecryptedSegment(session, playlist.segments[0]);
       }
@@ -543,13 +605,13 @@ export class AppleMusicProxyServer {
 
       const contentLength = endOffset - startOffset + 1;
 
-      // 检查当前请求是否属于客户端在首播尚未获取到曲目密钥时的末尾探针（如 FFmpeg 盲测 mfra/sidx 索引）
-      const isProbeRequest =
-        startOffset > (playlist.segments[0]?.end ?? 0) && session.trackHandle === undefined;
+      // 检查当前请求是否属于客户端在首播尚未获取到曲目密钥时对文件末尾的盲测探针（如 FFmpeg 寻找不存在的 mfra/sidx 索引）
+      const lastSegStart = playlist.segments[playlist.segments.length - 1]?.start ?? totalSize;
+      const isTailProbe = startOffset >= lastSegStart && session.trackHandle === undefined;
 
-      if (isProbeRequest) {
-        // 对于尚未获得曲目密钥且跳过首片向后发起的探针请求，由于 HLS fMP4 无末尾 mfra 索引，
-        // 瞬间返回零填充 Buffer 供解封装器快速判定无索引并退回起点，避免阻塞首播死等上游网络握手
+      if (isTailProbe) {
+        // 对于尚未获得曲目密钥且直接探测文件末尾的请求，由于 HLS fMP4 无末尾 mfra 索引，
+        // 瞬间返回零填充 Buffer 供解封装器快速判定无索引并退回起点，避免首播死等上游网络握手
         const probeLen = Math.min(contentLength, 65536);
         const probeChunk = Buffer.alloc(probeLen);
         res.writeHead(206, {

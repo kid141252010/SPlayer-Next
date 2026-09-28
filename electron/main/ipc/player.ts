@@ -320,7 +320,14 @@ export const registerPlayerIpc = (): void => {
         if (autoPlay) await inst.play();
       }
       const nativeDurationMs = toMs(meta.duration);
-      const durationMs = toDisplayDurationMs(nativeDurationMs);
+      // 当权威元数据声明了完整时长，而原生引擎因流式分片只探测到短分片（<= 20s）时，优先采用权威总时长
+      const durationMs =
+        authoritative?.duration &&
+        authoritative.duration > 0 &&
+        nativeDurationMs <= 20000 &&
+        authoritative.duration > nativeDurationMs
+          ? authoritative.duration
+          : toDisplayDurationMs(nativeDurationMs);
       const fallbackTitle = meta.title || source.split(/[/\\]/).pop() || source;
       const displayTitle = authoritative?.title ?? fallbackTitle;
       const displayArtists = authoritative
