@@ -13,6 +13,8 @@ interface StreamSession {
   /** 会话就绪 Promise（并发安全，防重入与防止连接断开误杀） */
   readyPromise?: Promise<ParsedMediaPlaylist>;
   playlist?: ParsedMediaPlaylist;
+  /** 后台异步拉取与加载 track 解密模板的 Promise */
+  keyPromise?: Promise<number>;
   keyTemplateJson?: string;
   trackHandle?: number;
   fixedHandle?: number;
@@ -247,7 +249,7 @@ const ensureSessionReady = async (session: StreamSession): Promise<ParsedMediaPl
       const playlist = parseMediaPlaylist(m3u8Text, session.m3u8Url);
       session.playlist = playlist;
 
-      // 2. 并发初始化 Init 段、Key 模板和 Fixed 模板
+      // 2. 并发初始化 Init 段与 Fixed 模板（首分片秒播所需）
       const initTask = (async () => {
         const rawInit = await fetchByteRangeWithRetry(
           playlist.mediaUrl,
@@ -257,29 +259,37 @@ const ensureSessionReady = async (session: StreamSession): Promise<ParsedMediaPl
         session.patchedInit = await amDecryptor.patchInit(rawInit);
       })();
 
-      const keyTask = (async () => {
-        if (!playlist.keyUri) return;
-        const keyReqUrl = `${session.upstreamUrl}/key?adamId=${encodeURIComponent(session.adamId)}&uri=${encodeURIComponent(playlist.keyUri)}`;
-        const headers: Record<string, string> = {};
-        if (session.authHeader) {
-          headers.Authorization = session.authHeader;
-        }
-        const keyRes = await fetchWithRetry(keyReqUrl, { headers });
-        if (!keyRes.ok) {
-          throw new Error(`拉取解密密钥模板失败 HTTP ${keyRes.status} (${keyReqUrl})`);
-        }
-        session.keyTemplateJson = await keyRes.text();
-        session.trackHandle = await amDecryptor.loadTemplate(session.keyTemplateJson, {
-          adamId: session.adamId,
-          keyUri: playlist.keyUri,
-        });
-      })();
-
       const fixedTask = (async () => {
         session.fixedHandle = await amDecryptor.getFixedTemplate();
       })();
 
-      await Promise.all([initTask, keyTask, fixedTask]);
+      // 3. 异步后台触发 Track Key 获取（Apple Music 第 0 分片使用 Fixed Key，前 15 秒无需阻塞等待 Track Key）
+      if (playlist.keyUri && !session.trackHandle && !session.keyPromise) {
+        session.keyPromise = (async () => {
+          const keyReqUrl = `${session.upstreamUrl}/key?adamId=${encodeURIComponent(session.adamId)}&uri=${encodeURIComponent(playlist.keyUri!)}`;
+          const headers: Record<string, string> = {};
+          if (session.authHeader) {
+            headers.Authorization = session.authHeader;
+          }
+          const keyRes = await fetchWithRetry(keyReqUrl, { headers });
+          if (!keyRes.ok) {
+            throw new Error(`拉取解密密钥模板失败 HTTP ${keyRes.status} (${keyReqUrl})`);
+          }
+          session.keyTemplateJson = await keyRes.text();
+          const handle = await amDecryptor.loadTemplate(session.keyTemplateJson, {
+            adamId: session.adamId,
+            keyUri: playlist.keyUri!,
+          });
+          session.trackHandle = handle;
+          return handle;
+        })().catch((err) => {
+          session.keyPromise = undefined;
+          amLog.error(`[proxy] 后台拉取 Track Key 失败 (adamId: ${session.adamId})`, err);
+          throw err;
+        });
+      }
+
+      await Promise.all([initTask, fixedTask]);
       return playlist;
     })().catch((err) => {
       session.readyPromise = undefined;
@@ -328,14 +338,14 @@ const getDecryptedSegment = (
         signal,
       );
 
-      const handle =
-        seg.keyType === "fixed"
-          ? session.fixedHandle
-          : seg.keyType === "track"
-            ? session.trackHandle
-            : 0;
+      let handle = 0;
+      if (seg.keyType === "fixed") {
+        handle = session.fixedHandle || 0;
+      } else if (seg.keyType === "track") {
+        handle = session.trackHandle ?? (session.keyPromise ? await session.keyPromise : 0);
+      }
 
-      return amDecryptor.decryptFragment(handle || 0, raw, session.patchedInit);
+      return amDecryptor.decryptFragment(handle, raw, session.patchedInit);
     })();
 
     if (session.fragCache.size >= MAX_CACHED_FRAGMENTS) {
@@ -426,19 +436,6 @@ export class AppleMusicProxyServer {
     const port = await this.start();
     const { cleanUpstreamUrl, token: resolvedToken } = resolveUpstreamAuth(upstreamUrl, token);
     const session = getOrCreateSession(adamId, m3u8Url, cleanUpstreamUrl, resolvedToken);
-
-    // 提前触发后台并发预热：解析 M3U8、修补 Init、获取密钥模板并预取第 0 个分片
-    void (async () => {
-      try {
-        const playlist = await ensureSessionReady(session);
-        if (playlist.segments.length > 0) {
-          void getDecryptedSegment(session, playlist.segments[0]);
-        }
-      } catch (err) {
-        amLog.warn("[proxy] 会话预热未完成", err);
-      }
-    })();
-
     const params = new URLSearchParams({
       adamId,
       m3u8: m3u8Url,
@@ -447,6 +444,23 @@ export class AppleMusicProxyServer {
     if (resolvedToken) {
       params.set("token", resolvedToken);
     }
+
+    // 快速预热并尝试提取总长度（给 350ms race 窗口，超时不阻塞放行）
+    try {
+      const playlist = await Promise.race([
+        ensureSessionReady(session),
+        new Promise<null>((r) => setTimeout(() => r(null), 350)),
+      ]);
+      if (playlist?.totalSize) {
+        params.set("size", String(playlist.totalSize));
+      }
+      if (playlist && playlist.segments.length > 0) {
+        void getDecryptedSegment(session, playlist.segments[0]);
+      }
+    } catch (err) {
+      amLog.warn("[proxy] 会话快速预热未完成", err);
+    }
+
     return `http://127.0.0.1:${port}/am-stream?${params.toString()}`;
   }
 
@@ -504,6 +518,19 @@ export class AppleMusicProxyServer {
             endOffset = Number.parseInt(match[2], 10);
           }
         }
+      }
+
+      // 处理客户端探测文件尾 (Range: bytes={totalSize}-) 的边界请求，避免抛出 416
+      if (startOffset === totalSize) {
+        res.writeHead(206, {
+          "Content-Range": `bytes ${totalSize}-${totalSize}/${totalSize}`,
+          "Accept-Ranges": "bytes",
+          "Content-Length": 0,
+          "Content-Type": "audio/mp4",
+          "Cache-Control": "no-cache",
+        });
+        res.end();
+        return;
       }
 
       if (startOffset >= totalSize || endOffset >= totalSize || startOffset > endOffset) {
