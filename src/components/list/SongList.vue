@@ -655,6 +655,20 @@ defineExpose({
                       {{ getQualityLabel(item.quality) }}
                     </span>
                     <span
+                      v-if="item.contentRating === 'explicit' || item.explicit"
+                      class="shrink-0 px-1 rounded text-[10px] leading-[18px] font-bold border border-solid text-red-400/90 border-red-400/40"
+                      title="Explicit"
+                    >
+                      E
+                    </span>
+                    <span
+                      v-else-if="item.contentRating === 'clean'"
+                      class="shrink-0 px-1 rounded text-[10px] leading-[18px] font-bold border border-solid text-on-surface-variant border-on-surface-variant/40"
+                      title="Clean"
+                    >
+                      CLEAN
+                    </span>
+                    <span
                       v-if="item.fee === 1 && !settings.preset.hideVipTag"
                       class="shrink-0 px-1 rounded text-[10px] leading-[18px] font-bold border border-solid text-red-400 border-red-400/40"
                     >

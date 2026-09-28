@@ -198,6 +198,20 @@ const alignItems = computed(() => {
         {{ sourceLabel }}
       </span>
       <span
+        v-if="displayTrack.contentRating === 'explicit' || displayTrack.explicit"
+        class="inline-flex items-center justify-center leading-none px-1.5 py-1.2 rounded-md border border-solid border-cover/30"
+        title="Explicit"
+      >
+        EXPLICIT
+      </span>
+      <span
+        v-else-if="displayTrack.contentRating === 'clean'"
+        class="inline-flex items-center justify-center leading-none px-1.5 py-1.2 rounded-md border border-solid border-cover/30"
+        title="Clean"
+      >
+        CLEAN
+      </span>
+      <span
         class="inline-flex items-center gap-1 leading-none px-1.5 py-1.2 rounded-md border border-solid border-cover/30 cursor-pointer transition-colors hover:border-cover/60"
         @click="status.audioInfoOpen = true"
       >

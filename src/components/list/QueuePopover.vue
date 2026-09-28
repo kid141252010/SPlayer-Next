@@ -121,7 +121,23 @@ const onClear = (): void => {
             >
               <SImg :src="item.cover" class="size-9 rounded shrink-0" />
               <div class="flex-1 min-w-0">
-                <div class="text-xs truncate font-medium leading-tight">{{ item.title }}</div>
+                <div class="flex items-center gap-1 min-w-0">
+                  <div class="text-xs truncate font-medium leading-tight">{{ item.title }}</div>
+                  <span
+                    v-if="item.contentRating === 'explicit' || item.explicit"
+                    class="shrink-0 px-0.5 rounded text-[8px] leading-[11px] font-bold border border-solid text-on-surface-variant/70 border-on-surface-variant/30 select-none"
+                    title="Explicit"
+                  >
+                    E
+                  </span>
+                  <span
+                    v-else-if="item.contentRating === 'clean'"
+                    class="shrink-0 px-0.5 rounded text-[8px] leading-[11px] font-bold border border-solid text-on-surface-variant/60 border-on-surface-variant/25 select-none"
+                    title="Clean"
+                  >
+                    CLEAN
+                  </span>
+                </div>
                 <div
                   class="text-[11px] truncate leading-tight mt-0.5"
                   :class="

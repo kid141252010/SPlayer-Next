@@ -32,6 +32,7 @@ export interface AMSongAttributes {
   url?: string;
   artistUrl?: string;
   previews?: AMPreview[];
+  contentRating?: "clean" | "explicit" | string;
 }
 
 export interface AMResource<T> {
@@ -68,6 +69,7 @@ export interface AMAlbumAttributes {
   recordLabel?: string;
   copyright?: string;
   url?: string;
+  contentRating?: "clean" | "explicit" | string;
 }
 
 export type AMAlbum = AMResource<AMAlbumAttributes> & {
@@ -114,6 +116,7 @@ export interface AMPlaylistAttributes {
   lastModifiedDate?: string;
   url?: string;
   trackCount?: number;
+  contentRating?: "clean" | "explicit" | string;
 }
 
 export type AMPlaylist = AMResource<AMPlaylistAttributes> & {
