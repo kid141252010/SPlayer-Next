@@ -125,13 +125,26 @@ pub fn prepare_decode(
     let source_channels = u16::try_from(stream_info.channels).context("源音频声道数超出范围")?;
     let codec = info.codec_name.clone().unwrap_or_default();
 
+    let is_remote = source.starts_with("http://") || source.starts_with("https://");
+
     let raw_metadata = reader.metadata();
     let tags = metadata::extract_tags(&raw_metadata);
-    let cover =
-        cover_cache_dir.and_then(|dir| metadata::extract_cover_thumbnail(&reader, source, dir));
-    let cover_raw = metadata::read_attached_pic(&reader);
+    let cover = if is_remote {
+        None
+    } else {
+        cover_cache_dir.and_then(|dir| metadata::extract_cover_thumbnail(&reader, source, dir))
+    };
+    let cover_raw = if is_remote {
+        None
+    } else {
+        metadata::read_attached_pic(&reader)
+    };
     let embedded_lyric = metadata::extract_embedded_lyric(&raw_metadata);
-    let external_lyrics = metadata::find_all_external_lyrics(source);
+    let external_lyrics = if is_remote {
+        Vec::new()
+    } else {
+        metadata::find_all_external_lyrics(source)
+    };
     let replay_gain_db = metadata::extract_replay_gain(&raw_metadata);
 
     let metadata = AudioMetadata {
