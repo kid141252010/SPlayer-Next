@@ -605,13 +605,13 @@ export class AppleMusicProxyServer {
 
       const contentLength = endOffset - startOffset + 1;
 
-      // 检查当前请求是否属于客户端在首播尚未获取到曲目密钥时对文件末尾的盲测探针（如 FFmpeg 寻找不存在的 mfra/sidx 索引）
-      const lastSegStart = playlist.segments[playlist.segments.length - 1]?.start ?? totalSize;
-      const isTailProbe = startOffset >= lastSegStart && session.trackHandle === undefined;
+      // 检查当前请求是否属于客户端在首播尚未获取到曲目密钥时的探针（如 FFmpeg 盲测 mfra/sidx 索引或跳跃式读取）
+      const seg0End = playlist.segments[0]?.end ?? 0;
+      const isProbeRequest = startOffset > seg0End && session.trackHandle === undefined;
 
-      if (isTailProbe) {
-        // 对于尚未获得曲目密钥且直接探测文件末尾的请求，由于 HLS fMP4 无末尾 mfra 索引，
-        // 瞬间返回零填充 Buffer 供解封装器快速判定无索引并退回起点，避免首播死等上游网络握手
+      if (isProbeRequest) {
+        // 对于尚未获得曲目密钥且跳过首片向后发起的探针请求，由于 HLS fMP4 无末尾 mfra 索引，
+        // 瞬间返回零填充 Buffer 供解封装器快速判定无索引并退回起点，避免阻塞首播死等上游网络握手
         const probeLen = Math.min(contentLength, 65536);
         const probeChunk = Buffer.alloc(probeLen);
         res.writeHead(206, {

@@ -40,3 +40,34 @@ fn playback_and_fft_resamplers_use_independent_channel_counts() {
     assert_eq!(player_samples.len() % 6, 0);
     assert_eq!(fft_samples.len() % usize::from(FFT_CHANNELS), 0);
 }
+
+#[test]
+fn lazy_seek_http_source_short_circuits_tail_probe() {
+    let dummy_data = vec![0xAB; 1000];
+    let cursor = Cursor::new(dummy_data);
+    let mut source = LazySeekHttpSource::new(cursor, Some(1000));
+
+    // 1. 正常从起点读取 10 字节
+    let mut initial_buf = [0u8; 10];
+    assert_eq!(source.read(&mut initial_buf).unwrap(), 10);
+    assert_eq!(initial_buf, [0xAB; 10]);
+    assert_eq!(source.inner.position(), 10);
+
+    // 2. 模拟 FFmpeg mov_read_mfra 对末尾 4 字节的探测：seek(End(-4)) 后 read(4)
+    let probe_pos = source.seek(SeekFrom::End(-4)).unwrap();
+    assert_eq!(probe_pos, 996);
+    let mut probe_buf = [0xFFu8; 4];
+    let n = source.read(&mut probe_buf).unwrap();
+    assert_eq!(n, 4);
+    // 应当返回内存零填充，且底层的实际 cursor 位置保持在 10，完全未发生网络 Seek
+    assert_eq!(probe_buf, [0x00; 4]);
+    assert_eq!(source.inner.position(), 10);
+
+    // 3. 模拟探测结束后恢复原位 seek(Start(10)) 并继续顺序读取
+    let resume_pos = source.seek(SeekFrom::Start(10)).unwrap();
+    assert_eq!(resume_pos, 10);
+    let mut next_buf = [0u8; 10];
+    assert_eq!(source.read(&mut next_buf).unwrap(), 10);
+    assert_eq!(next_buf, [0xAB; 10]);
+    assert_eq!(source.inner.position(), 20);
+}
