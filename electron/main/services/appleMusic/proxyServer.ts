@@ -246,11 +246,11 @@ const injectDurationToInit = (initBuf: Buffer, durationSecs: number): Buffer => 
   let movieTimescale = 48000;
   if (mvhdIdx >= 4) {
     const ver = copy.readUInt8(mvhdIdx + 4);
-    if (ver === 0) {
+    if (ver === 0 && copy.length >= mvhdIdx + 24) {
       movieTimescale = copy.readUInt32BE(mvhdIdx + 16);
       const targetDuration = Math.round(durationSecs * movieTimescale);
       copy.writeUInt32BE(targetDuration, mvhdIdx + 20);
-    } else if (ver === 1) {
+    } else if (ver === 1 && copy.length >= mvhdIdx + 36) {
       movieTimescale = copy.readUInt32BE(mvhdIdx + 24);
       const targetDuration = BigInt(Math.round(durationSecs * movieTimescale));
       copy.writeBigUInt64BE(targetDuration, mvhdIdx + 28);
@@ -258,27 +258,29 @@ const injectDurationToInit = (initBuf: Buffer, durationSecs: number): Buffer => 
   }
 
   // 2. tkhd (Track Header Box)
+  // FullBox(4B) + creation(4/8B) + mod(4/8B) + track_id(4B) + reserved(4B) -> duration
   const tkhdIdx = copy.indexOf("tkhd");
   if (tkhdIdx >= 4) {
     const ver = copy.readUInt8(tkhdIdx + 4);
-    if (ver === 0) {
+    if (ver === 0 && copy.length >= tkhdIdx + 28) {
       const targetDuration = Math.round(durationSecs * movieTimescale);
-      copy.writeUInt32BE(targetDuration, tkhdIdx + 20);
-    } else if (ver === 1) {
+      copy.writeUInt32BE(targetDuration, tkhdIdx + 24);
+    } else if (ver === 1 && copy.length >= tkhdIdx + 40) {
       const targetDuration = BigInt(Math.round(durationSecs * movieTimescale));
-      copy.writeBigUInt64BE(targetDuration, tkhdIdx + 28);
+      copy.writeBigUInt64BE(targetDuration, tkhdIdx + 32);
     }
   }
 
   // 3. mdhd (Media Header Box)
+  // FullBox(4B) + creation(4/8B) + mod(4/8B) + timescale(4B) -> duration
   const mdhdIdx = copy.indexOf("mdhd");
   if (mdhdIdx >= 4) {
     const ver = copy.readUInt8(mdhdIdx + 4);
-    if (ver === 0) {
+    if (ver === 0 && copy.length >= mdhdIdx + 24) {
       const mdhdTimescale = copy.readUInt32BE(mdhdIdx + 16);
       const targetDuration = Math.round(durationSecs * mdhdTimescale);
       copy.writeUInt32BE(targetDuration, mdhdIdx + 20);
-    } else if (ver === 1) {
+    } else if (ver === 1 && copy.length >= mdhdIdx + 36) {
       const mdhdTimescale = copy.readUInt32BE(mdhdIdx + 24);
       const targetDuration = BigInt(Math.round(durationSecs * mdhdTimescale));
       copy.writeBigUInt64BE(targetDuration, mdhdIdx + 28);
@@ -348,6 +350,11 @@ const ensureSessionReady = async (session: StreamSession): Promise<ParsedMediaPl
         });
       }
 
+      // 4. 立即在后台触发第 0 分片的网络拉取（与 initTask/fixedTask 并行进行网络 IO）
+      if (playlist.segments.length > 0) {
+        void getDecryptedSegment(session, playlist.segments[0]);
+      }
+
       await Promise.all([initTask, fixedTask]);
       return playlist;
     })().catch((err) => {
@@ -396,6 +403,13 @@ const getDecryptedSegment = (
         seg.end,
         signal,
       );
+
+      // 解密需要 patchedInit 和 fixedHandle 就绪
+      if (!session.patchedInit || (seg.keyType === "fixed" && session.fixedHandle === undefined)) {
+        if (session.readyPromise) {
+          await session.readyPromise;
+        }
+      }
 
       let handle = 0;
       if (seg.keyType === "fixed") {
@@ -504,11 +518,13 @@ export class AppleMusicProxyServer {
       params.set("token", resolvedToken);
     }
 
-    // 快速预热并尝试提取总长度（给 800ms race 窗口，超时不阻塞放行）
+    // 预热会话并提取总大小与总时长，确保首分片在播放前已在内存中就绪
     try {
       const playlist = await Promise.race([
         ensureSessionReady(session),
-        new Promise<null>((r) => setTimeout(() => r(null), 800)),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("会话准备超时")), DEFAULT_TIMEOUT_MS),
+        ),
       ]);
       if (playlist?.totalSize) {
         params.set("size", String(playlist.totalSize));
@@ -517,10 +533,21 @@ export class AppleMusicProxyServer {
         params.set("duration", String(playlist.duration));
       }
       if (playlist && playlist.segments.length > 0) {
-        void getDecryptedSegment(session, playlist.segments[0]);
+        // 等待第 0 分片解密就绪（网络拉取已在 ensureSessionReady 中并发开始）
+        // 设置 6 秒超时保护，即使极端网络延迟也不会死锁播放
+        try {
+          await Promise.race([
+            getDecryptedSegment(session, playlist.segments[0]),
+            new Promise<null>((r) => setTimeout(() => r(null), 6_000)),
+          ]);
+        } catch (e) {
+          amLog.warn("[proxy] 首分片预解密异常", e);
+        }
+        // 触发后续分片预取
+        triggerPrefetch(session, 0);
       }
     } catch (err) {
-      amLog.warn("[proxy] 会话快速预热未完成", err);
+      amLog.warn("[proxy] 会话预热未完成", err);
     }
 
     return `http://127.0.0.1:${port}/am-stream?${params.toString()}`;
