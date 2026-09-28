@@ -124,6 +124,22 @@ fn extract_stream_size(url: &str) -> Option<u64> {
     None
 }
 
+/// 从 URL 参数中提取预置的音频总时长（秒，若存在）
+pub(crate) fn extract_stream_duration(url: &str) -> Option<f64> {
+    let (_, query) = url.split_once('?')?;
+    for part in query.split('&') {
+        if let Some((k, v)) = part.split_once('=') {
+            if k == "duration" {
+                let d = v.parse::<f64>().ok()?;
+                if d > 0.0 {
+                    return Some(d);
+                }
+            }
+        }
+    }
+    None
+}
+
 /// 根据 source 协议打开音频：http(s) 走延迟 Range 源，其他走本地 File
 pub(super) fn open_source(
     source: &str,

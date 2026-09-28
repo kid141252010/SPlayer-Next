@@ -1,7 +1,7 @@
 mod processing;
 mod reader;
 use processing::run_dsp_safely;
-use reader::{build_resamplers, open_source, run_decoding_loop};
+use reader::{build_resamplers, extract_stream_duration, open_source, run_decoding_loop};
 
 pub(crate) mod buffer;
 pub(crate) mod source;
@@ -111,7 +111,15 @@ pub fn prepare_decode(
     let (reader, cancel_handle) = open_source(source, cancel_handle)?;
 
     let info = reader.source_info();
-    let duration_secs = reader.duration().map(|d| d.as_secs_f64()).unwrap_or(0.0);
+    let reader_duration = reader.duration().map(|d| d.as_secs_f64()).unwrap_or(0.0);
+    // 优先采用 URL 声明的权威时长（如 Apple Music 流媒体预置的精确总时长，避免首播被单一分片时长限制）
+    let url_duration = extract_stream_duration(source);
+    let duration_secs = match (url_duration, reader_duration) {
+        (Some(ud), rd) if rd <= 20.0 && ud > rd => ud,
+        (Some(ud), _) if ud > 0.0 => ud,
+        (_, rd) if rd > 0.0 => rd,
+        _ => 0.0,
+    };
     let stream_info = metadata::extract_stream_info(info);
     ensure!(stream_info.channels > 0, "源音频没有有效声道");
     let source_channels = u16::try_from(stream_info.channels).context("源音频声道数超出范围")?;
