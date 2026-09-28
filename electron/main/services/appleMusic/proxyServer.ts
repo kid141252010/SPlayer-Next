@@ -3,6 +3,7 @@ import { amLog } from "@main/utils/logger";
 import { fetchWithProxy } from "@main/utils/proxy";
 import { amDecryptor } from "./decryptor";
 import { parseMediaPlaylist, type ParsedMediaPlaylist, type MediaSegment } from "./playlist";
+import { shouldShortCircuitProbe } from "./probe";
 
 interface StreamSession {
   adamId: string;
@@ -632,13 +633,19 @@ export class AppleMusicProxyServer {
 
       const contentLength = endOffset - startOffset + 1;
 
-      // 检查当前请求是否属于客户端在首播尚未获取到曲目密钥时的探针（如 FFmpeg 盲测 mfra/sidx 索引或跳跃式读取）
-      const seg0End = playlist.segments[0]?.end ?? 0;
-      const isProbeRequest = startOffset > seg0End && session.trackHandle === undefined;
+      // 仅短路客户端对文件尾部 mfra/sidx 的小型探针，避免把后续音频分片误当成探针
+      const firstSegmentEnd = playlist.segments[0]?.end ?? 0;
+      const lastSegmentStart = playlist.segments[playlist.segments.length - 1]?.start ?? totalSize;
+      const isProbeRequest = shouldShortCircuitProbe(
+        startOffset,
+        firstSegmentEnd,
+        lastSegmentStart,
+        contentLength,
+        session.trackHandle !== undefined,
+      );
 
       if (isProbeRequest) {
-        // 对于尚未获得曲目密钥且跳过首片向后发起的探针请求，由于 HLS fMP4 无末尾 mfra 索引，
-        // 瞬间返回零填充 Buffer 供解封装器快速判定无索引并退回起点，避免阻塞首播死等上游网络握手
+        // HLS fMP4 没有末尾 mfra 索引，返回零填充让解封装器快速退回起点，避免等待密钥握手
         const probeLen = Math.min(contentLength, 65536);
         const probeChunk = Buffer.alloc(probeLen);
         res.writeHead(206, {
