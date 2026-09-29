@@ -125,17 +125,17 @@ const onClear = (): void => {
                   <div class="text-xs truncate font-medium leading-tight">{{ item.title }}</div>
                   <span
                     v-if="item.contentRating === 'explicit' || item.explicit"
-                    class="shrink-0 px-0.5 rounded text-[8px] leading-[11px] font-bold border border-solid text-on-surface-variant/70 border-on-surface-variant/30 select-none"
+                    class="shrink-0 px-1 rounded text-[8px] leading-[11px] font-bold border border-solid text-on-surface-variant/70 border-on-surface-variant/30 select-none"
                     title="Explicit"
                   >
-                    E
+                    Explicit
                   </span>
                   <span
                     v-else-if="item.contentRating === 'clean'"
-                    class="shrink-0 px-0.5 rounded text-[8px] leading-[11px] font-bold border border-solid text-on-surface-variant/60 border-on-surface-variant/25 select-none"
+                    class="shrink-0 px-1 rounded text-[8px] leading-[11px] font-bold border border-solid text-on-surface-variant/60 border-on-surface-variant/25 select-none"
                     title="Clean"
                   >
-                    CLEAN
+                    Clean
                   </span>
                 </div>
                 <div
