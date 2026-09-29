@@ -100,16 +100,13 @@ export const syncProxyEnv = (): void => {
   }
 };
 
-/** 判断是否属于无需通过网络代理的直连地址（回环地址或 Apple 官方 CDN） */
+/** 判断是否属于无需通过网络代理的直连地址（仅本地回环地址） */
 export const isDirectUrl = (input: string | URL): boolean => {
   try {
     const urlStr = typeof input === "string" ? input : input.href;
     const u = new URL(urlStr);
     const host = u.hostname.toLowerCase();
     if (host === "127.0.0.1" || host === "localhost" || host === "::1") return true;
-    if (host.endsWith(".apple.com") || host.endsWith(".itunes.apple.com") || host === "apple.com") {
-      return true;
-    }
   } catch {
     // 忽略异常
   }
