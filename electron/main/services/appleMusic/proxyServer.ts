@@ -24,11 +24,13 @@ interface StreamSession {
   fragCache: Map<number, Promise<Buffer>>;
   /** 最近访问时间戳，供 LRU 淘汰 */
   lastAccessTime: number;
+  /** 当前活跃推流中的连接数，防止推流途中被 LRU 淘汰并误释放解密模板 */
+  activeRequests: number;
 }
 
 /** 缓存最近解析的媒体会话，避免频繁重复解析清单元数据与反复向 CDN 拉取 */
 const sessionCache = new Map<string, StreamSession>();
-const MAX_SESSIONS = 2;
+const MAX_SESSIONS = 8;
 /** 单个会话最多内存驻留的切片数，避免高码率无损音频占用过多内存 */
 const MAX_CACHED_FRAGMENTS = 8;
 /** 滑动窗口前向预取切片数 */
@@ -113,6 +115,7 @@ const getOrCreateSession = (
       authHeader,
       fragCache: new Map(),
       lastAccessTime: now,
+      activeRequests: 0,
     };
     sessionCache.set(cacheKey, session);
 
@@ -120,6 +123,8 @@ const getOrCreateSession = (
       let oldestKey: string | null = null;
       let oldestTime = Number.POSITIVE_INFINITY;
       for (const [key, sess] of sessionCache) {
+        // 正在推流中（活跃请求 > 0）的会话不参与淘汰，防止误杀当前播放
+        if (sess.activeRequests > 0) continue;
         if (sess.lastAccessTime < oldestTime) {
           oldestTime = sess.lastAccessTime;
           oldestKey = key;
@@ -581,6 +586,7 @@ export class AppleMusicProxyServer {
       isClientClosed = true;
     });
 
+    session.activeRequests++;
     try {
       const playlist = await ensureSessionReady(session);
       const totalSize = playlist.totalSize;
@@ -728,6 +734,32 @@ export class AppleMusicProxyServer {
       if (!res.destroyed) {
         res.destroy(err instanceof Error ? err : new Error(String(err)));
       }
+    } finally {
+      session.activeRequests = Math.max(0, session.activeRequests - 1);
+    }
+  }
+
+  /**
+   * 主动轻量预热指定曲目的流媒体会话与 Track Key
+   * 仅拉取 M3U8 清单、Init 段及 Track Key，不拉取后续音频，轻量极速
+   * @param adamId - 曲目 ID
+   * @param m3u8Url - Apple CDN 的 Media M3U8 清单地址
+   * @param upstreamUrl - am-hook 上游服务地址
+   * @param token - 可选鉴权 Token
+   */
+  public async prewarm(
+    adamId: string,
+    m3u8Url: string,
+    upstreamUrl: string,
+    token?: string,
+  ): Promise<void> {
+    await this.start();
+    const { cleanUpstreamUrl, token: resolvedToken } = resolveUpstreamAuth(upstreamUrl, token);
+    const session = getOrCreateSession(adamId, m3u8Url, cleanUpstreamUrl, resolvedToken);
+    try {
+      await ensureSessionReady(session);
+    } catch (err) {
+      amLog.warn(`[proxy] 预热曲目会话失败 (adamId: ${adamId})`, err);
     }
   }
 

@@ -385,6 +385,12 @@ export interface HostApi {
       upstreamUrl: string,
       token?: string,
     ) => Promise<string>;
+    prewarm: (
+      adamId: string,
+      m3u8Url: string,
+      upstreamUrl: string,
+      token?: string,
+    ) => Promise<void>;
   };
 }
 
@@ -475,7 +481,8 @@ export type HostCallMethod =
   | "player.seek"
   | "player.setVolume"
   | "player.getPosition"
-  | "appleMusic.getStreamUrl";
+  | "appleMusic.getStreamUrl"
+  | "appleMusic.prewarm";
 
 /* ========== 渲染端 ↔ 主进程的 IPC 请求参数 ========== */
 

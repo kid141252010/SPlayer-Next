@@ -14,13 +14,17 @@ let defaultDispatcher: Dispatcher | null = null;
 const isManualProxyProtocol = (value: string): value is "http" | "https" | "socks5" =>
   value === "http" || value === "https" || value === "socks5";
 
-/** 默认直连 dispatcher（允许 legacy renegotiation） */
+/** 默认直连 dispatcher（允许 legacy renegotiation 并启用长连接连接池） */
 const getDefaultDispatcher = (): Dispatcher => {
   if (!defaultDispatcher) {
     defaultDispatcher = new Agent({
       connect: {
         secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT,
       },
+      keepAliveTimeout: 60_000,
+      keepAliveMaxTimeout: 600_000,
+      pipelining: 1,
+      connections: 64,
     });
   }
   return defaultDispatcher;
@@ -122,7 +126,15 @@ const getProxyDispatcher = (input?: string | URL): Dispatcher => {
   if (!url) return getDefaultDispatcher();
   if (!proxyAgent || proxyAgentUrl !== url) {
     proxyAgent?.close().catch(() => {});
-    proxyAgent = url.startsWith("socks5://") ? new Socks5ProxyAgent(url) : new ProxyAgent(url);
+    proxyAgent = url.startsWith("socks5://")
+      ? new Socks5ProxyAgent(url)
+      : new ProxyAgent({
+          uri: url,
+          keepAliveTimeout: 60_000,
+          keepAliveMaxTimeout: 600_000,
+          pipelining: 1,
+          connections: 64,
+        });
     proxyAgentUrl = url;
     systemLog.info(`[proxy] node fetch proxy=${url}`);
   }

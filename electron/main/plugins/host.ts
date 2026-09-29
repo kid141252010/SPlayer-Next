@@ -101,6 +101,15 @@ export const dispatchHostCall = async (
         data = await appleMusicProxy.getStreamUrl(adamId, m3u8Url, upstreamUrl, token);
         break;
       }
+      case "appleMusic.prewarm": {
+        const adamId = String(args[0]);
+        const m3u8Url = String(args[1]);
+        const upstreamUrl = String(args[2]);
+        const token = args[3] !== undefined && args[3] !== null ? String(args[3]) : undefined;
+        await appleMusicProxy.prewarm(adamId, m3u8Url, upstreamUrl, token);
+        data = undefined;
+        break;
+      }
       default:
         throw Object.assign(new Error(`unknown host method: ${method}`), {
           code: PluginErrorCodes.UNKNOWN,

@@ -296,6 +296,18 @@ const buildSplayer = (record: PluginContextRecord, spec: LoadSpec): HostApi => (
         upstreamUrl,
         token,
       ]) as Promise<string>,
+    prewarm: (
+      adamId: string,
+      m3u8Url: string,
+      upstreamUrl: string,
+      token?: string,
+    ): Promise<void> =>
+      hostCall(record, "appleMusic.prewarm", [
+        adamId,
+        m3u8Url,
+        upstreamUrl,
+        token,
+      ]) as Promise<void>,
   },
 
   onSettingChange: (key: string, handler: (value: unknown) => void) => {
