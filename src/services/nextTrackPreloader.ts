@@ -144,7 +144,11 @@ export const consumePreloadedTrack = (track: Track): NextTrackPreloadResult | nu
  */
 export const scheduleNextTrackPreload = (): void => {
   const settings = useSettingsStore();
-  if (!settings.player.preloadNextTrack || !settings.system.cache.songCache.enabled) {
+  if (
+    !settings.player.preloadNextTrack ||
+    !settings.system.cache.songCache.enabled ||
+    !settings.system.cache.songCache.cacheStreaming
+  ) {
     invalidateNextTrackPreload();
     return;
   }
