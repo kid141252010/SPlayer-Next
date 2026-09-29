@@ -658,6 +658,11 @@ export class AppleMusicProxyServer {
       });
 
       // 流式按序输出数据
+      const reqStart = performance.now();
+      amLog.info(
+        `[proxy:req] 开始推流 adamId=${adamId} Range=${rangeHeader ?? "all"} start=${startOffset} end=${endOffset}`,
+      );
+
       // 1. 检查是否包含 Init Segment 范围
       const patchedInit = session.patchedInit!;
       const initLen = patchedInit.length;
@@ -667,6 +672,9 @@ export class AppleMusicProxyServer {
         if (!res.write(initSlice)) {
           await new Promise((r) => res.once("drain", r));
         }
+        amLog.debug(
+          `[proxy:init] Init段已推送 len=${initSlice.length} 耗时=${(performance.now() - reqStart).toFixed(1)}ms`,
+        );
       }
 
       // 2. 寻找相交的分片并进行滑动窗口流式推送
@@ -681,7 +689,9 @@ export class AppleMusicProxyServer {
         // 触发前向滑动窗口预取
         triggerPrefetch(session, seg.index);
 
+        const segStart = performance.now();
         const fragBuf = await getDecryptedSegment(session, seg);
+        const segWaitMs = (performance.now() - segStart).toFixed(1);
         if (res.destroyed || isClientClosed) break;
 
         // 如果请求的 Range 只涵盖分片的一部分，做局部切片
@@ -696,13 +706,21 @@ export class AppleMusicProxyServer {
         }
 
         if (chunk.length > 0) {
+          const writeStart = performance.now();
           if (!res.write(chunk)) {
             await new Promise((r) => res.once("drain", r));
           }
+          const drainMs = (performance.now() - writeStart).toFixed(1);
+          amLog.info(
+            `[proxy:seg] 推送分片 #${seg.index} (${seg.keyType}) size=${chunk.length} 获取等待=${segWaitMs}ms 写入Drain=${drainMs}ms 累计=${(performance.now() - reqStart).toFixed(1)}ms`,
+          );
         }
       }
 
       res.end();
+      amLog.info(
+        `[proxy:done] 推流完成 adamId=${adamId} 总耗时=${(performance.now() - reqStart).toFixed(1)}ms`,
+      );
     } catch (err) {
       if (!isClientClosed) {
         amLog.error(`[proxy] 推流过程中发生错误 (adamId: ${adamId})`, err);
