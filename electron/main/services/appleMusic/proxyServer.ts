@@ -534,17 +534,7 @@ export class AppleMusicProxyServer {
         params.set("duration", String(playlist.duration));
       }
       if (playlist && playlist.segments.length > 0) {
-        // 等待第 0 分片解密就绪（网络拉取已在 ensureSessionReady 中并发开始）
-        // 设置 6 秒超时保护，即使极端网络延迟也不会死锁播放
-        try {
-          await Promise.race([
-            getDecryptedSegment(session, playlist.segments[0]),
-            new Promise<null>((r) => setTimeout(() => r(null), 6_000)),
-          ]);
-        } catch (e) {
-          amLog.warn("[proxy] 首分片预解密异常", e);
-        }
-        // 触发后续分片预取
+        // 触发后续分片预取（第 0 分片已在 ensureSessionReady 中并发开始拉取，推流时按需就绪）
         triggerPrefetch(session, 0);
       }
     } catch (err) {
