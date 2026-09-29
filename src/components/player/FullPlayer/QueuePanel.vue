@@ -103,14 +103,14 @@ const {
                     class="shrink-0 px-1 rounded text-[10px] leading-[14px] font-bold border border-solid text-cover/70 border-cover/30 select-none"
                     title="Explicit"
                   >
-                    E
+                    Explicit
                   </span>
                   <span
                     v-else-if="item.contentRating === 'clean'"
                     class="shrink-0 px-1 rounded text-[9px] leading-[14px] font-bold border border-solid text-cover/60 border-cover/25 select-none"
                     title="Clean"
                   >
-                    CLEAN
+                    Clean
                   </span>
                 </div>
                 <div

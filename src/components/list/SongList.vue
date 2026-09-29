@@ -659,14 +659,14 @@ defineExpose({
                       class="shrink-0 px-1 rounded text-[10px] leading-[18px] font-bold border border-solid text-red-400/90 border-red-400/40"
                       title="Explicit"
                     >
-                      E
+                      Explicit
                     </span>
                     <span
                       v-else-if="item.contentRating === 'clean'"
                       class="shrink-0 px-1 rounded text-[10px] leading-[18px] font-bold border border-solid text-on-surface-variant border-on-surface-variant/40"
                       title="Clean"
                     >
-                      CLEAN
+                      Clean
                     </span>
                     <span
                       v-if="item.fee === 1 && !settings.preset.hideVipTag"
