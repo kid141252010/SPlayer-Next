@@ -119,3 +119,33 @@ for (const mod of modules) {
     process.exit(result.status ?? 1);
   }
 }
+
+if (process.platform === "win32") {
+  const isDotnetAvailable = () => {
+    const res = spawnSync("dotnet", ["--version"], { stdio: "ignore" });
+    return !res.error && !res.signal && res.status === 0;
+  };
+  if (isDotnetAvailable()) {
+    console.log("[BuildNative] 构建 CavernBridge (Native AOT)");
+    const dotnetRes = spawnSync(
+      "dotnet",
+      [
+        "publish",
+        "native/cavern-bridge/CavernBridge.csproj",
+        "-c",
+        "Release",
+        "-r",
+        "win-x64",
+        "-o",
+        "native/audio-engine",
+      ],
+      {
+        stdio: "inherit",
+        shell: true,
+      },
+    );
+    if (dotnetRes.status !== 0) {
+      console.warn("[BuildNative] 警告：CavernBridge 构建失败，杜比全景声空间解码功能将不可用");
+    }
+  }
+}

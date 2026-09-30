@@ -31,6 +31,7 @@ impl AudioPlayer {
             failure_callback,
             fallback_callback,
             exclusive_mode,
+            spatial_enabled,
             fft,
             equalizer,
             tempo,
@@ -42,6 +43,7 @@ impl AudioPlayer {
             let failure_callback = player.make_failure_callback(output_generation);
             let fallback_callback = player.make_fallback_callback(output_generation);
             let exclusive_mode = player.is_exclusive_mode();
+            let spatial_enabled = player.is_spatial_audio_enabled();
             (
                 prepared_playback,
                 old_threads,
@@ -54,6 +56,7 @@ impl AudioPlayer {
                 failure_callback,
                 fallback_callback,
                 exclusive_mode,
+                spatial_enabled,
                 player.fft_handle(),
                 player.equalizer_handle(),
                 player.tempo_handle(),
@@ -99,8 +102,38 @@ impl AudioPlayer {
             let buffer = prepared_playback
                 .as_ref()
                 .map(|ready| Arc::clone(&ready.shared));
-            let (output, shared, playback) =
-                PlaybackHandle::prepare_with_buffer(output, fft, buffer)?;
+            #[cfg(target_os = "windows")]
+            let (output, shared, playback, is_spatial_active) = if spatial_enabled
+                && prepared
+                    .as_ref()
+                    .map_or(false, |p| p.metadata().is_spatial)
+                && output::spatial_audio::is_spatial_audio_available()
+            {
+                if let Some(dec) = decoder::cavern::CavernDecoder::open(&source_for_decoder) {
+                    let shared =
+                        crate::decoder::buffer::Shared::new(output.sample_rate(), output.channels());
+                    match PlaybackHandle::attach_spatial(&output, dec, Arc::clone(&shared), 1.0, true) {
+                        Ok(p) => (output, shared, Arc::new(p), true),
+                        Err(e) => {
+                            warn!(error = %e, "空间音频流初始化失败，回退到普通输出");
+                            let (out, sh, pb) = PlaybackHandle::prepare_with_buffer(output, fft, buffer)?;
+                            (out, sh, pb, false)
+                        }
+                    }
+                } else {
+                    let (out, sh, pb) = PlaybackHandle::prepare_with_buffer(output, fft, buffer)?;
+                    (out, sh, pb, false)
+                }
+            } else {
+                let (out, sh, pb) = PlaybackHandle::prepare_with_buffer(output, fft, buffer)?;
+                (out, sh, pb, false)
+            };
+
+            #[cfg(not(target_os = "windows"))]
+            let (output, shared, playback, is_spatial_active) = {
+                let (out, sh, pb) = PlaybackHandle::prepare_with_buffer(output, fft, buffer)?;
+                (out, sh, pb, false)
+            };
             shared.set_normalization_enabled(normalization_enabled);
             if let Some(mut ready) = prepared_playback.take() {
                 if Arc::ptr_eq(&shared, &ready.shared) {
@@ -126,20 +159,43 @@ impl AudioPlayer {
                     handle,
                 )?);
             }
-            equalizer
-                .lock()
-                .set_output_format(output.sample_rate(), output.channels());
-            equalizer.lock().reset_state();
-            tempo
-                .lock()
-                .set_output_format(output.sample_rate(), output.channels());
-            tempo.lock().reset();
-            let (metadata, decode_handle, cancel) = decoder::start_prepared_decode(
-                prepared.unwrap(),
-                Arc::clone(&shared),
-                Arc::clone(&equalizer),
-                Arc::clone(&tempo),
-            )?;
+            #[cfg(target_os = "windows")]
+            let (metadata, decode_handle, cancel) = if is_spatial_active {
+                decoder::start_spatial_prepared_decode(prepared.unwrap(), Arc::clone(&shared))?
+            } else {
+                equalizer
+                    .lock()
+                    .set_output_format(output.sample_rate(), output.channels());
+                equalizer.lock().reset_state();
+                tempo
+                    .lock()
+                    .set_output_format(output.sample_rate(), output.channels());
+                tempo.lock().reset();
+                decoder::start_prepared_decode(
+                    prepared.unwrap(),
+                    Arc::clone(&shared),
+                    Arc::clone(&equalizer),
+                    Arc::clone(&tempo),
+                )?
+            };
+
+            #[cfg(not(target_os = "windows"))]
+            let (metadata, decode_handle, cancel) = {
+                equalizer
+                    .lock()
+                    .set_output_format(output.sample_rate(), output.channels());
+                equalizer.lock().reset_state();
+                tempo
+                    .lock()
+                    .set_output_format(output.sample_rate(), output.channels());
+                tempo.lock().reset();
+                decoder::start_prepared_decode(
+                    prepared.unwrap(),
+                    Arc::clone(&shared),
+                    Arc::clone(&equalizer),
+                    Arc::clone(&tempo),
+                )?
+            };
             Ok::<_, anyhow::Error>((
                 metadata,
                 decode_handle,
@@ -235,6 +291,8 @@ impl AudioPlayer {
                 })
                 .collect(),
             cover: meta.cover,
+            is_spatial: Some(meta.is_spatial),
+            spatial_objects: Some(meta.spatial_objects),
         }
     }
 

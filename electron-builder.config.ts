@@ -68,7 +68,7 @@ const config: Configuration = {
     {
       from: "native/audio-engine",
       to: "native",
-      filter: ["*.node"],
+      filter: ["*.node", "*.dll"],
     },
     {
       from: "native/audio-capture",

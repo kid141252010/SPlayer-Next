@@ -224,4 +224,34 @@ impl AudioPlayer {
     pub fn get_pitch_sync(&self) -> bool {
         self.inner.lock().pitch_sync()
     }
+
+    /// 检查 Windows 空间音频与 Dolby Access 是否可用
+    #[napi]
+    pub fn is_spatial_audio_available(&self) -> bool {
+        #[cfg(target_os = "windows")]
+        return crate::output::spatial_audio::is_spatial_audio_available();
+        #[cfg(not(target_os = "windows"))]
+        false
+    }
+
+    /// 检查杜比全景声解构器（CavernBridge）是否可用
+    #[napi]
+    pub fn is_cavern_available(&self) -> bool {
+        #[cfg(target_os = "windows")]
+        return crate::decoder::cavern::is_cavern_available();
+        #[cfg(not(target_os = "windows"))]
+        false
+    }
+
+    /// 设置杜比全景声 / 空间音频开关
+    #[napi]
+    pub fn set_spatial_audio_enabled(&self, enabled: bool) {
+        self.inner.lock().set_spatial_audio_enabled(enabled);
+    }
+
+    /// 获取杜比全景声 / 空间音频开关状态
+    #[napi]
+    pub fn is_spatial_audio_enabled(&self) -> bool {
+        self.inner.lock().is_spatial_audio_enabled()
+    }
 }

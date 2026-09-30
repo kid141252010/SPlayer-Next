@@ -43,6 +43,10 @@ pub struct AudioMetadata {
     pub cover: Option<String>,
     /// 原始封面数据（load 时一次性提取，供 SMTC 等使用，避免重复打开文件）
     pub cover_raw: Option<Vec<u8>>,
+    /// 是否为杜比全景声空间音频
+    pub is_spatial: bool,
+    /// 空间音频动态对象数
+    pub spatial_objects: u32,
 }
 
 /// 音频流基本参数（scanner 和 decoder 共用）

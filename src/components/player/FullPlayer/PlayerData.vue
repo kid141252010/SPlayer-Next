@@ -4,7 +4,7 @@ import type { SSelectOption } from "@/components/ui/SSelect.vue";
 import { useMediaStore } from "@/stores/media";
 import { useStatusStore } from "@/stores/status";
 import { useSettingsStore } from "@/stores/settings";
-import { getQualityLabel, getQualityLevel } from "@/utils/quality";
+import { getQualityLabel, getQualityLevel, isDolbyAtmosQuality } from "@/utils/quality";
 import {
   canNavigateToResource,
   navigateToResource,
@@ -131,6 +131,13 @@ const sourceLabel = computed(() => {
 const quality = computed(() => media.detail?.quality ?? displayTrack.value?.quality);
 const qualityLabel = computed(() => getQualityLabel(quality.value));
 
+/** 是否为杜比全景声 */
+const isDolbyAtmos = computed(() => isDolbyAtmosQuality(quality.value));
+const dolbyAtmosTitle = computed(() => {
+  const objs = quality.value?.spatialObjects;
+  return objs ? `Dolby Atmos (${objs} Dynamic Objects)` : "Dolby Atmos";
+});
+
 /** 是否为无损级别（显示图标） */
 const showLosslessIcon = computed(() => {
   const level = getQualityLevel(quality.value);
@@ -217,6 +224,14 @@ const alignItems = computed(() => {
       >
         <IconSpLossless v-if="showLosslessIcon" class="text-[1.4em] -my-[0.4em]" />
         {{ qualityLabel }}
+      </span>
+      <span
+        v-if="isDolbyAtmos"
+        class="inline-flex items-center justify-center leading-none px-1.5 py-1.2 rounded-md border border-solid border-cover/40 font-semibold tracking-wide text-cover/90 cursor-pointer transition-colors hover:border-cover/70"
+        :title="dolbyAtmosTitle"
+        @click="status.audioInfoOpen = true"
+      >
+        DOLBY ATMOS
       </span>
       <SPopselect
         v-model="settings.lyric.lyricSourcePreference"

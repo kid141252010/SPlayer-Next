@@ -39,6 +39,10 @@ pub struct JsMusicMetadata {
     pub external_lyrics: Vec<JsExternalLyric>,
     /// 封面缩略图路径（300x300，用于前端日常显示）
     pub cover: Option<String>,
+    /// 是否为杜比全景声空间音频
+    pub is_spatial: Option<bool>,
+    /// 空间音频动态对象数
+    pub spatial_objects: Option<u32>,
 }
 
 /// 音频输出设备信息

@@ -3,7 +3,7 @@ import type { SSelectOption } from "@/components/ui/SSelect.vue";
 import type { QualityLevel } from "@/utils/quality";
 import { useMediaStore } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
-import { getQualityLabel } from "@/utils/quality";
+import { getQualityLabel, isDolbyAtmosQuality } from "@/utils/quality";
 import * as player from "@/core/player";
 import { isPlatform } from "@shared/types/platform";
 
@@ -19,6 +19,18 @@ const canSwitchQuality = computed(() => isPlatform(media.track?.source) && !medi
 /** 实际播放音质；详情加载前使用歌曲自身的音质信息。 */
 const quality = computed(() => media.detail?.quality ?? media.track?.quality);
 const qualityLabel = computed(() => getQualityLabel(quality.value));
+
+/** 是否为杜比全景声 */
+const isDolbyAtmos = computed(() => isDolbyAtmosQuality(quality.value));
+const displayQualityLabel = computed(() => {
+  if (isDolbyAtmos.value) return "Atmos";
+  return qualityLabel.value;
+});
+const dolbyAtmosTooltip = computed(() => {
+  if (!isDolbyAtmos.value) return t("settings.songLevel.unsupportedHint");
+  const objs = quality.value?.spatialObjects;
+  return objs ? `杜比全景声 (${objs} 空间对象)` : "杜比全景声 (Dolby Atmos)";
+});
 
 /** 音质偏好下拉选项 */
 const qualityOptions = computed<SSelectOption[]>(() => [
@@ -74,16 +86,11 @@ const onQualityChange = (value: string | number | boolean): void => {
             : 'border-on-surface-variant/30 text-on-surface-variant hover:border-on-surface-variant/60',
         ]"
       >
-        {{ qualityLabel }}
+        {{ displayQualityLabel }}
       </span>
     </template>
   </SPopselect>
-  <STooltip
-    v-else-if="media.track"
-    :content="t('settings.songLevel.unsupportedHint')"
-    :side-offset="16"
-    side="top"
-  >
+  <STooltip v-else-if="media.track" :content="dolbyAtmosTooltip" :side-offset="16" side="top">
     <span
       :class="[
         chipBase,
@@ -92,7 +99,7 @@ const onQualityChange = (value: string | number | boolean): void => {
           : 'border-on-surface-variant/25 text-on-surface-variant/80',
       ]"
     >
-      {{ qualityLabel }}
+      {{ displayQualityLabel }}
     </span>
   </STooltip>
 </template>

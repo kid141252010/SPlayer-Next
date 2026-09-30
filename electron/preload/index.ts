@@ -110,6 +110,11 @@ const api = {
     // 启用/禁用音量均衡
     setNormalizationEnabled: (enabled: boolean) =>
       ipcRenderer.invoke("player:setNormalizationEnabled", enabled),
+    // 启用/禁用杜比全景声空间音频
+    setSpatialAudioEnabled: (enabled: boolean) =>
+      ipcRenderer.invoke("player:setSpatialAudioEnabled", enabled),
+    // 检查系统是否支持杜比全景声空间音频
+    isSpatialAudioAvailable: () => ipcRenderer.invoke("player:isSpatialAudioAvailable"),
     // 启用/禁用 10 频段均衡器
     setEqualizerEnabled: (enabled: boolean) =>
       ipcRenderer.invoke("player:setEqualizerEnabled", enabled),

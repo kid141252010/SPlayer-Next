@@ -932,6 +932,10 @@
         "unavailable": "Exclusive mode is currently unavailable, falling back to shared mode"
       }
     },
+    "spatialAudio": {
+      "label": "Dolby Atmos / Spatial Audio",
+      "description": "Decode spatial acoustic objects and render via Windows Spatial Audio Platform using Dolby Access"
+    },
     "pauseOnDeviceSwitch": {
       "label": "Pause on Device Switch",
       "description": "Pause playback when switching the output device, e.g. when a Bluetooth device disconnects"

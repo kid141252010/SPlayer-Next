@@ -1162,10 +1162,13 @@ export const initPlayer = async (): Promise<void> => {
   await window.api.player.setVolume(status.volume);
   syncPlayMode();
   // 应用渐入渐出配置
-  const { fadeEnabled, fadeDuration, loudnessNormalization, equalizer } = settings.system.player;
+  const { fadeEnabled, fadeDuration, loudnessNormalization, equalizer, spatialAudio } =
+    settings.system.player;
   await window.api.player.setFadeDuration(fadeEnabled ? fadeDuration : 0);
   // 应用音量均衡配置
   await window.api.player.setNormalizationEnabled(loudnessNormalization ?? false);
+  // 应用空间音频配置
+  await window.api.player.setSpatialAudioEnabled(spatialAudio ?? true);
   // 应用均衡器配置
   if (equalizer) {
     await window.api.player.setEqualizerBands([...equalizer.bands]);

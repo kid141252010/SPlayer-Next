@@ -6,6 +6,7 @@ import { useSettingsStore } from "@/stores/settings";
 import { navigateToArtist } from "@/utils/navigate";
 import { fetchSongArtists } from "@/apis/song/applemusic";
 import { getValidArtists } from "@shared/utils/track";
+import { isDolbyAtmosQuality } from "@/utils/quality";
 
 withDefaults(
   defineProps<{
@@ -19,6 +20,12 @@ const status = useStatusStore();
 const media = useMediaStore();
 const settings = useSettingsStore();
 const { isPlayerExpanded, isPlaying } = storeToRefs(status);
+
+/** 是否为杜比全景声 */
+const isDolbyAtmos = computed(() => {
+  const q = media.detail?.quality ?? media.track?.quality;
+  return isDolbyAtmosQuality(q);
+});
 
 /** 当前歌曲中可展示的歌手 */
 const artists = computed(() => getValidArtists(media.track?.artists));
@@ -123,6 +130,13 @@ const goArtist = async (artist: Artist): Promise<void> => {
             title="Clean"
           >
             Clean
+          </span>
+          <span
+            v-if="isDolbyAtmos"
+            class="shrink-0 self-center px-1 rounded text-[9px] leading-[14px] font-bold border border-solid text-primary/80 border-primary/40 select-none tracking-tight"
+            title="Dolby Atmos"
+          >
+            ATMOS
           </span>
           <slot name="title-trailing" />
         </div>

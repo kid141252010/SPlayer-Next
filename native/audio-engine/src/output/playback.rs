@@ -94,6 +94,55 @@ impl PlaybackHandle {
         })
     }
 
+    /// 创建 Windows 空间音频播放流（向系统提交动态声学对象）
+    #[cfg(target_os = "windows")]
+    pub fn attach_spatial(
+        output: &AudioOutput,
+        decoder: crate::decoder::cavern::CavernDecoder,
+        shared: Arc<Shared>,
+        volume: f32,
+        paused: bool,
+    ) -> Result<Self> {
+        let volume = Arc::new(AtomicU32::new(volume.to_bits()));
+        let stopped = Arc::new(AtomicBool::new(false));
+        let stream =
+            output.build_spatial_stream(decoder, shared, Arc::clone(&volume), Arc::clone(&stopped), paused)?;
+        if !paused {
+            stream
+                .play()
+                .context("启动空间音频输出失败")
+                .with_audio_kind(AudioErrorKind::Device)?;
+        }
+        Ok(Self {
+            stream,
+            volume,
+            stopped,
+        })
+    }
+
+    /// 当前是否处于 Windows 空间音频流模式
+    pub fn is_spatial(&self) -> bool {
+        #[cfg(target_os = "windows")]
+        {
+            matches!(self.stream, OutputStream::Spatial(_))
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            false
+        }
+    }
+
+    /// 在空间音频流中执行瞬时 Seek
+    #[cfg(target_os = "windows")]
+    pub fn seek_spatial(&self, position_secs: f64) -> Result<()> {
+        if let OutputStream::Spatial(ref spatial) = self.stream {
+            spatial.seek(position_secs);
+            Ok(())
+        } else {
+            anyhow::bail!("当前输出流并非空间音频流");
+        }
+    }
+
     pub fn play(&self) {
         if let Err(error) = self.stream.play() {
             warn!(%error, "恢复音频输出失败");
@@ -125,6 +174,11 @@ impl OutputStream {
                 stream.play();
                 Ok(())
             }
+            #[cfg(target_os = "windows")]
+            Self::Spatial(stream) => {
+                stream.resume();
+                Ok(())
+            }
         }
     }
 
@@ -133,6 +187,11 @@ impl OutputStream {
             Self::Shared(stream) => stream.pause().map_err(Into::into),
             #[cfg(target_os = "windows")]
             Self::Exclusive(stream) => {
+                stream.pause();
+                Ok(())
+            }
+            #[cfg(target_os = "windows")]
+            Self::Spatial(stream) => {
                 stream.pause();
                 Ok(())
             }

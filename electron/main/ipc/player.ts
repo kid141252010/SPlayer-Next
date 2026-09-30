@@ -236,6 +236,8 @@ export const registerPlayerIpc = (): void => {
         playerLog.warn("应用独占模式配置失败:", error);
       });
     }
+    const spatialEnabled = store.get("player.spatialAudio") ?? true;
+    inst.setSpatialAudioEnabled(spatialEnabled);
   });
   // 加载音频文件
   ipcMain.handle("player:load", async (_event, source: string, options: LoadOptions = {}) => {
@@ -370,6 +372,8 @@ export const registerPlayerIpc = (): void => {
         bitsPerSample: meta.bitsPerSample,
         bitRate: meta.bitRate,
         codec: meta.codec,
+        isSpatial: meta.isSpatial ?? false,
+        spatialObjects: meta.spatialObjects ?? 0,
       };
       const data = {
         detail: {
@@ -537,6 +541,25 @@ export const registerPlayerIpc = (): void => {
     try {
       getPlayer().setNormalizationEnabled(enabled);
       return { success: true };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 启用/禁用杜比全景声空间音频
+  ipcMain.handle("player:setSpatialAudioEnabled", (_event, enabled: boolean) => {
+    try {
+      getPlayer().setSpatialAudioEnabled(enabled);
+      return { success: true };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 检查系统当前是否支持杜比全景声空间音频
+  ipcMain.handle("player:isSpatialAudioAvailable", () => {
+    try {
+      return { success: true, data: getPlayer().isSpatialAudioAvailable() };
     } catch (error) {
       return fail(ErrorCode.UNKNOWN, error);
     }
