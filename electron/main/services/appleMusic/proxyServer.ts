@@ -37,6 +37,8 @@ const MAX_CACHED_FRAGMENTS = 8;
 const PREFETCH_AHEAD = 2;
 /** 单次普通请求超时时间（毫秒） */
 const DEFAULT_TIMEOUT_MS = 15_000;
+/** 密钥模板拉取超时时间（毫秒），体积小故快速超时重试以防死连接挂起 */
+const KEY_TIMEOUT_MS = 8_000;
 /** 分片下载请求超时时间（毫秒），确保无损与高解析度音频切片有充裕缓冲时间 */
 const FRAGMENT_TIMEOUT_MS = 30_000;
 /** 网络请求最大失败重试次数 */
@@ -338,7 +340,12 @@ const ensureSessionReady = async (session: StreamSession): Promise<ParsedMediaPl
           if (session.authHeader) {
             headers.Authorization = session.authHeader;
           }
-          const keyRes = await fetchWithRetry(keyReqUrl, { headers });
+          const keyRes = await fetchWithRetry(
+            keyReqUrl,
+            { headers },
+            MAX_NETWORK_RETRIES,
+            KEY_TIMEOUT_MS,
+          );
           if (!keyRes.ok) {
             throw new Error(`拉取解密密钥模板失败 HTTP ${keyRes.status} (${keyReqUrl})`);
           }
@@ -794,8 +801,10 @@ export class AppleMusicProxyServer {
     }
   }
 
+  private consecutiveHeartbeatFailures = 0;
+
   /**
-   * 向当前上游发送极轻量 HEAD 请求维持 TCP+TLS 握手
+   * 向当前上游发送极轻量 HEAD 请求维持 TCP+TLS 握手并检测连接健康
    */
   private async pingUpstream(): Promise<void> {
     if (!this.activeUpstreamUrl) return;
@@ -809,10 +818,34 @@ export class AppleMusicProxyServer {
         headers,
         signal: AbortSignal.timeout(5000),
       });
+      if (this.consecutiveHeartbeatFailures > 0) {
+        amLog.info(`[proxy] 上游长连接已自愈恢复握手: ${this.activeUpstreamUrl}`);
+      }
+      this.consecutiveHeartbeatFailures = 0;
       amLog.debug(`[proxy] 上游长连接心跳保活成功: ${this.activeUpstreamUrl}`);
-    } catch {
-      // 心跳探测静默重试，不影响主流程
+    } catch (err) {
+      this.consecutiveHeartbeatFailures++;
+      // 连续多次失败时，说明网络已断开或系统休眠导致 socket 失效
+      if (this.consecutiveHeartbeatFailures === 2) {
+        amLog.warn(
+          `[proxy] 上游心跳保活连续失败，可能存在网络抖动或休眠断网: ${this.activeUpstreamUrl}`,
+          err,
+        );
+      }
     }
+  }
+
+  /**
+   * 系统休眠唤醒事件处理：快速重置心跳并触发长连接自愈握手
+   */
+  public onSystemResume(): void {
+    if (!this.activeUpstreamUrl) return;
+    amLog.info("[proxy] 检测到系统休眠唤醒，立即重置并重新建立上游长连接握手");
+    this.consecutiveHeartbeatFailures = 0;
+    // 延迟 1 秒等待操作系统网卡与 DNS 服务在唤醒后就绪
+    setTimeout(() => {
+      void this.pingUpstream();
+    }, 1000);
   }
 
   /**
