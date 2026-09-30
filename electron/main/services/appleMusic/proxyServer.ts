@@ -449,6 +449,9 @@ export class AppleMusicProxyServer {
   private server: http.Server | null = null;
   private port: number = 0;
   private isStarting: boolean = false;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private activeUpstreamUrl: string = "";
+  private activeAuthHeader?: string;
 
   /**
    * 启动本地回环 HTTP 服务
@@ -515,6 +518,7 @@ export class AppleMusicProxyServer {
     const port = await this.start();
     const { cleanUpstreamUrl, token: resolvedToken } = resolveUpstreamAuth(upstreamUrl, token);
     const session = getOrCreateSession(adamId, m3u8Url, cleanUpstreamUrl, resolvedToken);
+    this.keepUpstreamAlive(cleanUpstreamUrl, session.authHeader);
     const params = new URLSearchParams({
       adamId,
       m3u8: m3u8Url,
@@ -756,6 +760,7 @@ export class AppleMusicProxyServer {
     await this.start();
     const { cleanUpstreamUrl, token: resolvedToken } = resolveUpstreamAuth(upstreamUrl, token);
     const session = getOrCreateSession(adamId, m3u8Url, cleanUpstreamUrl, resolvedToken);
+    this.keepUpstreamAlive(cleanUpstreamUrl, session.authHeader);
     try {
       await ensureSessionReady(session);
     } catch (err) {
@@ -764,9 +769,62 @@ export class AppleMusicProxyServer {
   }
 
   /**
+   * 启动或更新上游服务的常驻长连接保活心跳
+   * 每 40 秒向远端发送一次轻量 HEAD 请求，防止对端 Nginx/CDN 或本地 NAT 网关掐断空闲 TCP/TLS 隧道
+   * 确保只要应用活着，该长连接就一直牢牢握住
+   * @param upstreamUrl - 上游服务根地址
+   * @param authHeader - 可选认证头
+   */
+  public keepUpstreamAlive(upstreamUrl: string, authHeader?: string): void {
+    const { cleanUpstreamUrl } = resolveUpstreamAuth(upstreamUrl);
+    if (!cleanUpstreamUrl) return;
+
+    this.activeUpstreamUrl = cleanUpstreamUrl;
+    this.activeAuthHeader = authHeader;
+
+    if (!this.heartbeatTimer) {
+      // 首次立即触发一次握手建立连接
+      void this.pingUpstream();
+      // 以 40 秒为周期常驻保活（对端常见空闲超时为 60s ~ 65s）
+      this.heartbeatTimer = setInterval(() => {
+        void this.pingUpstream();
+      }, 40_000);
+      this.heartbeatTimer.unref();
+      amLog.info(`[proxy] 已启动上游常驻长连接保活守护: ${cleanUpstreamUrl}`);
+    }
+  }
+
+  /**
+   * 向当前上游发送极轻量 HEAD 请求维持 TCP+TLS 握手
+   */
+  private async pingUpstream(): Promise<void> {
+    if (!this.activeUpstreamUrl) return;
+    try {
+      const headers: Record<string, string> = {};
+      if (this.activeAuthHeader) {
+        headers.Authorization = this.activeAuthHeader;
+      }
+      await fetchWithProxy(this.activeUpstreamUrl, {
+        method: "HEAD",
+        headers,
+        signal: AbortSignal.timeout(5000),
+      });
+      amLog.debug(`[proxy] 上游长连接心跳保活成功: ${this.activeUpstreamUrl}`);
+    } catch {
+      // 心跳探测静默重试，不影响主流程
+    }
+  }
+
+  /**
    * 销毁并停止本地代理服务
    */
   public stop(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+    this.activeUpstreamUrl = "";
+    this.activeAuthHeader = undefined;
     if (this.server) {
       this.server.close();
       this.server = null;
