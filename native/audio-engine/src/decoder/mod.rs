@@ -155,23 +155,27 @@ pub fn prepare_decode(
     let replay_gain_db = metadata::extract_replay_gain(&raw_metadata);
 
     #[cfg(target_os = "windows")]
-    let (is_spatial, spatial_objects) = if !is_remote
-        && (codec == "eac3"
-            || codec == "truehd"
-            || codec.contains("atmos")
-            || source.ends_with(".ec3")
-            || source.ends_with(".eac3")
-            || source.ends_with(".m4a"))
-    {
-        if let Some(dec) = cavern::CavernDecoder::open(source) {
-            let has_obj = dec.has_objects();
-            let dyn_count = dec.dynamic_object_count();
-            (has_obj, dyn_count)
+    let (is_spatial, spatial_objects) = {
+        let src_lower = source.to_ascii_lowercase();
+        let codec_lower = codec.to_ascii_lowercase();
+        if !is_remote
+            && (codec_lower == "eac3"
+                || codec_lower == "truehd"
+                || codec_lower.contains("atmos")
+                || src_lower.ends_with(".ec3")
+                || src_lower.ends_with(".eac3")
+                || src_lower.ends_with(".m4a"))
+        {
+            if let Some(dec) = cavern::CavernDecoder::open(source) {
+                let has_obj = dec.has_objects();
+                let dyn_count = dec.dynamic_object_count();
+                (has_obj, dyn_count)
+            } else {
+                (false, 0)
+            }
         } else {
             (false, 0)
         }
-    } else {
-        (false, 0)
     };
     #[cfg(not(target_os = "windows"))]
     let (is_spatial, spatial_objects) = (false, 0);

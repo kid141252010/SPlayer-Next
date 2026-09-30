@@ -202,7 +202,7 @@ fn run_spatial_stream_loop(
             cbSize: 0,
         };
 
-        // 默认激活 5.1/7.1 床声道掩码
+        // 激活 5.1/7.1.4 完整床声道掩码（含地面环绕与天空顶声道）
         let static_mask = AudioObjectType_FrontLeft
             | AudioObjectType_FrontRight
             | AudioObjectType_FrontCenter
@@ -210,7 +210,11 @@ fn run_spatial_stream_loop(
             | AudioObjectType_SideLeft
             | AudioObjectType_SideRight
             | AudioObjectType_BackLeft
-            | AudioObjectType_BackRight;
+            | AudioObjectType_BackRight
+            | AudioObjectType_TopFrontLeft
+            | AudioObjectType_TopFrontRight
+            | AudioObjectType_TopBackLeft
+            | AudioObjectType_TopBackRight;
 
         let buffer_event = CreateEventW(None, false, false, None)?;
         let max_dynamic = decoder.dynamic_object_count().min(16);
@@ -334,7 +338,8 @@ fn run_spatial_stream_loop(
                 };
 
                 if is_dynamic {
-                    let _ = audio_obj.SetPosition(meta.x, meta.y, meta.z);
+                    // 映射 Cavern 坐标系 (X=左右, Y=前后, Z=高低) 到 Windows 空间音频平台 (x=左右, y=高低, z=前后)
+                    let _ = audio_obj.SetPosition(meta.x, meta.z, meta.y);
                 }
                 let _ = audio_obj.SetVolume(meta.volume * gain);
 

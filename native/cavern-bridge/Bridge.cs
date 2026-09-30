@@ -190,11 +190,16 @@ public static unsafe class Exports
             {
                 float[] samples = objectSamples[i];
                 float* dest = outPlanarSamples + (i * sampleCount);
-                if (samples != null && samples.Length >= sampleCount)
+                if (samples != null && samples.Length > 0)
                 {
+                    int toCopy = Math.Min(sampleCount, samples.Length);
                     fixed (float* src = samples)
                     {
-                        Buffer.MemoryCopy(src, dest, sampleCount * sizeof(float), sampleCount * sizeof(float));
+                        Buffer.MemoryCopy(src, dest, sampleCount * sizeof(float), toCopy * sizeof(float));
+                    }
+                    if (toCopy < sampleCount)
+                    {
+                        new Span<float>(dest + toCopy, sampleCount - toCopy).Clear();
                     }
                 }
                 else
