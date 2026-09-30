@@ -28,6 +28,8 @@ pub(crate) enum OutputStream {
     Shared(cpal::Stream),
     #[cfg(target_os = "windows")]
     Exclusive(crate::output::wasapi::ExclusiveStream),
+    #[cfg(target_os = "windows")]
+    Spatial(crate::output::spatial_audio::SpatialAudioStream),
 }
 
 /// 输出设备与配置句柄。`Send`，可放进 `InnerPlayer` 而不需 `unsafe impl Send`。
@@ -209,6 +211,33 @@ impl AudioOutput {
         .map(OutputStream::Shared)
         .with_audio_kind(AudioErrorKind::Device)
     }
+
+    /// 创建 Windows 空间音频输出流（向系统提交动态声学对象，由 Dolby Access 渲染）
+    #[cfg(target_os = "windows")]
+    pub(crate) fn build_spatial_stream(
+        &self,
+        decoder: crate::decoder::cavern::CavernDecoder,
+        shared: Arc<crate::decoder::buffer::Shared>,
+        volume: Arc<AtomicU32>,
+        stopped: Arc<AtomicBool>,
+        paused: bool,
+    ) -> Result<OutputStream> {
+        let device_id = device_id_string(&self.device);
+        let on_failure = Arc::clone(&self.on_failure);
+        run_in_mta(move || {
+            crate::output::spatial_audio::open_spatial_audio_stream(
+                device_id.as_deref(),
+                decoder,
+                shared,
+                volume,
+                stopped,
+                paused,
+                on_failure,
+            )
+            .map(OutputStream::Spatial)
+        })
+        .with_audio_kind(AudioErrorKind::Device)
+    }
 }
 
 impl Drop for AudioOutput {
@@ -224,6 +253,8 @@ pub(crate) mod device_watcher;
 mod pipewire;
 pub(crate) mod playback;
 mod thread;
+#[cfg(target_os = "windows")]
+pub(crate) mod spatial_audio;
 #[cfg(target_os = "windows")]
 pub(crate) mod wasapi;
 

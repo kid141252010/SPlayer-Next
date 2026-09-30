@@ -4,6 +4,8 @@ use processing::run_dsp_safely;
 use reader::{build_resamplers, extract_stream_duration, open_source, run_decoding_loop};
 
 pub(crate) mod buffer;
+#[cfg(target_os = "windows")]
+pub(crate) mod cavern;
 pub(crate) mod source;
 
 use std::fs::File;
@@ -84,6 +86,11 @@ impl PreparedDecoder {
     pub fn bits_per_sample(&self) -> u32 {
         self.metadata.bits_per_sample
     }
+
+    /// 音频元数据引用
+    pub fn metadata(&self) -> &AudioMetadata {
+        &self.metadata
+    }
 }
 
 /// 统一结束解码线程；panic 属于源错误，但仍需结束 source 迭代
@@ -147,6 +154,32 @@ pub fn prepare_decode(
     };
     let replay_gain_db = metadata::extract_replay_gain(&raw_metadata);
 
+    #[cfg(target_os = "windows")]
+    let (is_spatial, spatial_objects) = {
+        let src_lower = source.to_ascii_lowercase();
+        let codec_lower = codec.to_ascii_lowercase();
+        if !is_remote
+            && (codec_lower == "eac3"
+                || codec_lower == "truehd"
+                || codec_lower.contains("atmos")
+                || src_lower.ends_with(".ec3")
+                || src_lower.ends_with(".eac3")
+                || src_lower.ends_with(".m4a"))
+        {
+            if let Some(dec) = cavern::CavernDecoder::open(source) {
+                let has_obj = dec.has_objects();
+                let dyn_count = dec.dynamic_object_count();
+                (has_obj, dyn_count)
+            } else {
+                (false, 0)
+            }
+        } else {
+            (false, 0)
+        }
+    };
+    #[cfg(not(target_os = "windows"))]
+    let (is_spatial, spatial_objects) = (false, 0);
+
     let metadata = AudioMetadata {
         title: tags.title,
         artist: tags.artist,
@@ -163,6 +196,8 @@ pub fn prepare_decode(
         external_lyrics,
         cover,
         cover_raw,
+        is_spatial,
+        spatial_objects,
     };
 
     Ok(PreparedDecoder {
@@ -234,6 +269,46 @@ pub fn start_prepared_decode(
         })
         .context("启动解码线程失败")
         .with_audio_kind(AudioErrorKind::DecodeFailed)?;
+
+    Ok((metadata, handle, cancel_handle))
+}
+
+/// 空间音频专用：启动轻量占位线程持有 DecoderData，等待停止信号并安全回收资源
+pub fn start_spatial_prepared_decode(
+    prepared: PreparedDecoder,
+    shared: Arc<Shared>,
+) -> Result<(
+    AudioMetadata,
+    JoinHandle<DecoderData>,
+    Option<HttpCancelHandle>,
+)> {
+    let PreparedDecoder {
+        reader,
+        mut metadata,
+        replay_gain_db: _,
+        cancel_handle,
+    } = prepared;
+    let target_rate = shared.sample_rate();
+    let (player_resampler, fft_resampler) =
+        build_resamplers(&reader, target_rate, shared.channels())?;
+    metadata.sample_rate = target_rate;
+
+    let data = DecoderData {
+        reader,
+        player_resampler,
+        fft_resampler,
+        cancel_handle: cancel_handle.clone(),
+    };
+
+    let handle = thread::Builder::new()
+        .name("spatial-stub".to_string())
+        .spawn(move || {
+            while !shared.is_stopping() {
+                thread::sleep(Duration::from_millis(50));
+            }
+            data
+        })
+        .context("启动空间音频占位线程失败")?;
 
     Ok((metadata, handle, cancel_handle))
 }

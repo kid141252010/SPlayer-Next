@@ -77,6 +77,10 @@ export interface AudioQuality {
   bitsPerSample: number;
   bitRate: number;
   codec: string;
+  /** 是否为杜比全景声 / 空间音频 */
+  isSpatial?: boolean;
+  /** 空间音频动态对象数 */
+  spatialObjects?: number;
 }
 
 /**
@@ -339,6 +343,10 @@ export interface PlayerApi {
   reinit: () => Promise<IpcResponse>;
   /** 设置音量均衡 */
   setNormalizationEnabled: (enabled: boolean) => Promise<IpcResponse>;
+  /** 设置是否启用杜比全景声空间音频 */
+  setSpatialAudioEnabled: (enabled: boolean) => Promise<IpcResponse>;
+  /** 检查当前系统是否支持杜比全景声空间音频 */
+  isSpatialAudioAvailable: () => Promise<IpcResponse<boolean>>;
   /** 启用/禁用 10 频段均衡器 */
   setEqualizerEnabled: (enabled: boolean) => Promise<IpcResponse>;
   /** 更新均衡器各频段增益（dB 数组，长度 10） */

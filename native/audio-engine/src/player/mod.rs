@@ -85,6 +85,8 @@ pub struct InnerPlayer {
     original_bits: u32,
     /// WASAPI 独占模式开关（仅 Windows 生效，重建设备时生效）
     exclusive_mode: bool,
+    /// 杜比全景声 / 空间音频开关（仅 Windows 生效，默认启用）
+    spatial_audio_enabled: bool,
     /// 正在打开的网络音源中断句柄，确保切歌和 stop 能取消元数据探测
     pending_load_handle: Option<HttpCancelHandle>,
 }
@@ -180,8 +182,46 @@ impl InnerPlayer {
             original_sample_rate: decoder::DEFAULT_TARGET_SAMPLE_RATE,
             original_bits: 16,
             exclusive_mode: false,
+            spatial_audio_enabled: true,
             pending_load_handle: None,
         })
+    }
+
+    /// 设置杜比全景声 / 空间音频开关（仅 Windows 生效）
+    pub fn set_spatial_audio_enabled(&mut self, enabled: bool) {
+        info!(enabled, "切换空间音频开关");
+        self.spatial_audio_enabled = enabled;
+    }
+
+    /// 空间音频开关是否已启用
+    pub fn is_spatial_audio_enabled(&self) -> bool {
+        self.spatial_audio_enabled
+    }
+
+    /// 当前是否处于空间音频流激活状态
+    pub fn is_spatial_active(&self) -> bool {
+        self.playback.as_ref().map_or(false, |p| p.is_spatial())
+    }
+
+    /// 在空间音频模式下瞬时 Seek 到指定时间（秒）
+    pub fn seek_spatial(&mut self, position_secs: f64) -> Result<()> {
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(playback) = &self.playback {
+                playback.seek_spatial(position_secs)?;
+                self.seek_base = position_secs;
+                if let Some(shared) = &self.shared {
+                    shared.reset_consumed();
+                }
+                let duration = self.duration();
+                self.emit(PlayerEvent::Position {
+                    position: position_secs,
+                    duration,
+                });
+                return Ok(());
+            }
+        }
+        anyhow::bail!("当前未激活空间音频输出");
     }
 
     /// 切换输出设备（下一次重建设备时生效）

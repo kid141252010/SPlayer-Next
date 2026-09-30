@@ -57,6 +57,8 @@ export interface PlayerSettings {
   loudnessNormalization: boolean;
   /** 音频输出模式：共享（默认）/ WASAPI 独占（仅 Windows） */
   audioOutputMode: AudioOutputMode;
+  /** 是否启用杜比全景声 / 空间音频（仅 Windows 生效，需要系统开启 Dolby Atmos） */
+  spatialAudio: boolean;
   /** 均衡器配置 */
   equalizer: EqualizerSettings;
   /** 按 `{Track.id}|{歌词源}` 记忆的歌词偏移（ms，正值为歌词提前）；为 0 时不写入 */

@@ -201,6 +201,16 @@ const playerCategory: SettingCategory = {
           visible: () => isWin,
         },
         {
+          key: "spatialAudio",
+          type: "switch",
+          binding: { store: "settings", path: "system.player.spatialAudio" },
+          defaultValue: true,
+          tag: { text: "Dolby Atmos" },
+          action: (enabled) =>
+            window.api.player.setSpatialAudioEnabled(Boolean(enabled)).then(() => {}),
+          visible: () => isWin,
+        },
+        {
           key: "pauseOnDeviceSwitch",
           type: "switch",
           binding: { store: "settings", path: "player.pauseOnDeviceSwitch" },

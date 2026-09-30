@@ -65,6 +65,14 @@ export declare class AudioPlayer {
   getPitch(): number
   /** 获取"音调同步"开关状态 */
   getPitchSync(): boolean
+  /** 检查 Windows 空间音频与 Dolby Access 是否可用 */
+  isSpatialAudioAvailable(): boolean
+  /** 检查杜比全景声解构器（CavernBridge）是否可用 */
+  isCavernAvailable(): boolean
+  /** 设置杜比全景声 / 空间音频开关 */
+  setSpatialAudioEnabled(enabled: boolean): void
+  /** 获取杜比全景声 / 空间音频开关状态 */
+  isSpatialAudioEnabled(): boolean
   /**
    * 重新初始化音频输出设备（系统休眠唤醒、设备热插拔或输出流错误后调用）
    *
@@ -237,6 +245,10 @@ export interface JsMusicMetadata {
   externalLyrics: Array<JsExternalLyric>
   /** 封面缩略图路径（300x300，用于前端日常显示） */
   cover?: string
+  /** 是否为杜比全景声空间音频 */
+  isSpatial?: boolean
+  /** 空间音频动态对象数 */
+  spatialObjects?: number
 }
 
 /** 播放器事件，推送给 JS 侧 */

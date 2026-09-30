@@ -21,6 +21,7 @@ export const defaultSystemConfig: SystemConfig = {
     volume: 1,
     loudnessNormalization: false,
     audioOutputMode: "shared",
+    spatialAudio: true,
     equalizer: {
       enabled: false,
       preset: "flat",

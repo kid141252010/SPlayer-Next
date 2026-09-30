@@ -920,6 +920,10 @@
         "unavailable": "独占模式暂不可用，已回退共享模式"
       }
     },
+    "spatialAudio": {
+      "label": "杜比全景声 / 空间音频",
+      "description": "解析全景声动态声学对象并直通 Windows 空间音频平台，交由已激活的 Dolby Access 提供官方耳机环绕渲染"
+    },
     "pauseOnDeviceSwitch": {
       "label": "切换时暂停播放",
       "description": "切换输出设备时暂停播放，例如蓝牙设备的断联"
