@@ -66,6 +66,7 @@ const otherCategory: SettingCategory = {
           options: [
             { value: "cn", labelKey: "settings.amStorefront.cn" },
             { value: "us", labelKey: "settings.amStorefront.us" },
+            { value: "ca", labelKey: "settings.amStorefront.ca" },
             { value: "tr", labelKey: "settings.amStorefront.tr" },
             { value: "jp", labelKey: "settings.amStorefront.jp" },
             { value: "kr", labelKey: "settings.amStorefront.kr" },
