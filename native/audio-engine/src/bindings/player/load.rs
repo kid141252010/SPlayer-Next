@@ -64,139 +64,158 @@ impl AudioPlayer {
         };
 
         let source_for_decoder = source.clone();
-
-        let result = tokio::task::spawn_blocking(move || {
-            if let Some(h) = old_threads.join_aux() {
-                let _ = h.join();
-            }
-            let mut prepared_playback = prepared_playback;
-            let mut prepared = if prepared_playback.is_none() {
-                Some(decoder::prepare_decode(
-                    &source_for_decoder,
-                    cover_dir.as_deref(),
-                    handle.clone(),
-                )?)
-            } else {
-                None
-            };
-            if load_token.load(std::sync::atomic::Ordering::Acquire) != token {
-                anyhow::bail!(LOAD_SUPERSEDED_REASON);
-            }
-            let (rate, bits) = if let Some(ready) = &prepared_playback {
-                (
-                    ready.metadata.original_sample_rate,
-                    ready.metadata.bits_per_sample,
-                )
-            } else {
-                let prepared = prepared.as_ref().unwrap();
-                (prepared.original_sample_rate(), prepared.bits_per_sample())
-            };
-            let output = output::AudioOutput::new(
-                device_id.as_deref(),
-                Some(rate),
-                Some(bits),
-                output_generation,
-                failure_callback,
-                exclusive_mode.then_some(&fallback_callback),
-            )?;
-            let buffer = prepared_playback
-                .as_ref()
-                .map(|ready| Arc::clone(&ready.shared));
-            #[cfg(target_os = "windows")]
-            let (output, shared, playback, is_spatial_active) = if spatial_enabled
-                && prepared
+        let inner = Arc::clone(&self.inner);
+        // 解码器及未提交结果均在阻塞线程释放，避免销毁 HTTP 运行时引发崩溃。
+        tokio::task::spawn_blocking(move || {
+            let result = (|| {
+                if let Some(h) = old_threads.join_aux() {
+                    let _ = h.join();
+                }
+                let mut prepared_playback = prepared_playback;
+                let mut prepared = if prepared_playback.is_none() {
+                    Some(decoder::prepare_decode(
+                        &source_for_decoder,
+                        cover_dir.as_deref(),
+                        handle.clone(),
+                    )?)
+                } else {
+                    None
+                };
+                if load_token.load(std::sync::atomic::Ordering::Acquire) != token {
+                    anyhow::bail!(LOAD_SUPERSEDED_REASON);
+                }
+                let (rate, bits) = if let Some(ready) = &prepared_playback {
+                    (
+                        ready.metadata.original_sample_rate,
+                        ready.metadata.bits_per_sample,
+                    )
+                } else {
+                    let prepared = prepared.as_ref().unwrap();
+                    (prepared.original_sample_rate(), prepared.bits_per_sample())
+                };
+                let output = output::AudioOutput::new(
+                    device_id.as_deref(),
+                    Some(rate),
+                    Some(bits),
+                    output_generation,
+                    failure_callback,
+                    exclusive_mode.then_some(&fallback_callback),
+                )?;
+                let buffer = prepared_playback
                     .as_ref()
-                    .map_or(false, |p| p.metadata().is_spatial)
-                && output::spatial_audio::is_spatial_audio_available()
-            {
-                if let Some(dec) = decoder::cavern::CavernDecoder::open(&source_for_decoder) {
-                    let shared =
-                        crate::decoder::buffer::Shared::new(output.sample_rate(), output.channels());
-                    match PlaybackHandle::attach_spatial(&output, dec, Arc::clone(&shared), 1.0, true) {
-                        Ok(p) => (output, shared, Arc::new(p), true),
-                        Err(e) => {
-                            warn!(error = %e, "空间音频流初始化失败，回退到普通输出");
-                            let (out, sh, pb) = PlaybackHandle::prepare_with_buffer(output, fft, buffer)?;
-                            (out, sh, pb, false)
+                    .map(|ready| Arc::clone(&ready.shared));
+
+                #[cfg(target_os = "windows")]
+                let (output, shared, playback, is_spatial_active) = if spatial_enabled
+                    && prepared
+                        .as_ref()
+                        .map_or(false, |p| p.metadata().is_spatial)
+                    && output::spatial_audio::is_spatial_audio_available()
+                {
+                    if let Some(dec) = decoder::cavern::CavernDecoder::open(&source_for_decoder) {
+                        let shared =
+                            crate::decoder::buffer::Shared::new(output.sample_rate(), output.channels());
+                        match PlaybackHandle::attach_spatial(&output, dec, Arc::clone(&shared), 1.0, true) {
+                            Ok(p) => (output, shared, Arc::new(p), true),
+                            Err(e) => {
+                                warn!(error = %e, "空间音频流初始化失败，回退到普通输出");
+                                let (out, sh, pb) = PlaybackHandle::prepare_with_buffer(output, fft, buffer)?;
+                                (out, sh, pb, false)
+                            }
                         }
+                    } else {
+                        let (out, sh, pb) = PlaybackHandle::prepare_with_buffer(output, fft, buffer)?;
+                        (out, sh, pb, false)
                     }
                 } else {
                     let (out, sh, pb) = PlaybackHandle::prepare_with_buffer(output, fft, buffer)?;
                     (out, sh, pb, false)
-                }
-            } else {
-                let (out, sh, pb) = PlaybackHandle::prepare_with_buffer(output, fft, buffer)?;
-                (out, sh, pb, false)
-            };
+                };
 
-            #[cfg(not(target_os = "windows"))]
-            let (output, shared, playback, is_spatial_active) = {
-                let (out, sh, pb) = PlaybackHandle::prepare_with_buffer(output, fft, buffer)?;
-                (out, sh, pb, false)
-            };
-            shared.set_normalization_enabled(normalization_enabled);
-            if let Some(mut ready) = prepared_playback.take() {
-                if Arc::ptr_eq(&shared, &ready.shared) {
-                    shared.set_preloading(false);
-                    let decode_handle = ready.decoder.take().unwrap();
-                    return Ok((
-                        ready.metadata.clone(),
-                        decode_handle,
-                        shared,
-                        output,
-                        playback,
-                        ready.cancel.clone(),
-                        Arc::clone(&ready.equalizer),
-                        Arc::clone(&ready.tempo),
-                        Some(ready.start_position),
-                    ));
-                }
-                // 独占回退或采样率改变后必须按最终设备格式重新解码
-                drop(ready);
-                prepared = Some(decoder::prepare_decode(
-                    &source_for_decoder,
-                    cover_dir.as_deref(),
-                    handle,
-                )?);
-            }
-            #[cfg(target_os = "windows")]
-            let (metadata, decode_handle, cancel) = if is_spatial_active {
-                decoder::start_spatial_prepared_decode(prepared.unwrap(), Arc::clone(&shared))?
-            } else {
-                equalizer
-                    .lock()
-                    .set_output_format(output.sample_rate(), output.channels());
-                equalizer.lock().reset_state();
-                tempo
-                    .lock()
-                    .set_output_format(output.sample_rate(), output.channels());
-                tempo.lock().reset();
-                decoder::start_prepared_decode(
-                    prepared.unwrap(),
-                    Arc::clone(&shared),
-                    Arc::clone(&equalizer),
-                    Arc::clone(&tempo),
-                )?
-            };
+                #[cfg(not(target_os = "windows"))]
+                let (output, shared, playback, is_spatial_active) = {
+                    let (out, sh, pb) = PlaybackHandle::prepare_with_buffer(output, fft, buffer)?;
+                    (out, sh, pb, false)
+                };
 
-            #[cfg(not(target_os = "windows"))]
-            let (metadata, decode_handle, cancel) = {
-                equalizer
-                    .lock()
-                    .set_output_format(output.sample_rate(), output.channels());
-                equalizer.lock().reset_state();
-                tempo
-                    .lock()
-                    .set_output_format(output.sample_rate(), output.channels());
-                tempo.lock().reset();
-                decoder::start_prepared_decode(
-                    prepared.unwrap(),
-                    Arc::clone(&shared),
-                    Arc::clone(&equalizer),
-                    Arc::clone(&tempo),
-                )?
-            };
-            Ok::<_, anyhow::Error>((
+                shared.set_normalization_enabled(normalization_enabled);
+                if let Some(mut ready) = prepared_playback.take() {
+                    if Arc::ptr_eq(&shared, &ready.shared) {
+                        shared.set_preloading(false);
+                        let decode_handle = ready.decoder.take().unwrap();
+                        return Ok((
+                            ready.metadata.clone(),
+                            decode_handle,
+                            shared,
+                            output,
+                            playback,
+                            ready.cancel.clone(),
+                            Arc::clone(&ready.equalizer),
+                            Arc::clone(&ready.tempo),
+                            Some(ready.start_position),
+                        ));
+                    }
+                    // 独占回退或采样率改变后必须按最终设备格式重新解码
+                    drop(ready);
+                    prepared = Some(decoder::prepare_decode(
+                        &source_for_decoder,
+                        cover_dir.as_deref(),
+                        handle,
+                    )?);
+                }
+
+                #[cfg(target_os = "windows")]
+                let (metadata, decode_handle, cancel) = if is_spatial_active {
+                    decoder::start_spatial_prepared_decode(prepared.unwrap(), Arc::clone(&shared))?
+                } else {
+                    equalizer
+                        .lock()
+                        .set_output_format(output.sample_rate(), output.channels());
+                    equalizer.lock().reset_state();
+                    tempo
+                        .lock()
+                        .set_output_format(output.sample_rate(), output.channels());
+                    tempo.lock().reset();
+                    decoder::start_prepared_decode(
+                        prepared.unwrap(),
+                        Arc::clone(&shared),
+                        Arc::clone(&equalizer),
+                        Arc::clone(&tempo),
+                    )?
+                };
+
+                #[cfg(not(target_os = "windows"))]
+                let (metadata, decode_handle, cancel) = {
+                    equalizer
+                        .lock()
+                        .set_output_format(output.sample_rate(), output.channels());
+                    equalizer.lock().reset_state();
+                    tempo
+                        .lock()
+                        .set_output_format(output.sample_rate(), output.channels());
+                    tempo.lock().reset();
+                    decoder::start_prepared_decode(
+                        prepared.unwrap(),
+                        Arc::clone(&shared),
+                        Arc::clone(&equalizer),
+                        Arc::clone(&tempo),
+                    )?
+                };
+
+                Ok::<_, anyhow::Error>((
+                    metadata,
+                    decode_handle,
+                    shared,
+                    output,
+                    playback,
+                    cancel,
+                    equalizer,
+                    tempo,
+                    None,
+                ))
+            })();
+
+            let (
                 metadata,
                 decode_handle,
                 shared,
@@ -205,69 +224,57 @@ impl AudioPlayer {
                 cancel,
                 equalizer,
                 tempo,
-                None,
-            ))
+                prepared_position,
+            ) = match result {
+                Ok(result) => result,
+                Err(error) => {
+                    let mut player = inner.lock();
+                    if !player.is_load_token_current(token) {
+                        return Err(Error::from_reason(LOAD_SUPERSEDED_REASON));
+                    }
+                    player.clear_pending_load(token);
+                    return Err(error).into_napi();
+                }
+            };
+
+            let returned_meta = {
+                let mut player = inner.lock();
+                if player.is_load_token_current(token) {
+                    player.replace_dsp(equalizer, tempo);
+                }
+                player
+                    .commit_loaded(
+                        token,
+                        &source,
+                        auto_play,
+                        crate::player::LoadedPlayback {
+                            start_position: prepared_position.unwrap_or(0.0),
+                            metadata,
+                            decode_handle,
+                            shared,
+                            output,
+                            playback,
+                            cancel,
+                        },
+                    )
+                    .into_napi()?
+            };
+
+            match returned_meta {
+                Some(meta) => {
+                    let mut meta = Self::meta_to_js(meta);
+                    meta.prepared_position = prepared_position;
+                    Ok(meta)
+                }
+                None => Err(Error::from_reason(LOAD_SUPERSEDED_REASON)),
+            }
         })
         .await
-        .map_err(|e| Error::from_reason(format!("load task join error: {e}")))?;
-
-        let (
-            metadata,
-            decode_handle,
-            shared,
-            output,
-            playback,
-            cancel,
-            equalizer,
-            tempo,
-            prepared_position,
-        ) = match result {
-            Ok(result) => result,
-            Err(error) => {
-                let mut player = self.inner.lock();
-                if !player.is_load_token_current(token) {
-                    return Err(Error::from_reason(LOAD_SUPERSEDED_REASON));
-                }
-                player.clear_pending_load(token);
-                return Err(error).into_napi();
-            }
-        };
-
-        let returned_meta = {
-            let mut player = self.inner.lock();
-            if player.is_load_token_current(token) {
-                player.replace_dsp(equalizer, tempo);
-            }
-            player
-                .commit_loaded(
-                    token,
-                    &source,
-                    auto_play,
-                    crate::player::LoadedPlayback {
-                        start_position: prepared_position.unwrap_or(0.0),
-                        metadata,
-                        decode_handle,
-                        shared,
-                        output,
-                        playback,
-                        cancel,
-                    },
-                )
-                .into_napi()?
-        };
-
-        match returned_meta {
-            Some(meta) => {
-                let mut meta = Self::meta_to_js(meta);
-                meta.prepared_position = prepared_position;
-                Ok(meta)
-            }
-            None => Err(Error::from_reason(LOAD_SUPERSEDED_REASON)),
-        }
+        .map_err(|e| Error::from_reason(format!("load task join error: {e}")))?
     }
 
     /// 内部：将 AudioMetadata 转为 JS 结构
-    fn meta_to_js(meta: crate::metadata::AudioMetadata) -> JsMusicMetadata {
+    pub(super) fn meta_to_js(meta: crate::metadata::AudioMetadata) -> JsMusicMetadata {
         JsMusicMetadata {
             prepared_position: None,
             title: meta.title,

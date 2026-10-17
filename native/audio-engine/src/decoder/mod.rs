@@ -1,3 +1,4 @@
+pub(crate) mod input;
 mod processing;
 mod reader;
 use processing::run_dsp_safely;
@@ -7,6 +8,8 @@ pub(crate) mod buffer;
 #[cfg(target_os = "windows")]
 pub(crate) mod cavern;
 pub(crate) mod source;
+pub(crate) mod tail;
+pub(crate) mod transition_source;
 
 use std::fs::File;
 use std::sync::Arc;

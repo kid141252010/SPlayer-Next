@@ -2,7 +2,6 @@ import { execSync } from "node:child_process";
 import crypto from "node:crypto";
 import { store } from "@main/store";
 import { systemLog } from "@main/utils/logger";
-import { fetch as undiciFetch, Agent, ProxyAgent, Socks5ProxyAgent } from "undici";
 import type { Dispatcher } from "undici";
 
 const PROXY_TEST_URL = "https://www.baidu.com";
@@ -13,26 +12,6 @@ let defaultDispatcher: Dispatcher | null = null;
 
 const isManualProxyProtocol = (value: string): value is "http" | "https" | "socks5" =>
   value === "http" || value === "https" || value === "socks5";
-
-/** 默认直连 dispatcher（允许 legacy renegotiation 并保持长连接一直握着） */
-const getDefaultDispatcher = (): Dispatcher => {
-  if (!defaultDispatcher) {
-    defaultDispatcher = new Agent({
-      connect: {
-        keepAlive: true,
-        keepAliveInitialDelay: 10_000,
-        secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT,
-      },
-      keepAliveTimeout: 86_400_000,
-      keepAliveMaxTimeout: 86_400_000,
-      maxRequestsPerClient: 0,
-      pipelining: 1,
-      connections: 64,
-    });
-  }
-  return defaultDispatcher;
-};
-
 /** 当前手动代理地址；off 或配置无效时返回 null，保持原生直连行为 */
 export const getNetworkProxyUrl = (): string | null => {
   const config = store.get("system.networkProxy");
@@ -123,31 +102,37 @@ export const isDirectUrl = (input: string | URL): boolean => {
   return false;
 };
 
-const getProxyDispatcher = (input?: string | URL): Dispatcher => {
-  if (input && isDirectUrl(input)) return getDefaultDispatcher();
-  const url = getEffectiveProxyUrl();
-  if (!url) return getDefaultDispatcher();
-  if (!proxyAgent || proxyAgentUrl !== url) {
-    proxyAgent?.close().catch(() => {});
-    proxyAgent = url.startsWith("socks5://")
-      ? new Socks5ProxyAgent(url)
-      : new ProxyAgent({
-          uri: url,
-          keepAliveTimeout: 86_400_000,
-          keepAliveMaxTimeout: 86_400_000,
-          maxRequestsPerClient: 0,
-          pipelining: 1,
-          connections: 64,
-        });
-    proxyAgentUrl = url;
-    systemLog.info(`[proxy] node fetch proxy=${url}`);
+/** Node fetch 包装：首次请求才加载网络库，并复用当前代理连接池 */
+export const fetchWithProxy = async (
+  input: string | URL,
+  init?: RequestInit,
+): Promise<Response> => {
+  const { fetch: undiciFetch, Agent, ProxyAgent, Socks5ProxyAgent } = await import("undici");
+  const url = isDirectUrl(input) ? null : getNetworkProxyUrl();
+  let dispatcher: Dispatcher;
+  if (url) {
+    if (!proxyAgent || proxyAgentUrl !== url) {
+      proxyAgent?.close().catch(() => {});
+      proxyAgent = url.startsWith("socks5://") ? new Socks5ProxyAgent(url) : new ProxyAgent(url);
+      proxyAgentUrl = url;
+      systemLog.info(`[proxy] node fetch proxy=${url}`);
+    }
+    dispatcher = proxyAgent;
+  } else {
+    defaultDispatcher ??= new Agent({
+      connect: {
+        keepAlive: true,
+        keepAliveInitialDelay: 10_000,
+        secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT,
+      },
+      keepAliveTimeout: 86_400_000,
+      keepAliveMaxTimeout: 86_400_000,
+      maxRequestsPerClient: 0,
+      pipelining: 1,
+      connections: 64,
+    });
+    dispatcher = defaultDispatcher;
   }
-  return proxyAgent;
-};
-
-/** Node fetch 包装：统一使用 undici 并注入支持 legacy SSL 的 dispatcher */
-export const fetchWithProxy = (input: string | URL, init?: RequestInit): Promise<Response> => {
-  const dispatcher = getProxyDispatcher(input);
   return undiciFetch(input, { ...(init as RequestInit), dispatcher } as Parameters<
     typeof undiciFetch
   >[1]) as unknown as Promise<Response>;

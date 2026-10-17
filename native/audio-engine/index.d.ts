@@ -138,13 +138,28 @@ export declare class AudioPlayer {
   /**
    * 跳转到指定播放位置（秒）
    *
-   * 异步三段式：与 load 同样的设计原则
-   * 1. 主线程瞬时持锁：take 旧解码线程 + 拿归一化参数
-   * 2. 工作线程：join 旧线程 → ffmpeg seek → resume_decode 启动新解码线程
-   * 3. 主线程瞬时持锁：attach 新 sink + emit 状态
-   * seek 失败时 fallback 到完整 load
+   * 解码与提交均在阻塞线程执行，避免过期网络解码器在异步上下文释放。
+   * seek 失败时回退到完整加载。
    */
   seek(position: number): Promise<void>
+  /**
+   * 后台检查当前本地音源的连续近静音拖尾，不改变实际时长或播放位置
+   * @param startSeconds - 当前曲目或 CUE 分轨的起点
+   * @param endSeconds - 当前曲目或 CUE 分轨的终点
+   * @returns 确认的交接终点，未确认或已切歌时为空
+   */
+  analyzeTail(startSeconds: number, endSeconds: number): Promise<number | null>
+  /**
+   * 在当前输出流中交叉切换到已准备的下一曲
+   * @param id - 预载槽位标识
+   * @param source - 预载音源路径
+   * @param remainingSeconds - 当前曲目距离有效结束的墙钟秒数
+   * @param preference - 曲尾交接时机与淡化时长偏好
+   * @param nextEndSeconds - 下一曲的 CUE 结束位置
+   * @param currentEndSeconds - 当前曲目的 CUE 结束位置
+   * @returns 成功交接时返回下一曲元信息，槽位失效时返回空值
+   */
+  transitionToPrepared(id: string, source: string, remainingSeconds: number, preference: string, nextEndSeconds?: number | undefined | null, currentEndSeconds?: number | undefined | null): Promise<JsMusicMetadata | null>
   /** 创建新的播放器实例 */
   constructor()
 }
@@ -253,7 +268,7 @@ export interface JsMusicMetadata {
 
 /** 播放器事件，推送给 JS 侧 */
 export interface JsPlayerEvent {
-  /** 事件类型："stateChanged" | "ended" | "sourceError" | "position" | "fftData" | "outputStalled" | "outputFailed" | "outputFallback" */
+  /** 事件类型："stateChanged" | "ended" | "sourceError" | "position" | "transitionChanged" | "fftData" | "outputStalled" | "outputFailed" | "outputFallback" */
   type: string
   /** 状态（仅 stateChanged 时有值） */
   state?: string
@@ -261,6 +276,12 @@ export interface JsPlayerEvent {
   position?: number
   /** 时长（秒，仅 position 时有值） */
   duration?: number
+  /** 实际交叉淡化状态（仅 transitionChanged 时有值） */
+  transitionActive?: boolean
+  /** 交接点来源（仅 transitionChanged 开始时有值） */
+  transitionReason?: string
+  /** 计划交叉淡化时长（秒，仅 transitionChanged 开始时有值） */
+  transitionFadeSeconds?: number
   /** FFT 频谱数据（仅 fftData 时有值，128 个频段，值域 0.0 ~ 1.0） */
   fftData?: JsFftData
   /** 回退原因分类键（仅 outputFallback 时有值：deviceBusy / formatUnsupported / unavailable） */

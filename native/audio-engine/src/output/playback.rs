@@ -6,7 +6,9 @@ use cpal::traits::StreamTrait;
 use tracing::warn;
 
 use crate::decoder::buffer::Shared;
-use crate::decoder::source::DecoderSource;
+use crate::decoder::transition_source::{
+    TransitionControl, TransitionPlan, TransitionSignals, TransitionSource as DecoderSource,
+};
 use crate::dsp::fft::FftAnalyzer;
 use crate::error::{AudioErrorKind, AudioResultExt};
 use crate::output::{AudioOutput, OutputStream};
@@ -17,6 +19,7 @@ pub struct PlaybackHandle {
     stream: OutputStream,
     volume: Arc<AtomicU32>,
     stopped: Arc<AtomicBool>,
+    transition: TransitionControl,
 }
 
 impl PlaybackHandle {
@@ -79,6 +82,7 @@ impl PlaybackHandle {
     ) -> Result<Self> {
         let volume = Arc::new(AtomicU32::new(volume.to_bits()));
         let stopped = Arc::new(AtomicBool::new(false));
+        let transition = source.control();
         let stream =
             output.build_stream(source, Arc::clone(&volume), Arc::clone(&stopped), paused)?;
         if !paused {
@@ -91,6 +95,7 @@ impl PlaybackHandle {
             stream,
             volume,
             stopped,
+            transition,
         })
     }
 
@@ -117,6 +122,7 @@ impl PlaybackHandle {
             stream,
             volume,
             stopped,
+            transition: TransitionControl::default(),
         })
     }
 
@@ -143,6 +149,26 @@ impl PlaybackHandle {
         }
     }
 
+    /// 将备用 PCM 提交到现有输出流，由回调按音频帧执行过渡
+    pub fn queue_transition(
+        &self,
+        shared: Arc<Shared>,
+        plan: TransitionPlan,
+    ) -> Result<TransitionSignals> {
+        self.transition.drain_retired();
+        self.transition.queue(shared, plan)
+    }
+
+    /// 在非实时线程回收已经退出混音的旧音源
+    pub fn drain_retired(&self) {
+        self.transition.drain_retired();
+    }
+
+    /// 将用户调速同步到在途过渡的时间轴
+    pub fn set_transition_speed(&self, ratio: f32) {
+        self.transition.set_speed_ratio(ratio);
+    }
+
     pub fn play(&self) {
         if let Err(error) = self.stream.play() {
             warn!(%error, "恢复音频输出失败");
@@ -155,9 +181,12 @@ impl PlaybackHandle {
         }
     }
 
-    /// 停止播放：实时回调转入静音填充，随句柄销毁释放输出流
+    /// 停止播放：先停止设备流，再让实时回调转入静音填充
     pub fn stop(&self) {
         self.stopped.store(true, Ordering::Release);
+        if let Err(error) = self.stream.pause() {
+            warn!(%error, "停止音频输出失败");
+        }
     }
 
     pub fn set_volume(&self, volume: f32) {

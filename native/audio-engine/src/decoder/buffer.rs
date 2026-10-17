@@ -28,6 +28,7 @@ pub enum PopResult {
 pub struct Shared {
     decoded_buffer: Mutex<VecDeque<AudioChunk>>,
     decoded_capacity: AtomicUsize,
+    preloading: AtomicBool,
     decoded_condvar: Condvar,
     output_buffer: ArrayQueue<AudioChunk>,
     output_wait: Mutex<()>,
@@ -41,6 +42,7 @@ pub struct Shared {
     is_stopping: AtomicBool,
     /// 已被输出回调消费的交错采样数（包含所有声道）
     samples_consumed: AtomicU64,
+    end_sample: AtomicU64,
     /// 输出采样率（创建时确定，不可变）
     sample_rate: u32,
     /// 输出声道数（创建时确定，不可变）
@@ -79,6 +81,7 @@ impl Shared {
         Arc::new(Self {
             decoded_buffer: Mutex::new(VecDeque::with_capacity(FRAME_BUFFER_CAPACITY)),
             decoded_capacity: AtomicUsize::new(FRAME_BUFFER_CAPACITY),
+            preloading: AtomicBool::new(false),
             decoded_condvar: Condvar::new(),
             output_buffer: ArrayQueue::new(OUTPUT_BUFFER_CAPACITY),
             output_wait: Mutex::new(()),
@@ -91,6 +94,7 @@ impl Shared {
             output_eof: AtomicBool::new(false),
             is_stopping: AtomicBool::new(false),
             samples_consumed: AtomicU64::new(0),
+            end_sample: AtomicU64::new(u64::MAX),
             sample_rate,
             channels,
             all_consumed: AtomicBool::new(false),
@@ -103,12 +107,15 @@ impl Shared {
 
     /// 备用槽只保留少量未处理帧，切入播放后恢复正常背压容量
     pub fn set_preloading(&self, preloading: bool) {
+        let _output_guard = self.output_wait.lock();
         let _guard = self.decoded_buffer.lock();
+        self.preloading.store(preloading, Ordering::Release);
         self.decoded_capacity.store(
             if preloading { 2 } else { FRAME_BUFFER_CAPACITY },
             Ordering::Relaxed,
         );
         self.decoded_condvar.notify_all();
+        self.output_condvar.notify_all();
     }
 
     /// 绑定网络中断句柄，之后调用 stop() 会中断 HTTP IO
@@ -183,6 +190,17 @@ impl Shared {
     /// 已消费采样的原始计数（用于停滞检测，不做单位换算）
     pub fn samples_consumed_count(&self) -> u64 {
         self.samples_consumed.load(Ordering::Relaxed)
+    }
+
+    /// 将 CUE 的有效时长下沉到样本读取边界
+    pub fn set_end_position(&self, seconds: f64) {
+        let frames = (seconds.max(0.0) * f64::from(self.sample_rate)).round() as u64;
+        self.end_sample
+            .store(frames * u64::from(self.channels), Ordering::Release);
+    }
+
+    pub fn end_sample(&self) -> u64 {
+        self.end_sample.load(Ordering::Acquire)
     }
 
     /// 缓冲区是否为空（true 表示解码 underrun，sink 不消费可能是正常等待数据）
@@ -291,9 +309,14 @@ impl Shared {
                 }
                 self.output_samples.fetch_sub(samples, Ordering::AcqRel);
             }
-            // 回调不持有等待锁，超时兜住检查条件与等待之间的通知竞态
-            self.output_condvar
-                .wait_for(&mut wait, Duration::from_millis(2));
+            if self.preloading.load(Ordering::Acquire) {
+                // 备用槽没有消费者，激活和停止持锁通知即可，避免持续定时唤醒。
+                self.output_condvar.wait(&mut wait);
+            } else {
+                // 回调不持有等待锁，超时兜住检查条件与等待之间的通知竞态。
+                self.output_condvar
+                    .wait_for(&mut wait, Duration::from_millis(2));
+            }
         }
     }
 
@@ -350,6 +373,7 @@ impl Shared {
     /// 发出停止信号，唤醒双方
     /// 同时取消网络请求，让阻塞中的 HTTP IO 尽快返回
     pub fn stop(&self) {
+        let _output_guard = self.output_wait.lock();
         let _guard = self.decoded_buffer.lock();
         self.is_stopping.store(true, Ordering::Release);
         if let Some(handle) = self.cancel_handle.lock().as_ref() {

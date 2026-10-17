@@ -72,6 +72,7 @@ const goArtist = async (artist: Artist): Promise<void> => {
         navigateToArtist(target.name || artist.name, {
           source: track.source,
           artistId: target.id,
+          serverId: track.serverId,
         });
         return;
       }
@@ -82,6 +83,7 @@ const goArtist = async (artist: Artist): Promise<void> => {
   navigateToArtist(artist.name, {
     source: media.track?.source,
     artistId: artist.id,
+    serverId: media.track?.serverId,
   });
 };
 </script>

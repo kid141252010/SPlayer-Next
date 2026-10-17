@@ -29,6 +29,7 @@ let preloadAbort: AbortController | null = null;
 let cachedResult: NextTrackPreloadResult | null = null;
 let currentContextKey: string | null = null;
 let pendingCover: HTMLImageElement | null = null;
+let transitionPreparedId: string | null = null;
 let stopContextWatch: (() => void) | null = null;
 
 /**
@@ -51,6 +52,8 @@ const buildContextKey = (track: Track): string => {
     track.cueStartMs ?? "",
     track.cueEndMs ?? "",
     settings.player.songLevel,
+    settings.player.transitionMode,
+    settings.player.transitionPreference,
     settings.player.allowTrialPlay,
     streaming.activeServerId ?? "",
     plugins.list
@@ -140,15 +143,53 @@ export const consumePreloadedTrack = (track: Track): NextTrackPreloadResult | nu
 };
 
 /**
+ * 查询与候选曲目匹配的原生备用槽位，不改变其所有权
+ * @param track - 即将交接的目标曲目
+ * @returns 仍有效且原生 PCM 已就绪的预载结果
+ */
+export const peekPreparedTrack = (track: Track): NextTrackPreloadResult | null => {
+  if (!useSettingsStore().player.preloadNextTrack) return null;
+  if (cachedResult?.trackId !== track.id || !cachedResult.preparedId) return null;
+  return cachedResult.contextKey === buildContextKey(track) ? cachedResult : null;
+};
+
+/**
+ * 将备用槽位所有权交给在途交接，设置变更从下一次预载开始生效
+ * @param track - 本次交接的目标曲目
+ * @param expectedId - 后台通知对应的槽位标识
+ * @returns 已接管的预载结果，迟到通知或槽位失效时返回 null
+ */
+export const beginPreparedTransition = (
+  track: Track,
+  expectedId?: string,
+): NextTrackPreloadResult | null => {
+  if (transitionPreparedId) return null;
+  const prepared = peekPreparedTrack(track);
+  if (!prepared?.source || (expectedId && prepared.preparedId !== expectedId)) return null;
+  const result = consumePreloadedTrack(track);
+  if (!result?.preparedId) return null;
+  transitionPreparedId = result.preparedId;
+  return result;
+};
+
+/**
+ * 释放交接所有权，再按最新设置调度下一曲
+ * @param id - 本次交接持有的槽位标识
+ */
+export const finishPreparedTransition = (id: string): void => {
+  if (transitionPreparedId !== id) return;
+  transitionPreparedId = null;
+  void window.api.player.cancelPrepared(id).catch(console.warn);
+  scheduleNextTrackPreload();
+};
+
+/**
  * 调度下一首预载任务
  */
 export const scheduleNextTrackPreload = (): void => {
+  if (transitionPreparedId) return;
   const settings = useSettingsStore();
-  if (
-    !settings.player.preloadNextTrack ||
-    !settings.system.cache.songCache.enabled ||
-    !settings.system.cache.songCache.cacheStreaming
-  ) {
+  if (!settings.player.preloadNextTrack) {
     invalidateNextTrackPreload();
     return;
   }
@@ -158,7 +199,7 @@ export const scheduleNextTrackPreload = (): void => {
     invalidateNextTrackPreload();
     return;
   }
-  if (status.state === "loading") return;
+  if (status.trackLoading || status.state === "loading") return;
   const currentTrack = status.currentTrack;
   if (!currentTrack || useMediaStore().track?.id !== currentTrack.id) {
     invalidateNextTrackPreload();
@@ -179,6 +220,13 @@ export const scheduleNextTrackPreload = (): void => {
   }
 
   const candidateTrack = candidateResult.track;
+  if (
+    candidateTrack.source !== "local" &&
+    (!settings.system.cache.songCache.enabled || !settings.system.cache.songCache.cacheStreaming)
+  ) {
+    invalidateNextTrackPreload();
+    return;
+  }
   const contextKey = buildContextKey(candidateTrack);
   // 上下文指纹一致且已有缓存，避免重复触发
   if (cachedResult && cachedResult.contextKey === contextKey) {
@@ -201,6 +249,10 @@ export const scheduleNextTrackPreload = (): void => {
   nativePreloadId = id;
   currentContextKey = contextKey;
   cachedResult = null;
+  console.info("[player:preload] 开始预载下一曲", {
+    trackId: candidateTrack.id,
+    title: candidateTrack.title,
+  });
 
   void (async () => {
     try {
@@ -210,10 +262,13 @@ export const scheduleNextTrackPreload = (): void => {
       // 音源预拉取
       let source = await resolveTrackSource(candidateTrack, {
         silent: true,
-        streamingPlaySessionId: crypto.randomUUID(),
       });
       if (token !== currentToken) return;
       if (!source) {
+        console.info("[player:preload] 下一曲未找到可用音源", {
+          trackId: candidateTrack.id,
+          title: candidateTrack.title,
+        });
         invalidateNextTrackPreload();
         return;
       }
@@ -223,11 +278,14 @@ export const scheduleNextTrackPreload = (): void => {
         if (cachedPath) source = { source: cachedPath, fromCache: true, provider: "cache" };
       }
       let preparedId: string | undefined;
-      if (source.provider === "local" || source.fromCache) {
+      if (source.provider === "local" || source.provider === "download" || source.fromCache) {
         const ready = await window.api.player.prepareNext(
           id,
           source.source,
           candidateTrack.cueStartMs,
+          settings.player.transitionMode === "crossfade"
+            ? settings.player.transitionPreference
+            : undefined,
         );
         if (token !== currentToken) return;
         if (ready) preparedId = id;
@@ -238,11 +296,21 @@ export const scheduleNextTrackPreload = (): void => {
         nativePreloadId = null;
       }
       cachedResult = { trackId: candidateTrack.id, source, contextKey, preparedId };
-    } catch (err) {
-      console.warn("[nextPreload] Preload task failed silently:", err);
-      if (token === currentToken) {
-        invalidateNextTrackPreload();
+      if (!preparedId) {
+        console.info("[player:preload] 下一曲音源已准备，PCM 未预载", {
+          trackId: candidateTrack.id,
+          title: candidateTrack.title,
+          source: source.provider,
+        });
       }
+    } catch (err) {
+      if (token !== currentToken) return;
+      console.warn("[player:preload] 下一曲预载失败", {
+        trackId: candidateTrack.id,
+        title: candidateTrack.title,
+        error: err,
+      });
+      invalidateNextTrackPreload();
     }
   })();
 };
@@ -257,6 +325,8 @@ export const installNextTrackPreloadWatchers = (): void => {
   stopContextWatch = watch(
     () => [
       settings.player.preloadNextTrack,
+      settings.player.transitionMode,
+      settings.player.transitionPreference,
       settings.system.cache.songCache.enabled,
       settings.system.cache.songCache.cacheStreaming,
       settings.player.songLevel,

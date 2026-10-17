@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::thread::JoinHandle;
 
 use ffmpeg_audio::HttpCancelHandle;
 use napi::bindgen_prelude::*;
@@ -51,6 +50,8 @@ mod events;
 mod load;
 mod preload;
 mod seek;
+mod tail;
+mod transition;
 mod types;
 pub use types::*;
 
