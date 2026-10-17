@@ -21,7 +21,6 @@ export const defaultSystemConfig: SystemConfig = {
     volume: 1,
     loudnessNormalization: false,
     audioOutputMode: "shared",
-    spatialAudio: true,
     keepScreenAwake: false,
     equalizer: {
       enabled: false,

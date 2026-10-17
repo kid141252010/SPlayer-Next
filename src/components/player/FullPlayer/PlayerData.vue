@@ -146,10 +146,7 @@ const qualityLabel = computed(() => getQualityLabel(quality.value));
 
 /** 是否为杜比全景声 */
 const isDolbyAtmos = computed(() => isDolbyAtmosQuality(quality.value));
-const dolbyAtmosTitle = computed(() => {
-  const objs = quality.value?.spatialObjects;
-  return objs ? `Dolby Atmos (${objs} Dynamic Objects)` : "Dolby Atmos";
-});
+const dolbyAtmosTitle = computed(() => "Dolby Atmos");
 
 /** 是否为无损级别（显示图标） */
 const showLosslessIcon = computed(() => {

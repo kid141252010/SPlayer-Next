@@ -19,15 +19,6 @@ impl AudioPlayer {
     /// seek 失败时回退到完整加载。
     #[napi]
     pub async fn seek(&self, position: f64) -> Result<()> {
-        let is_spatial = {
-            let player = self.inner.lock();
-            player.is_spatial_active()
-        };
-        if is_spatial {
-            let mut player = self.inner.lock();
-            return player.seek_spatial(position).into_napi();
-        }
-
         let take = {
             let mut player = self.inner.lock();
             player.take_for_async_seek()

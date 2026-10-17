@@ -28,8 +28,7 @@ const displayQualityLabel = computed(() => {
 });
 const dolbyAtmosTooltip = computed(() => {
   if (!isDolbyAtmos.value) return t("settings.songLevel.unsupportedHint");
-  const objs = quality.value?.spatialObjects;
-  return objs ? `杜比全景声 (${objs} 空间对象)` : "杜比全景声 (Dolby Atmos)";
+  return "杜比全景声 (Dolby Atmos)";
 });
 
 /** 音质偏好下拉选项 */

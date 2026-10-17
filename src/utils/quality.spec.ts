@@ -4,29 +4,26 @@ import type { AudioQuality } from "@shared/types/player";
 
 describe("quality utilities", () => {
   describe("isDolbyAtmosQuality", () => {
-    it("正确识别明确标记为 isSpatial 的音质", () => {
-      const q: AudioQuality = {
-        sampleRate: 48000,
-        channels: 2,
-        bitsPerSample: 16,
-        bitRate: 768000,
-        codec: "eac3",
-        isSpatial: true,
-        spatialObjects: 12,
-      };
-      expect(isDolbyAtmosQuality(q)).toBe(true);
-    });
-
-    it("正确识别带有空间对象的 EAC-3 杜比音质", () => {
+    it("正确识别多声道 EAC-3 杜比音质", () => {
       const q: AudioQuality = {
         sampleRate: 48000,
         channels: 6,
         bitsPerSample: 16,
         bitRate: 448000,
         codec: "eac3",
-        spatialObjects: 16,
       };
       expect(isDolbyAtmosQuality(q)).toBe(true);
+    });
+
+    it("双声道 EAC-3 不识别为全景声", () => {
+      const q: AudioQuality = {
+        sampleRate: 48000,
+        channels: 2,
+        bitsPerSample: 16,
+        bitRate: 256000,
+        codec: "eac3",
+      };
+      expect(isDolbyAtmosQuality(q)).toBe(false);
     });
 
     it("普通双声道无损或压缩音乐不应识别为全景声", () => {

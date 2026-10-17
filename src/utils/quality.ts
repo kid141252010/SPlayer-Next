@@ -90,12 +90,11 @@ export const isLosslessQuality = (quality: AudioQuality | undefined): boolean =>
 };
 
 /**
- * 判断是否为杜比全景声 / 空间音频
+ * 判断是否为杜比全景声音质
  * @param quality - 音质信息
  * @returns 是否为杜比全景声
  */
 export const isDolbyAtmosQuality = (quality: AudioQuality | undefined): boolean => {
   if (!quality) return false;
-  if (quality.isSpatial) return true;
-  return isEAC3Codec(quality.codec) && (quality.channels > 2 || (quality.spatialObjects ?? 0) > 0);
+  return isEAC3Codec(quality.codec) && quality.channels > 2;
 };
