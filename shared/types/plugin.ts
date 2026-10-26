@@ -419,12 +419,21 @@ export interface HostApi {
 
   /** Apple Music 本地流媒体代理扩展 */
   appleMusic?: {
+    /**
+     * 等待首片与首个轨道密钥片完成真实解密后返回播放地址，准备失败时拒绝
+     * @param adamId - 曲目 ID
+     * @param m3u8Url - Apple 媒体清单地址
+     * @param upstreamUrl - 提供完整轨道模板的密钥服务
+     * @param token - 可选认证令牌
+     * @returns 支持完整文件字节 Range 的本地播放地址
+     */
     getStreamUrl: (
       adamId: string,
       m3u8Url: string,
       upstreamUrl: string,
       token?: string,
     ) => Promise<string>;
+    /** 尽力预热 init、密钥和换钥边界分片；播放仍须调用 getStreamUrl 检查就绪 */
     prewarm: (
       adamId: string,
       m3u8Url: string,

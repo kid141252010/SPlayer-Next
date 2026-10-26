@@ -153,6 +153,21 @@ splayer.on("musicPic", async ({ musicInfo }) => ({
 
 调用示例见[快速开始](#快速开始)。请求音质不可用时，可返回较低音质并注明 `quality`。
 
+#### Apple Music 本地解密扩展
+
+`splayer.appleMusic` 是可选扩展，调用前先检查是否存在：
+
+- `getStreamUrl(adamId, m3u8Url, upstreamUrl, token?)`：返回 `Promise<string>`。
+  宿主并发准备 init、密钥及分片，首片和第一个轨道密钥片都成功解密后才返回地址。
+  准备失败会拒绝，不返回只能播放首片的试听地址；恢复上游后可重新调用。
+- `prewarm(adamId, m3u8Url, upstreamUrl, token?)`：尽力预热相同资源。
+  预热失败会记录日志，不能以该调用完成代替 `getStreamUrl` 的就绪检查。
+
+`m3u8Url` 必须是同一媒体文件的连续字节范围清单；宿主按每片声明的密钥 URI 解密。
+上游 `/key` 需返回真实完整的 `ctx`、`state` 和寄存器模板，支持直接模板或
+`{ code: 0, msg, data }` 包装；只有 `contentKey` 不足以解密，不会使用固定模板冒充。
+播放与缓存共用相同解密结果；分片错误会中止响应，不以填零或透传密文掩盖。
+
 ### 搜索歌曲 {#musicsearch}
 
 返回独立来源的歌曲搜索结果，也可用于宿主匹配歌词、封面等元数据。

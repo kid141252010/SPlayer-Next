@@ -15,6 +15,27 @@ impl AudioPlayer {
         #[napi(ts_arg_type = "boolean")] auto_play: Option<bool>,
         prepared_id: Option<String>,
     ) -> Result<JsMusicMetadata> {
+        self.load_internal(source, auto_play, prepared_id, false)
+            .await
+    }
+
+    /// 内部恢复加载在失败提交锁内绑定 source/token，禁止 await 后再读当前曲目。
+    pub(super) async fn load_for_recovery(
+        &self,
+        source: String,
+        auto_play: bool,
+    ) -> Result<JsMusicMetadata> {
+        self.load_internal(source, Some(auto_play), None, true)
+            .await
+    }
+
+    async fn load_internal(
+        &self,
+        source: String,
+        auto_play: Option<bool>,
+        prepared_id: Option<String>,
+        notify_source_error: bool,
+    ) -> Result<JsMusicMetadata> {
         let auto_play = auto_play.unwrap_or(true);
         info!(source = %source, auto_play, "加载音频源");
 
@@ -174,7 +195,16 @@ impl AudioPlayer {
                         return Err(Error::from_reason(LOAD_SUPERSEDED_REASON));
                     }
                     player.clear_pending_load(token);
-                    return Err(error).into_napi();
+                    let failure: Result<JsMusicMetadata> = Err(error).into_napi();
+                    if notify_source_error
+                        && (source.starts_with("http://") || source.starts_with("https://"))
+                        && failure.as_ref().is_err_and(|error| {
+                            !is_device_napi_error(error) && !is_cancelled_napi_error(error)
+                        })
+                    {
+                        player.emit_source_error(&source, token);
+                    }
+                    return failure;
                 }
             };
 

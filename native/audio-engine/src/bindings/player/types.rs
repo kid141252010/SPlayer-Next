@@ -68,6 +68,10 @@ pub struct JsPlayerEvent {
     pub event_type: String,
     /// 状态（仅 stateChanged 时有值）
     pub state: Option<String>,
+    /// 失败音源路径（仅 sourceError 时有值）
+    pub source: Option<String>,
+    /// 失败音源的操作代次（仅 sourceError 时有值）
+    pub source_generation: Option<f64>,
     /// 位置（秒，仅 position 时有值）
     pub position: Option<f64>,
     /// 时长（秒，仅 position 时有值）

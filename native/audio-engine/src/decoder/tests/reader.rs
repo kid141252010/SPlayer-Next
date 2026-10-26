@@ -42,34 +42,30 @@ fn playback_and_fft_resamplers_use_independent_channel_counts() {
 }
 
 #[test]
-fn lazy_seek_http_source_short_circuits_tail_probe() {
-    let dummy_data = vec![0xAB; 1000];
-    let cursor = Cursor::new(dummy_data);
-    let mut source = LazySeekHttpSource::new(cursor, Some(1000));
+fn lazy_seek_preserves_real_tail_bytes_for_all_read_sizes() {
+    let expected: Vec<u8> = (0..1000).map(|index| (index % 251) as u8).collect();
+    for block_size in [1, 7, 64, 1024] {
+        let mut source = LazySeekHttpSource::new(Cursor::new(&expected), Some(1000));
+        let mut actual = Vec::new();
+        let mut block = vec![0; block_size];
+        loop {
+            let count = source.read(&mut block).unwrap();
+            if count == 0 {
+                break;
+            }
+            actual.extend_from_slice(&block[..count]);
+        }
+        assert_eq!(actual, expected, "顺序读取不得伪造尾部字节");
 
-    // 1. 正常从起点读取 10 字节
-    let mut initial_buf = [0u8; 10];
-    assert_eq!(source.read(&mut initial_buf).unwrap(), 10);
-    assert_eq!(initial_buf, [0xAB; 10]);
-    assert_eq!(source.inner.position(), 10);
-
-    // 2. 模拟 FFmpeg mov_read_mfra 对末尾 4 字节的探测：seek(End(-4)) 后 read(4)
-    let probe_pos = source.seek(SeekFrom::End(-4)).unwrap();
-    assert_eq!(probe_pos, 996);
-    let mut probe_buf = [0xFFu8; 4];
-    let n = source.read(&mut probe_buf).unwrap();
-    assert_eq!(n, 4);
-    // 应当返回内存零填充，且底层的实际 cursor 位置保持在 10，完全未发生网络 Seek
-    assert_eq!(probe_buf, [0x00; 4]);
-    assert_eq!(source.inner.position(), 10);
-
-    // 3. 模拟探测结束后恢复原位 seek(Start(10)) 并继续顺序读取
-    let resume_pos = source.seek(SeekFrom::Start(10)).unwrap();
-    assert_eq!(resume_pos, 10);
-    let mut next_buf = [0u8; 10];
-    assert_eq!(source.read(&mut next_buf).unwrap(), 10);
-    assert_eq!(next_buf, [0xAB; 10]);
-    assert_eq!(source.inner.position(), 20);
+        source.seek(SeekFrom::End(-4)).unwrap();
+        let mut tail = [0; 4];
+        source.read_exact(&mut tail).unwrap();
+        assert_eq!(tail, expected[996..]);
+        source.seek(SeekFrom::Start(10)).unwrap();
+        let mut resumed = [0; 10];
+        source.read_exact(&mut resumed).unwrap();
+        assert_eq!(resumed, expected[10..20]);
+    }
 }
 
 const FRAGMENTED_ALAC: &[u8] = include_bytes!("fragmented-alac.m4a");
@@ -177,5 +173,51 @@ fn only_local_am_proxy_uses_lazy_fragment_indexing() {
         "C:/Music/am-stream.m4a",
     ] {
         assert!(!is_am_stream(source), "普通音源不应忽略索引: {source}");
+    }
+}
+
+#[test]
+fn accurate_seek_preserves_nonperiodic_stereo_samples_at_44100_hz() {
+    let sample_rate = 44_100_u32;
+    let frames = sample_rate * 6;
+    let data_size = frames * 4;
+    let mut wav = mono_wav();
+    wav.resize(44 + data_size as usize, 0);
+    wav[4..8].copy_from_slice(&(36 + data_size).to_le_bytes());
+    wav[22..24].copy_from_slice(&2_u16.to_le_bytes());
+    wav[24..28].copy_from_slice(&sample_rate.to_le_bytes());
+    wav[28..32].copy_from_slice(&(sample_rate * 4).to_le_bytes());
+    wav[32..34].copy_from_slice(&4_u16.to_le_bytes());
+    wav[40..44].copy_from_slice(&data_size.to_le_bytes());
+    let mut expected = Vec::with_capacity((frames * 2) as usize);
+    for (index, bytes) in wav[44..].chunks_exact_mut(2).enumerate() {
+        let sample = ((index as u32)
+            .wrapping_mul(1_664_525)
+            .wrapping_add(1_013_904_223)
+            >> 16) as i16;
+        bytes.copy_from_slice(&sample.to_le_bytes());
+        expected.push(f32::from(sample) / 32_768.0);
+    }
+    let mut reader = AudioReader::new(Cursor::new(wav)).unwrap();
+    for second in [4, 1] {
+        reader
+            .seek(Duration::from_secs(second), SeekMode::Accurate)
+            .unwrap();
+        let mut resampler = reader
+            .build_resampler(
+                ResampleOptions::new()
+                    .sample_rate(sample_rate as i32)
+                    .channels(2)
+                    .format::<f32>(),
+            )
+            .unwrap();
+        let mut offset = second as usize * sample_rate as usize * 2;
+        while let Some(frame) = reader.receive_frame().unwrap() {
+            resampler.process::<f32>(Some(&frame)).unwrap();
+            let actual = resampler.output_as::<f32>();
+            assert_eq!(actual, &expected[offset..offset + actual.len()]);
+            offset += actual.len();
+        }
+        assert_eq!(offset, expected.len(), "精确 seek 不得多裁剪样本");
     }
 }

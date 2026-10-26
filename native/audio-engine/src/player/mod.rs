@@ -240,9 +240,19 @@ impl InnerPlayer {
         });
     }
 
-    /// 对外发 SourceError：供 NAPI 绑定层在远端源重开失败时通知 JS 重新解析
-    pub fn emit_source_error(&self) {
-        self.emit(PlayerEvent::SourceError);
+    /// 当前音源操作代次，供 JS 丢弃已经排队的旧失败事件。
+    pub fn source_generation(&self) -> u64 {
+        self.load_token.load(Ordering::Acquire)
+    }
+
+    /// 在失败加载的提交锁内上报原始音源与代次，绝不把迟到失败归属到当前新曲。
+    pub fn emit_source_error(&self, source: &str, token: u64) {
+        if self.is_load_token_current(token) {
+            self.emit(PlayerEvent::SourceError {
+                source: Some(source.to_owned()),
+                source_generation: token,
+            });
+        }
     }
 
     /// 设置封面缓存目录

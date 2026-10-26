@@ -67,6 +67,7 @@ interface InFlight {
   promise: Promise<string | null>;
   controller: AbortController;
   owners: Set<string>;
+  filename: string;
 }
 
 /** 当前生效的歌曲缓存目录 */
@@ -77,6 +78,11 @@ const inFlight = new Map<string, InFlight>();
 const waiting: Array<() => void> = [];
 let activeDownloads = 0;
 let preloadPin: { id: string; filename: string } | null = null;
+/** 初始化与首次查询、下载共用同一屏障，避免孤儿清理删除新下载。 */
+let initialization: Promise<void> | null = null;
+let quitListenerRegistered = false;
+/** 旧版 AM 缓存可能长度完整但未解密，只有修复版文件带此标记。 */
+const APPLE_MUSIC_CACHE_PREFIX = "am-v2-";
 
 /** sizeLimit 字节数；0/负数视为不限制 */
 const sizeLimitBytes = (): number => {
@@ -88,13 +94,16 @@ const sizeLimitBytes = (): number => {
 const isCacheEnabled = (): boolean => store.get("cache.songCache.enabled") === true;
 
 /**
- * 用 cache_key 派生唯一文件名
+ * 每次下载派生独立文件名，AM 协议标记隔离旧版未解密缓存。
  * @param cacheKey - 缓存键
- * @returns 文件名
+ * @param source - 音源平台
+ * @returns 本次下载专属的文件名
  */
-const filenameFor = (cacheKey: string): string => {
+const filenameFor = (cacheKey: string, source: TrackSource): string => {
   const hash = crypto.createHash("sha1").update(cacheKey).digest("hex").slice(0, 16);
-  return `${hash}.bin`;
+  const prefix = source === "applemusic" ? APPLE_MUSIC_CACHE_PREFIX : "";
+  // 每次发布有独立路径，迟到的失效请求不能删除同 key 的新文件。
+  return `${prefix}${hash}-${crypto.randomUUID()}.bin`;
 };
 
 /** 获取文件的绝对路径
@@ -181,6 +190,13 @@ const cleanupOrphans = async (): Promise<void> => {
   }
 
   const known = new Set(listAllFilenames());
+  for (const filename of known) {
+    const row = findByFilename(filename);
+    if (row?.source === "applemusic" && !filename.startsWith(APPLE_MUSIC_CACHE_PREFIX)) {
+      deleteByKey(row.cacheKey);
+      known.delete(filename);
+    }
+  }
   for (const name of entries) {
     if (name.endsWith(".part")) continue;
     if (!known.has(name)) {
@@ -251,9 +267,9 @@ const runDownload = async (
   source: TrackSource,
   streamUrl: string,
   controller: AbortController,
+  filename: string,
 ): Promise<string | null> => {
   const start = Date.now();
-  const filename = filenameFor(cacheKey);
   const finalPath = absPath(filename);
   const partPath = `${finalPath}.part`;
 
@@ -295,6 +311,13 @@ const runDownload = async (
     await pipeline(nodeStream, writeStream, { signal: controller.signal });
 
     const stat = await fsp.stat(partPath);
+    if (Number.isFinite(declaredSize) && stat.size !== declaredSize) {
+      await fsp.unlink(partPath).catch(() => {});
+      songCacheLog.warn(
+        `[fetch] length mismatch key=${cacheKey} declared=${declaredSize} actual=${stat.size}`,
+      );
+      return null;
+    }
     if (stat.size === 0) {
       await fsp.unlink(partPath).catch(() => {});
       songCacheLog.warn(`[fetch] empty key=${cacheKey}`);
@@ -312,7 +335,12 @@ const runDownload = async (
       return null;
     }
 
+    controller.signal.throwIfAborted();
     await fsp.rename(partPath, finalPath);
+    if (controller.signal.aborted) {
+      await fsp.unlink(finalPath).catch(() => {});
+      return null;
+    }
     const now = Date.now();
     upsert({
       cacheKey,
@@ -338,26 +366,42 @@ const runDownload = async (
   }
 };
 
+/** 初始化与读写共用的屏障；AM 版本淘汰与孤儿清理只运行一次。 */
+const ensureInitialized = (): Promise<void> => {
+  initialization ??= (async () => {
+    await fsp.mkdir(cacheDir, { recursive: true });
+    await cleanupOrphans();
+  })();
+  return initialization;
+};
+
 /** 启动初始化：建目录 + 孤儿清理 */
 export const init = async (): Promise<void> => {
-  cacheDir = getSongCacheDir();
-  await fsp.mkdir(cacheDir, { recursive: true });
-  await cleanupOrphans();
-  app.on("before-quit", () => {
-    for (const entry of inFlight.values()) entry.controller.abort();
-  });
+  await ensureInitialized();
+  if (!quitListenerRegistered) {
+    quitListenerRegistered = true;
+    app.on("before-quit", () => {
+      for (const entry of inFlight.values()) entry.controller.abort();
+    });
+  }
 };
 
 /** 切换缓存目录后调用，让服务感知新前缀 */
 export const reloadDir = (): void => {
   cacheDir = getSongCacheDir();
+  initialization = null;
 };
 
 /** 查询命中；命中则更新 last_used_at 并返回本地绝对路径 */
 export const lookup = async (cacheKey: string): Promise<string | null> => {
   if (!isCacheEnabled()) return null;
+  await ensureInitialized();
   const row = findByKey(cacheKey);
   if (!row) return null;
+  if (row.source === "applemusic" && !row.filename.startsWith(APPLE_MUSIC_CACHE_PREFIX)) {
+    await invalidate(absPath(row.filename));
+    return null;
+  }
   const full = absPath(row.filename);
   if (!fs.existsSync(full)) {
     deleteByKey(cacheKey);
@@ -384,27 +428,32 @@ export const fetchAsync = (
   if (!isCacheEnabled()) return Promise.resolve(null);
   if (source === "streaming" && !store.get("cache.songCache.cacheStreaming"))
     return Promise.resolve(null);
-  if (preloadId) preloadPin = { id: preloadId, filename: filenameFor(cacheKey) };
   const owner = preloadId ?? "background";
   const existing = inFlight.get(cacheKey);
   if (existing) {
     existing.owners.add(owner);
+    if (preloadId) preloadPin = { id: preloadId, filename: existing.filename };
     return existing.promise;
   }
   const controller = new AbortController();
+  const filename = filenameFor(cacheKey, source);
+  if (preloadId) preloadPin = { id: preloadId, filename };
   const promise = (async () => {
     const acquired = await acquireSlot(controller.signal);
     if (!acquired) return null;
     try {
+      await ensureInitialized();
       if (controller.signal.aborted) return null;
       const cached = await lookup(cacheKey);
-      return cached ?? (await runDownload(cacheKey, source, streamUrl, controller));
+      if (controller.signal.aborted) return null;
+      if (cached && preloadPin?.filename === filename) preloadPin.filename = path.basename(cached);
+      return cached ?? (await runDownload(cacheKey, source, streamUrl, controller, filename));
     } finally {
       if (inFlight.get(cacheKey)?.controller === controller) inFlight.delete(cacheKey);
       releaseSlot();
     }
   })();
-  inFlight.set(cacheKey, { promise, controller, owners: new Set([owner]) });
+  inFlight.set(cacheKey, { promise, controller, owners: new Set([owner]), filename });
   void promise
     .finally(() => {
       if (inFlight.get(cacheKey)?.controller === controller) inFlight.delete(cacheKey);
@@ -423,15 +472,20 @@ export const cancel = (cacheKey: string): void => {
 };
 
 /**
- * 失效：删文件 + 删表
- * 如果表里没有或文件不存在则静默返回
- * @param sourcePath - 传入原始来源路径（streamUrl 或本地路径），用来找到对应的 cacheKey 和文件
+ * 仅失效路径对应的缓存版本，并取消该 key 当前未发布的下载。
+ * 已被替换的旧路径没有表记录，不会误删新版本；旧下载的独立 part 由取消流程回收。
+ * @param sourcePath - 失败音源的原始路径，非歌曲缓存目录的来源不会被删除
  */
 export const invalidate = async (sourcePath: string): Promise<void> => {
   if (path.dirname(sourcePath) !== cacheDir) return;
   const filename = path.basename(sourcePath);
   const row = findByFilename(filename);
   if (!row) return;
+  const pending = inFlight.get(row.cacheKey);
+  if (pending) {
+    pending.controller.abort();
+    inFlight.delete(row.cacheKey);
+  }
   deleteByKey(row.cacheKey);
   await fsp.unlink(absPath(filename)).catch(() => {});
   songCacheLog.info(`[invalidate] path=${sourcePath}`);

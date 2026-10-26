@@ -19,8 +19,13 @@ impl AudioPlayer {
                     event_type: "ended".into(),
                     ..Default::default()
                 },
-                PlayerEvent::SourceError => JsPlayerEvent {
+                PlayerEvent::SourceError {
+                    source,
+                    source_generation,
+                } => JsPlayerEvent {
                     event_type: "sourceError".into(),
+                    source,
+                    source_generation: Some(source_generation as f64),
                     ..Default::default()
                 },
                 PlayerEvent::Position { position, duration } => JsPlayerEvent {
@@ -67,6 +72,12 @@ impl AudioPlayer {
 
         self.inner.lock().set_event_callback(emitter);
         Ok(())
+    }
+
+    /// 当前音源操作代次，用于 JS 丢弃已排队但被 load/stop/seek 取代的失败事件
+    #[napi]
+    pub fn get_source_generation(&self) -> f64 {
+        self.inner.lock().source_generation() as f64
     }
 
     /// 当前平台是否支持原生音频设备监听

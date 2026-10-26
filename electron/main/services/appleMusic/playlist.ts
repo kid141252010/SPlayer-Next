@@ -11,6 +11,7 @@ export interface MediaSegment {
   duration: number;
   time: number;
   keyType: "fixed" | "track" | "none";
+  keyUri: string | null;
 }
 
 export interface MediaInit {
@@ -22,7 +23,6 @@ export interface MediaInit {
 export interface ParsedMediaPlaylist {
   mediaUrl: string;
   adamId: string;
-  keyUri: string | null;
   init: MediaInit;
   segments: MediaSegment[];
   duration: number;
@@ -40,7 +40,6 @@ export const parseMediaPlaylist = (text: string, playlistUrl: string): ParsedMed
   const adamId = (/_A(\d+)_/.exec(fileName) || [])[1] || "";
 
   let init: MediaInit | null = null;
-  let keyUri: string | null = null;
   let currentKey: string | null = null;
   let duration = 0;
   let pendingDuration: number | null = null;
@@ -54,7 +53,12 @@ export const parseMediaPlaylist = (text: string, playlistUrl: string): ParsedMed
     const [lenStr, offStr] = value.replace(/"/g, "").trim().split("@");
     const len = Number(lenStr);
     const start = offStr === undefined ? fallbackOffset : Number(offStr);
-    return { start, end: start + len - 1 };
+    const end = start + len - 1;
+    if (!Number.isSafeInteger(end)) throw new Error("M3U8 分片字节范围超出安全整数范围");
+    if (!Number.isSafeInteger(len) || len <= 0 || !Number.isSafeInteger(start) || start < 0) {
+      throw new Error("M3U8 含无效的分片字节范围");
+    }
+    return { start, end };
   };
 
   const lines = text.split(/\r?\n/);
@@ -63,10 +67,10 @@ export const parseMediaPlaylist = (text: string, playlistUrl: string): ParsedMed
     if (line.startsWith("#EXT-X-KEY:")) {
       const method = (/METHOD=([^,]+)/.exec(line) || [])[1];
       const uri = (/URI="([^"]+)"/.exec(line) || [])[1];
-      currentKey = method === "NONE" || !uri ? null : uri;
-      if (currentKey && currentKey !== FIXED_KEY_URI && !keyUri) {
-        keyUri = currentKey;
+      if (method !== "NONE" && (method !== "SAMPLE-AES" || !uri?.startsWith("skd://"))) {
+        throw new Error("M3U8 含不支持的音频加密方式或缺少密钥 URI");
       }
+      currentKey = method === "NONE" ? null : uri;
     } else if (line.startsWith("#EXT-X-MAP:")) {
       const uriMatch = /URI="([^"]+)"/.exec(line);
       const rangeMatch = /BYTERANGE="([^"]+)"/.exec(line);
@@ -74,6 +78,7 @@ export const parseMediaPlaylist = (text: string, playlistUrl: string): ParsedMed
         throw new Error("M3U8 缺少有效的 #EXT-X-MAP 头信息");
       }
       const range = parseByterange(rangeMatch[1], 0);
+      if (init || range.start !== 0) throw new Error("M3U8 初始化段必须从文件起点开始");
       init = {
         url: new URL(uriMatch[1], playlistUrl).href,
         ...range,
@@ -83,6 +88,15 @@ export const parseMediaPlaylist = (text: string, playlistUrl: string): ParsedMed
       pendingDuration = Number.parseFloat(line.slice(8));
     } else if (line.startsWith("#EXT-X-BYTERANGE:")) {
       const r = parseByterange(line.slice(17), next);
+      if (
+        !init ||
+        r.start !== next ||
+        pendingDuration === null ||
+        !Number.isFinite(pendingDuration) ||
+        pendingDuration <= 0
+      ) {
+        throw new Error("M3U8 分片范围或时长不连续");
+      }
       next = r.end + 1;
       const dur = pendingDuration || 0;
       const keyType = currentKey === FIXED_KEY_URI ? "fixed" : currentKey ? "track" : "none";
@@ -92,9 +106,14 @@ export const parseMediaPlaylist = (text: string, playlistUrl: string): ParsedMed
         time: duration,
         duration: dur,
         keyType,
+        keyUri: currentKey,
       });
       duration += dur;
       pendingDuration = null;
+    } else if (line && !line.startsWith("#")) {
+      if (!init || new URL(line, playlistUrl).href !== init.url) {
+        throw new Error("M3U8 分片必须与初始化段位于同一媒体文件");
+      }
     }
   }
 
@@ -108,7 +127,6 @@ export const parseMediaPlaylist = (text: string, playlistUrl: string): ParsedMed
   return {
     mediaUrl: init.url,
     adamId,
-    keyUri,
     init,
     segments,
     duration,

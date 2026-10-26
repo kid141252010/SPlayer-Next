@@ -169,13 +169,12 @@ impl AudioPlayer {
                     }
                     if let Some(src) = source {
                         let is_remote = src.starts_with("http://") || src.starts_with("https://");
-                        if let Err(e) = self.load(src, Some(was_playing), None).await {
+                        if let Err(e) = self.load_for_recovery(src, was_playing).await {
                             if is_cancelled_napi_error(&e) {
                                 return Ok(());
                             }
-                            // 远端源恢复重开失败（多半 URL 过期）：发 sourceError 交 JS 重解析
+                            // 失败事件已在恢复加载提交锁内发出。
                             if is_remote && !is_device_napi_error(&e) {
-                                self.inner.lock().emit_source_error();
                                 return Ok(());
                             }
                             return Err(e);
@@ -202,12 +201,11 @@ impl AudioPlayer {
         // 没有 decoder_thread（例如上次 reinit 失败），但存在待恢复的曲目，走重新加载
         if let Some(src) = fallback_source {
             let is_remote = src.starts_with("http://") || src.starts_with("https://");
-            if let Err(e) = self.load(src, Some(was_playing_fallback), None).await {
+            if let Err(e) = self.load_for_recovery(src, was_playing_fallback).await {
                 if is_cancelled_napi_error(&e) {
                     return Ok(());
                 }
                 if is_remote && !is_device_napi_error(&e) {
-                    self.inner.lock().emit_source_error();
                     return Ok(());
                 }
                 return Err(e);

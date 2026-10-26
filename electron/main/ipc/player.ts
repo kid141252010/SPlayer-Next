@@ -38,7 +38,7 @@ import {
 import { setTaskbarThumbnailCover } from "@main/services/thumbnail";
 import { getMainWindow, setTaskbarProgress } from "@main/window";
 import { store } from "@main/store";
-import { appName, getSongCacheDir } from "@main/utils/config";
+import { appName } from "@main/utils/config";
 import * as songCache from "@main/services/songCache";
 import { parseArtists, parseAlbum, formatArtists, artistNames } from "@main/utils/metadata";
 import { playerLog } from "@main/utils/logger";
@@ -123,6 +123,48 @@ const classifyLoadError = (error: unknown, source: string): ErrorCode => {
   return ErrorCode.FILE_DECODE_ERROR;
 };
 
+/** 只绑定已提交的曲目；操作代次与原生代次共同隔离排队中的旧失败。 */
+let activeSource: {
+  inst: InstanceType<AudioEngineModule["AudioPlayer"]>;
+  source: string;
+  seq: number;
+  pendingSeek?: { seq: number; promise: Promise<void> };
+} | null = null;
+
+/** 先移除坏缓存，再通知渲染端重取地址，避免续播再次命中相同坏文件。 */
+const handleSourceError = async (
+  inst: InstanceType<AudioEngineModule["AudioPlayer"]>,
+  event: JsPlayerEvent,
+): Promise<void> => {
+  const binding = activeSource;
+  if (!binding || binding.inst !== inst || inst !== getPlayer() || event.source !== binding.source)
+    return;
+  // 恢复加载可能在 seek Promise 返回前发出失败，等操作提交后再判定归属
+  if (binding.pendingSeek?.seq === loadSeq) await binding.pendingSeek.promise.catch(() => {});
+  if (
+    binding !== activeSource ||
+    binding.seq !== loadSeq ||
+    inst !== getPlayer() ||
+    event.sourceGeneration == null ||
+    event.sourceGeneration !== inst.getSourceGeneration()
+  )
+    return;
+  activeSource = null;
+  await songCache.invalidate(binding.source);
+  if (
+    binding.seq !== loadSeq ||
+    inst !== getPlayer() ||
+    event.sourceGeneration !== inst.getSourceGeneration()
+  )
+    return;
+  updatePowerBlocker("stopped");
+  sendToMain("player:event", { type: "sourceError" });
+  mediaService.setPlayState({ status: "Paused" });
+  neteaseScrobble.onState(false);
+  void streamingPlayback.stopStreamingPlayback();
+  setTaskbarProgress(-1);
+};
+
 /**
  * 播放器原生事件回调
  * @param inst - 播放器实例
@@ -180,13 +222,9 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
         break;
       }
       case "sourceError": {
-        updatePowerBlocker("stopped");
-        // 音源失效（网络中断 / URL 过期）
-        sendToMain("player:event", { type: "sourceError" });
-        mediaService.setPlayState({ status: "Paused" });
-        neteaseScrobble.onState(false);
-        void streamingPlayback.stopStreamingPlayback();
-        setTaskbarProgress(-1);
+        void handleSourceError(inst, event).catch((error) => {
+          playerLog.error("处理音源失败事件出错:", error);
+        });
         break;
       }
       case "position": {
@@ -270,6 +308,7 @@ let loadSeq = 0;
 let streamingServerId: string | undefined;
 onPlayerReset(() => {
   loadSeq++;
+  activeSource = null;
   void streamingPlayback.stopStreamingPlayback();
 });
 
@@ -302,6 +341,7 @@ const completeTrackLoad = (
   meta: JsMusicMetadata,
   seq: number,
 ) => {
+  activeSource = { inst: getPlayer(), source, seq };
   const authoritative = options.meta ?? null;
   const autoPlay = options.autoPlay ?? true;
   const isRemote = authoritative != null && authoritative.source !== "local";
@@ -514,8 +554,10 @@ export const registerPlayerIpc = (): void => {
     streamingServerId = authoritative?.source === "streaming" ? authoritative.serverId : undefined;
     void streamingPlayback.stopStreamingPlayback();
     if (!options.preparedId) cancelPreparedTrack();
+    let loadingInstance: InstanceType<AudioEngineModule["AudioPlayer"]> | undefined;
     try {
       const inst = getPlayer();
+      loadingInstance = inst;
       if (authoritative?.source === "streaming" && !options.preparedId) inst.stop();
       let streamingSource =
         options.meta?.source === "streaming"
@@ -620,6 +662,8 @@ export const registerPlayerIpc = (): void => {
       );
       return result;
     } catch (error) {
+      if (seq !== loadSeq || (loadingInstance && loadingInstance !== getPlayer()))
+        return fail(ErrorCode.LOAD_SUPERSEDED);
       if (seq === loadSeq) activeCueRange = null;
       const code = classifyLoadError(error, source);
       // 解码失败的源指向歌曲缓存目录 → 文件已损坏，把这条缓存项作废
@@ -628,8 +672,7 @@ export const registerPlayerIpc = (): void => {
           ErrorCode.FILE_DECODE_ERROR,
           ErrorCode.FILE_NOT_FOUND,
           ErrorCode.FILE_NO_AUDIO_STREAM,
-        ].includes(code) &&
-        source.startsWith(getSongCacheDir())
+        ].includes(code)
       ) {
         await songCache.invalidate(source);
       }
@@ -677,6 +720,7 @@ export const registerPlayerIpc = (): void => {
 
   // 跳转到指定播放位置
   ipcMain.handle("player:seek", async (_event, positionMs: number, restartRound = false) => {
+    const previousSource = activeSource;
     const seq = ++loadSeq;
     try {
       /** 重播时先装配轮次，原生 seek 的播放事件才能启动新的计时 */
@@ -686,8 +730,12 @@ export const registerPlayerIpc = (): void => {
       }
       const enginePositionMs = toEnginePositionMs(positionMs);
       const positionSecs = enginePositionMs / 1000;
-      await getPlayer().seek(positionSecs);
+      const inst = getPlayer();
+      const pending = inst.seek(positionSecs);
+      if (previousSource?.inst === inst) previousSource.pendingSeek = { seq, promise: pending };
+      await pending;
       if (seq !== loadSeq) return { success: false };
+      if (activeSource === previousSource && previousSource) previousSource.seq = seq;
       streamingPlayback.onStreamingSeek(positionMs);
       mediaService.setTimeline({
         currentMs: positionMs,
@@ -701,6 +749,8 @@ export const registerPlayerIpc = (): void => {
         lastfm.onStopped();
       }
       return fail(ErrorCode.UNKNOWN, error);
+    } finally {
+      if (previousSource?.pendingSeek?.seq === seq) previousSource.pendingSeek = undefined;
     }
   });
 
@@ -995,17 +1045,30 @@ export const registerPlayerIpc = (): void => {
         case "Seek":
           if (event.positionMs != null) {
             const seq = ++loadSeq;
+            const previousSource = activeSource;
             const targetMs = event.positionMs;
             sendToMain("player:event", { type: "seek", data: { position: targetMs } });
-            void inst.seek(toEnginePositionMs(targetMs) / 1000).then(() => {
-              if (seq !== loadSeq || inst !== getPlayer()) return;
-              streamingPlayback.onStreamingSeek(targetMs);
-              mediaService.setTimeline({
-                currentMs: targetMs,
-                totalMs: toMs(inst.getDuration()),
-                seeked: true,
+            const pending = inst.seek(toEnginePositionMs(targetMs) / 1000);
+            if (previousSource?.inst === inst)
+              previousSource.pendingSeek = { seq, promise: pending };
+            void pending
+              .then(() => {
+                if (seq !== loadSeq || inst !== getPlayer()) return;
+                if (activeSource === previousSource && previousSource) previousSource.seq = seq;
+                streamingPlayback.onStreamingSeek(targetMs);
+                mediaService.setTimeline({
+                  currentMs: targetMs,
+                  totalMs: toMs(inst.getDuration()),
+                  seeked: true,
+                });
+              })
+              .catch((error) => {
+                playerLog.warn("系统跳转失败:", error);
+              })
+              .finally(() => {
+                if (previousSource?.pendingSeek?.seq === seq)
+                  previousSource.pendingSeek = undefined;
               });
-            });
           }
           break;
         case "SetVolume":

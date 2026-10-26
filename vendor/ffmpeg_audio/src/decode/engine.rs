@@ -145,8 +145,9 @@ impl DecodeEngine {
                         }
 
                         if start_us < 0 && audio_frame.offset() == 0 {
-                            let delta_us = 0 - start_us;
-                            let offset_samples = audio_frame.calc_samples(delta_us);
+                            let offset_samples = audio_frame
+                                .sample_offset_to(Duration::ZERO)
+                                .unwrap_or(audio_frame.samples());
 
                             if offset_samples < audio_frame.samples() {
                                 audio_frame = audio_frame.with_offset(offset_samples);
@@ -207,25 +208,16 @@ impl DecodeEngine {
             return Ok(());
         }
 
-        let target_us = i64::try_from(target.as_micros()).unwrap_or(i64::MAX);
-
         loop {
             match self.receive_frame() {
                 Ok(Some(frame)) => {
-                    if let Some(pts_us) = frame.pts_micros() {
-                        if pts_us.saturating_add(frame.duration_micros()) >= target_us {
-                            let delta_us = target_us.saturating_sub(pts_us).max(0);
-
-                            let offset_samples = frame.calc_samples(delta_us);
-
-                            if offset_samples >= frame.samples() {
-                                continue;
-                            }
-
-                            self.has_buffered_seek_frame = true;
-                            self.buffered_seek_offset = offset_samples;
-                            break;
+                    if let Some(offset_samples) = frame.sample_offset_to(target) {
+                        if offset_samples >= frame.samples() {
+                            continue;
                         }
+                        self.buffered_seek_offset = frame.offset() + offset_samples;
+                        self.has_buffered_seek_frame = true;
+                        break;
                     } else {
                         return Err(AudioError::InvalidData(
                             "Cannot perform accurate seek on a stream lacking valid timestamps."

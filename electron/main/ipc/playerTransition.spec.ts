@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { JsPlayerEvent } from "@splayer/audio-engine";
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
@@ -16,6 +17,12 @@ const mocks = vi.hoisted(() => ({
   mediaEvent: (_event: { type: string; positionMs?: number }) => {},
   scrobbleRestart: vi.fn(),
   lastfmRestart: vi.fn(),
+  nativeEvent: (_event: JsPlayerEvent) => {},
+  generation: 0,
+  invalidate: vi.fn(),
+  cachedFiles: new Set<string>(),
+  broadcast: vi.fn(),
+  recreatePlayer: () => {},
 }));
 vi.mock("electron", () => ({
   ipcMain: {
@@ -27,7 +34,7 @@ vi.mock("electron", () => ({
   app: { on: vi.fn() },
 }));
 vi.mock("@main/services/engine", () => {
-  const player = {
+  let player = {
     transitionToPrepared: mocks.transition,
     load: mocks.load,
     stop: mocks.stop,
@@ -38,10 +45,22 @@ vi.mock("@main/services/engine", () => {
     getVolume: () => 1,
     getCoverRaw: () => null,
     getStatus: () => ({ state: "playing" }),
+    getSourceGeneration: () => mocks.generation,
+    onEvent: (callback: typeof mocks.nativeEvent) => {
+      mocks.nativeEvent = callback;
+    },
+  };
+  const created: Array<(instance: typeof player) => void> = [];
+  mocks.recreatePlayer = () => {
+    player = { ...player };
+    created.forEach((callback) => callback(player));
   };
   return {
     getPlayer: () => player,
-    onPlayerCreated: vi.fn(),
+    onPlayerCreated: (callback: (instance: typeof player) => void) => {
+      created.push(callback);
+      callback(player);
+    },
     onPlayerReset: (callback: () => void) => mocks.reset.push(callback),
     resetPlayer: () => mocks.reset.forEach((callback) => callback()),
   };
@@ -73,13 +92,13 @@ vi.mock("@main/services/device", () => ({
   startDeviceMonitoring: vi.fn(),
   stopDeviceMonitoring: vi.fn(),
 }));
-vi.mock("@main/utils/broadcast", () => ({ sendToMain: vi.fn() }));
+vi.mock("@main/utils/broadcast", () => ({ sendToMain: mocks.broadcast }));
 vi.mock("@main/server/broadcast", () => ({ wsBroadcast: vi.fn() }));
 vi.mock("@main/utils/encoding", () => ({}));
 vi.mock("@main/utils/protocol", () => ({ toCacheUrl: () => undefined }));
 vi.mock("@main/utils/config", () => ({ appName: "SPlayer", getSongCacheDir: () => "cache" }));
 vi.mock("@main/utils/fetchBytes", () => ({}));
-vi.mock("@main/utils/powerBlocker", () => ({}));
+vi.mock("@main/utils/powerBlocker", () => ({ updatePowerBlocker: vi.fn() }));
 vi.mock("@main/services/lastfm", () => ({
   onTrackLoaded: vi.fn(),
   onStopped: vi.fn(),
@@ -89,6 +108,7 @@ vi.mock("@main/services/neteaseScrobble", () => ({
   onTrackLoaded: vi.fn(),
   onStopped: vi.fn(),
   onRepeatOneRestart: mocks.scrobbleRestart,
+  onState: vi.fn(),
 }));
 vi.mock("@main/services/streaming/playback", () => ({
   prepareStreamingPlayback: mocks.streamingPrepare,
@@ -99,11 +119,11 @@ vi.mock("@main/services/streaming/playback", () => ({
 vi.mock("@main/services/streaming/adapters/resolve", () => ({
   invalidateStreamingSession: vi.fn(),
 }));
-vi.mock("@main/services/songCache", () => ({}));
+vi.mock("@main/services/songCache", () => ({ invalidate: mocks.invalidate }));
 vi.mock("@main/services/thumbar", () => ({ getThumbar: () => null }));
 vi.mock("@main/services/tray", () => ({ setTraySongName: vi.fn(), setTrayPlayState: vi.fn() }));
 vi.mock("@main/services/thumbnail", () => ({ setTaskbarThumbnailCover: vi.fn() }));
-vi.mock("@main/window", () => ({ getMainWindow: () => null }));
+vi.mock("@main/window", () => ({ getMainWindow: () => null, setTaskbarProgress: vi.fn() }));
 vi.mock("@main/store", () => ({ store: { get: () => false } }));
 
 const meta = { title: "Next", duration: 10, artist: "", album: "" };
@@ -134,10 +154,24 @@ describe("交接响应的主进程竞态保护", () => {
     vi.clearAllMocks();
     mocks.handlers.clear();
     mocks.reset.length = 0;
-    mocks.seek.mockResolvedValue(undefined);
-    mocks.load.mockResolvedValue(meta);
+    mocks.generation = 0;
+    mocks.cachedFiles.clear();
+    mocks.invalidate.mockReset().mockImplementation(async (source: string) => {
+      mocks.cachedFiles.delete(source);
+    });
+    mocks.stop.mockImplementation(() => {
+      mocks.generation++;
+    });
+    mocks.seek.mockImplementation(async () => {
+      mocks.generation++;
+    });
+    mocks.load.mockImplementation(async () => {
+      mocks.generation++;
+      return meta;
+    });
     mocks.streamingPrepare.mockReset().mockResolvedValue(undefined);
     mocks.streamingStop.mockResolvedValue(undefined);
+    // 每例必须重建模块内播放代次，静态导入无法隔离这些生命周期状态。
     const { registerPlayerIpc } = await import("./player");
     registerPlayerIpc();
   });
@@ -268,5 +302,150 @@ describe("交接响应的主进程竞态保护", () => {
       success: false,
       error,
     });
+  });
+
+  it("异步失败先清掉对应缓存再通知续播，重复事件不会再次失效", async () => {
+    const source = "cache/broken.bin";
+    mocks.cachedFiles.add(source);
+    await invoke("player:load", source);
+    const event: JsPlayerEvent = {
+      type: "sourceError",
+      source,
+      sourceGeneration: mocks.generation,
+    };
+    const { promise: invalidated, resolve: finish } = Promise.withResolvers<void>();
+    mocks.invalidate.mockImplementationOnce(async (failed: string) => {
+      await invalidated;
+      mocks.cachedFiles.delete(failed);
+    });
+    mocks.broadcast.mockClear();
+    mocks.nativeEvent(event);
+    mocks.nativeEvent(event);
+    expect(mocks.invalidate).toHaveBeenCalledExactlyOnceWith(source);
+    expect(mocks.broadcast).not.toHaveBeenCalledWith("player:event", { type: "sourceError" });
+    finish();
+    await vi.waitFor(() =>
+      expect(mocks.broadcast).toHaveBeenCalledWith("player:event", { type: "sourceError" }),
+    );
+    expect(mocks.cachedFiles.has(source)).toBe(false);
+  });
+
+  it.each(["加载新曲", "同源重新加载", "停止", "跳转", "重置"])(
+    "%s 后迟到的旧失败不能清缓存或触发新曲续播",
+    async (action) => {
+      const old = "cache/old.bin";
+      const fresh = "cache/fresh.bin";
+      mocks.cachedFiles.add(old);
+      mocks.cachedFiles.add(fresh);
+      await invoke("player:load", old);
+      const oldEvent: JsPlayerEvent = {
+        type: "sourceError",
+        source: old,
+        sourceGeneration: mocks.generation,
+      };
+      if (action === "加载新曲") await invoke("player:load", fresh);
+      if (action === "同源重新加载") await invoke("player:load", old);
+      if (action === "停止") await invoke("player:stop");
+      if (action === "跳转") await invoke("player:seek", 2000);
+      if (action === "重置") mocks.reset.forEach((callback) => callback());
+      mocks.broadcast.mockClear();
+      mocks.nativeEvent(oldEvent);
+      await Promise.resolve();
+      expect(mocks.invalidate).not.toHaveBeenCalled();
+      expect(mocks.cachedFiles.has(old)).toBe(true);
+      expect(mocks.cachedFiles.has(fresh)).toBe(true);
+      expect(mocks.broadcast).not.toHaveBeenCalledWith("player:event", { type: "sourceError" });
+    },
+  );
+
+  it("失效等待期间切歌，不把旧失败通知应用到新曲", async () => {
+    await invoke("player:load", "cache/old.bin");
+    const generation = mocks.generation;
+    const { promise: invalidated, resolve: finish } = Promise.withResolvers<void>();
+    mocks.invalidate.mockImplementationOnce(() => invalidated);
+    mocks.nativeEvent({
+      type: "sourceError",
+      source: "cache/old.bin",
+      sourceGeneration: generation,
+    });
+    await invoke("player:load", "cache/new.bin");
+    mocks.broadcast.mockClear();
+    finish();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(mocks.broadcast).not.toHaveBeenCalledWith("player:event", { type: "sourceError" });
+  });
+
+  it("被新加载取代的同步解码异常不删除同源新缓存", async () => {
+    const { promise: failed, reject } = Promise.withResolvers<typeof meta>();
+    mocks.load.mockImplementationOnce(() => failed);
+    const stale = invoke("player:load", "cache/same.bin");
+    await invoke("player:load", "cache/same.bin");
+    reject(new Error("[DecodeFailed] old failure"));
+    expect(await stale).toMatchObject({ success: false, error: "LOAD_SUPERSEDED" });
+    expect(mocks.invalidate).not.toHaveBeenCalled();
+  });
+
+  it("旧实例回调即使来源和代次都碰巧一致，也不能失效新实例缓存", async () => {
+    const source = "cache/same.bin";
+    mocks.cachedFiles.add(source);
+    await invoke("player:load", source);
+    const oldCallback = mocks.nativeEvent;
+    mocks.recreatePlayer();
+    await invoke("player:load", source);
+    mocks.broadcast.mockClear();
+    oldCallback({ type: "sourceError", source, sourceGeneration: mocks.generation });
+    await Promise.resolve();
+    expect(mocks.invalidate).not.toHaveBeenCalled();
+    expect(mocks.cachedFiles.has(source)).toBe(true);
+    expect(mocks.broadcast).not.toHaveBeenCalledWith("player:event", { type: "sourceError" });
+  });
+
+  it("跳转后当前代次的新失败仍会移除该曲缓存", async () => {
+    const source = "cache/seek-failed.bin";
+    mocks.cachedFiles.add(source);
+    await invoke("player:load", source);
+    await invoke("player:seek", 2000);
+    mocks.nativeEvent({ type: "sourceError", source, sourceGeneration: mocks.generation });
+    await vi.waitFor(() => expect(mocks.cachedFiles.has(source)).toBe(false));
+    expect(mocks.invalidate).toHaveBeenCalledExactlyOnceWith(source);
+  });
+
+  it.each(["IPC", "SMTC"])("%s 跳转返回前的当前失败等待提交后仍能失效坏缓存", async (entry) => {
+    const source = "cache/pending-seek.bin";
+    mocks.cachedFiles.add(source);
+    await invoke("player:load", source);
+    const oldGeneration = mocks.generation;
+    const { promise, resolve } = Promise.withResolvers<void>();
+    mocks.seek.mockImplementationOnce(() => {
+      mocks.generation++;
+      return promise;
+    });
+    let pending: unknown;
+    if (entry === "IPC") {
+      pending = invoke("player:seek", 2000);
+    } else {
+      mocks.mediaEvent({ type: "Seek", positionMs: 2000 });
+      pending = promise;
+    }
+    mocks.nativeEvent({ type: "sourceError", source, sourceGeneration: oldGeneration });
+    mocks.nativeEvent({ type: "sourceError", source, sourceGeneration: mocks.generation });
+    expect(mocks.invalidate).not.toHaveBeenCalled();
+    resolve();
+    await pending;
+    await vi.waitFor(() => expect(mocks.cachedFiles.has(source)).toBe(false));
+    expect(mocks.invalidate).toHaveBeenCalledExactlyOnceWith(source);
+  });
+
+  it("当前加载的同步解码失败仍会移除对应坏缓存", async () => {
+    const source = "cache/invalid.bin";
+    mocks.cachedFiles.add(source);
+    mocks.load.mockRejectedValueOnce(new Error("[DecodeFailed] invalid data"));
+    expect(await invoke("player:load", source)).toMatchObject({
+      success: false,
+      error: "FILE_DECODE_ERROR",
+    });
+    expect(mocks.cachedFiles.has(source)).toBe(false);
+    expect(mocks.invalidate).toHaveBeenCalledExactlyOnceWith(source);
   });
 });

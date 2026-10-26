@@ -105,17 +105,28 @@ impl<'a> AudioFrame<'a> {
         unsafe { (*self.ptr.as_ptr()).sample_rate }
     }
 
-    /// Converts a time span in microseconds to the corresponding number of samples based on the
-    /// current frame sample rate
-    pub(crate) fn calc_samples(&self, micros: i64) -> usize {
-        let sample_rate = i64::from(self.frame_sample_rate());
-
-        if sample_rate > 0 && micros > 0 {
-            let samples_i64 = ((micros * sample_rate) + 999_999) / 1_000_000;
-            samples_i64 as usize
-        } else {
-            0
+    /// 在原始 PTS 与采样率的有理数域计算裁剪量，避免经微秒舍入后多丢一个样本。
+    pub(crate) fn sample_offset_to(&self, target: Duration) -> Option<usize> {
+        let raw_pts = unsafe { (*self.ptr.as_ptr()).pts };
+        let rate = self.frame_sample_rate();
+        if raw_pts == sys::AV_NOPTS_VALUE || rate <= 0 {
+            return None;
         }
+        let relative_pts = raw_pts.saturating_sub(self.timeline_origin_pts);
+        let start_sample = unsafe {
+            sys::av_rescale_q(
+                relative_pts,
+                self.time_base.as_rational(),
+                sys::AVRational { num: 1, den: rate },
+            )
+        }
+        .saturating_add(self.sample_offset as i64);
+        let target_sample = target
+            .as_nanos()
+            .saturating_mul(rate as u128)
+            .div_ceil(1_000_000_000)
+            .min(i64::MAX as u128) as i64;
+        usize::try_from(target_sample.saturating_sub(start_sample).max(0)).ok()
     }
 
     /// Returns the exact physical duration of this frame in microseconds.
@@ -276,15 +287,21 @@ mod tests {
     }
 
     #[test]
-    fn test_calc_samples_for_micros_with_ceiling() {
+    fn seek_offset_preserves_exact_44100_hz_sample_boundaries() {
         let mut raw_frame = unsafe { mem::zeroed::<sys::AVFrame>() };
         raw_frame.sample_rate = 44_100;
-        let time_base = TimeBase::try_new(sys::AVRational { num: 1, den: 1 }).unwrap();
+        raw_frame.pts = 176_128;
+        let time_base = TimeBase::try_new(sys::AVRational { num: 1, den: 44_100 }).unwrap();
         let frame = AudioFrame::new(&raw const raw_frame, time_base);
+        assert_eq!(frame.sample_offset_to(Duration::from_secs(4)), Some(272));
 
-        assert_eq!(frame.calc_samples(1_000_000), 44_100);
-        assert_eq!(frame.calc_samples(1), 1);
-        assert_eq!(frame.calc_samples(12), 1);
+        raw_frame.pts = 0;
+        let frame = AudioFrame::new(&raw const raw_frame, time_base);
+        assert_eq!(frame.sample_offset_to(Duration::from_millis(25)), Some(1_103));
+
+        raw_frame.pts = -272;
+        let frame = AudioFrame::new(&raw const raw_frame, time_base).with_offset(272);
+        assert_eq!(frame.sample_offset_to(Duration::ZERO), Some(0));
     }
 
     #[test]
@@ -299,6 +316,6 @@ mod tests {
 
         assert_eq!(frame.duration_micros(), 0);
         assert_eq!(frame.end_micros(), Some(1000));
-        assert_eq!(frame.calc_samples(5_000_000), 0);
+        assert_eq!(frame.sample_offset_to(Duration::from_secs(5)), None);
     }
 }

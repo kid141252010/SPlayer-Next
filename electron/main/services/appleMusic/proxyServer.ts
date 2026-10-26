@@ -1,24 +1,21 @@
 import http from "node:http";
+import { setTimeout as delay } from "node:timers/promises";
 import { amLog } from "@main/utils/logger";
 import { fetchWithProxy } from "@main/utils/proxy";
-import { amDecryptor } from "./decryptor";
+import { amDecryptor, type AmTemplate } from "./decryptor";
 import { parseMediaPlaylist, type ParsedMediaPlaylist, type MediaSegment } from "./playlist";
-import { shouldShortCircuitProbe } from "./probe";
 
 interface StreamSession {
   adamId: string;
   m3u8Url: string;
   upstreamUrl: string;
-  token?: string;
   authHeader?: string;
-  /** 会话就绪 Promise（并发安全，防重入与防止连接断开误杀） */
+  /** 初始化段就绪与轨道模板就绪相互独立，失败的模板可重新获取 */
   readyPromise?: Promise<ParsedMediaPlaylist>;
+  playbackPromise?: Promise<void>;
   playlist?: ParsedMediaPlaylist;
-  /** 后台异步拉取与加载 track 解密模板的 Promise */
-  keyPromise?: Promise<number>;
-  keyTemplateJson?: string;
-  trackHandle?: number;
-  fixedHandle?: number;
+  templates: Map<string, Promise<AmTemplate>>;
+  controller: AbortController;
   patchedInit?: Buffer;
   /** 已解密切片的内存缓存与在途请求合并，key = start offset */
   fragCache: Map<number, Promise<Buffer>>;
@@ -37,8 +34,8 @@ const MAX_CACHED_FRAGMENTS = 8;
 const PREFETCH_AHEAD = 2;
 /** 单次普通请求超时时间（毫秒） */
 const DEFAULT_TIMEOUT_MS = 15_000;
-/** 密钥模板拉取超时时间（毫秒），体积小故快速超时重试以防死连接挂起 */
-const KEY_TIMEOUT_MS = 8_000;
+/** 覆盖上游密钥服务的 15 秒处理窗口与网络开销 */
+const KEY_TIMEOUT_MS = 20_000;
 /** 分片下载请求超时时间（毫秒），确保无损与高解析度音频切片有充裕缓冲时间 */
 const FRAGMENT_TIMEOUT_MS = 30_000;
 /** 网络请求最大失败重试次数 */
@@ -86,12 +83,53 @@ export function resolveUpstreamAuth(
 }
 
 /**
- * 获取或创建流会话
- * @param adamId - 曲目 Adam ID
- * @param m3u8Url - Apple 官方 CDN 的 media m3u8 地址
- * @param upstreamUrl - am-hook 上游服务根地址
- * @param token - 可选鉴权 Token
- * @returns 会话结构体
+ * 终止会话，等待在途解密退出后释放所属模板
+ * @param session - 被淘汰或停止的会话
+ */
+const disposeSession = (session: StreamSession): void => {
+  session.controller.abort();
+  const templates = [...session.templates.values()];
+  void Promise.allSettled([
+    session.readyPromise,
+    session.playbackPromise,
+    ...session.fragCache.values(),
+    ...templates,
+  ])
+    .then(async () => {
+      for (const pending of templates) {
+        const template = await pending.catch(() => null);
+        if (template) await amDecryptor.freeTemplate(template);
+      }
+    })
+    .catch((error) => amLog.warn("[proxy] 释放解密会话失败", error));
+  session.templates.clear();
+  session.fragCache.clear();
+};
+
+/** 淘汰超出容量的空闲会话，活跃播放和预热不参与淘汰 */
+const trimSessions = (): void => {
+  while (sessionCache.size > MAX_SESSIONS) {
+    let oldestKey: string | undefined;
+    let oldestTime = Number.POSITIVE_INFINITY;
+    for (const [key, session] of sessionCache) {
+      if (session.activeRequests === 0 && session.lastAccessTime < oldestTime) {
+        oldestKey = key;
+        oldestTime = session.lastAccessTime;
+      }
+    }
+    if (!oldestKey) break;
+    disposeSession(sessionCache.get(oldestKey)!);
+    sessionCache.delete(oldestKey);
+  }
+};
+
+/**
+ * 获取会话并持有租约，隔离不同上游和凭证的解密上下文
+ * @param adamId - 曲目 ID
+ * @param m3u8Url - Apple 媒体清单地址
+ * @param upstreamUrl - 密钥服务根地址
+ * @param token - 可选认证令牌
+ * @returns 由调用方在 finally 中释放租约的会话
  */
 const getOrCreateSession = (
   adamId: string,
@@ -99,144 +137,135 @@ const getOrCreateSession = (
   upstreamUrl: string,
   token?: string,
 ): StreamSession => {
-  const {
-    cleanUpstreamUrl,
-    token: resolvedToken,
-    authHeader,
-  } = resolveUpstreamAuth(upstreamUrl, token);
-  const cacheKey = `${adamId}:${m3u8Url}`;
+  const { cleanUpstreamUrl, authHeader } = resolveUpstreamAuth(upstreamUrl, token);
+  const cacheKey = JSON.stringify([adamId, m3u8Url, cleanUpstreamUrl, authHeader]);
   let session = sessionCache.get(cacheKey);
-  const now = Date.now();
-
   if (!session) {
     session = {
       adamId,
       m3u8Url,
       upstreamUrl: cleanUpstreamUrl,
-      token: resolvedToken,
       authHeader,
+      templates: new Map(),
+      controller: new AbortController(),
       fragCache: new Map(),
-      lastAccessTime: now,
+      lastAccessTime: Date.now(),
       activeRequests: 0,
     };
     sessionCache.set(cacheKey, session);
-
-    if (sessionCache.size > MAX_SESSIONS) {
-      let oldestKey: string | null = null;
-      let oldestTime = Number.POSITIVE_INFINITY;
-      for (const [key, sess] of sessionCache) {
-        // 正在推流中（活跃请求 > 0）的会话不参与淘汰，防止误杀当前播放
-        if (sess.activeRequests > 0) continue;
-        if (sess.lastAccessTime < oldestTime) {
-          oldestTime = sess.lastAccessTime;
-          oldestKey = key;
-        }
-      }
-      if (oldestKey) {
-        const oldSession = sessionCache.get(oldestKey);
-        if (oldSession?.trackHandle) {
-          void amDecryptor.freeTemplate(oldSession.trackHandle);
-        }
-        oldSession?.fragCache.clear();
-        sessionCache.delete(oldestKey);
-      }
-    }
-  } else {
-    session.lastAccessTime = now;
   }
+  session.lastAccessTime = Date.now();
+  session.activeRequests++;
+  trimSessions();
   return session;
 };
 
 /**
- * 带有超时控制、代理支持与自动重试的通用 HTTP 请求
- * @param url - 请求目标 URL
- * @param init - 请求配置
- * @param retries - 重试次数
- * @param timeoutMs - 超时时间（毫秒）
- * @returns 响应对象
+ * 释放请求或预热持有的会话租约
+ * @param session - 已完成消费的会话
  */
-const fetchWithRetry = async (
-  url: string,
-  init?: RequestInit,
-  retries = MAX_NETWORK_RETRIES,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
-): Promise<Response> => {
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const timeoutSignal = AbortSignal.timeout(timeoutMs);
-      const combinedSignal = init?.signal
-        ? AbortSignal.any([init.signal, timeoutSignal])
-        : timeoutSignal;
+const releaseSession = (session: StreamSession): void => {
+  session.activeRequests--;
+  trimSessions();
+};
 
-      const res = await fetchWithProxy(url, {
+/**
+ * 在同一次超时与重试范围内读取并验证完整响应体
+ * @param url - 上游地址
+ * @param read - 响应体读取与边界验证
+ * @param init - 请求参数
+ * @param timeoutMs - 每次请求的完整耗时上限
+ * @returns 已读取并验证的数据
+ */
+const fetchWithRetry = async <T>(
+  url: string,
+  read: (response: Response) => Promise<T>,
+  init?: RequestInit,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<T> => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= MAX_NETWORK_RETRIES; attempt++) {
+    init?.signal?.throwIfAborted();
+    let response: Response | undefined;
+    let retryable = true;
+    try {
+      const timeout = AbortSignal.timeout(timeoutMs);
+      response = await fetchWithProxy(url, {
         ...init,
-        signal: combinedSignal,
+        signal: init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
         headers: {
           "User-Agent": "iTunes/12.11.3 (Windows; Microsoft Windows 10.0.19045)",
           ...init?.headers,
         },
       });
-
-      if (!res.ok && res.status >= 500 && attempt < retries) {
-        await new Promise((r) => setTimeout(r, 100 * (attempt + 1)));
-        continue;
+      if (!response.ok) {
+        retryable = response.status >= 500 || response.status === 429;
+        throw new Error(`上游响应异常 HTTP ${response.status}`);
       }
-
-      return res;
-    } catch (err) {
-      lastError = err;
-      if (init?.signal?.aborted) throw err;
-      if (attempt < retries) {
-        await new Promise((r) => setTimeout(r, 100 * (attempt + 1)));
-        continue;
-      }
+      return await read(response);
+    } catch (error) {
+      lastError = error;
+      if (init?.signal?.aborted || !retryable) throw error;
+    } finally {
+      if (response?.body && !response.bodyUsed) await response.body.cancel().catch(() => {});
     }
+    if (attempt < MAX_NETWORK_RETRIES)
+      await delay(100 * (attempt + 1), undefined, { signal: init?.signal ?? undefined });
   }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  throw lastError;
 };
 
 /**
- * 带有超时控制、重试与 Range 头的二进制拉取
- * @param url - 请求目标 URL
- * @param start - 起始字节偏移
- * @param end - 结束字节偏移
- * @param signal - 中止信号
- * @returns 响应二进制 Buffer
+ * 读取精确的 CDN 字节区间，短读、错位与响应体错误均参与重试
+ * @param url - 媒体文件地址
+ * @param start - 闭区间起点
+ * @param end - 闭区间终点
+ * @param signal - 会话取消信号
+ * @returns 与请求范围等长的原始分片
  */
-const fetchByteRangeWithRetry = async (
+const fetchByteRangeWithRetry = (
   url: string,
   start: number,
   end: number,
-  signal?: AbortSignal,
-): Promise<Buffer> => {
-  const res = await fetchWithRetry(
+  signal: AbortSignal,
+): Promise<Buffer> =>
+  fetchWithRetry(
     url,
-    {
-      headers: {
-        Range: `bytes=${start}-${end}`,
-      },
-      signal,
+    async (response) => {
+      const expectedLength = end - start + 1;
+      if (response.status === 206) {
+        const range = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(
+          response.headers.get("content-range") ?? "",
+        );
+        if (
+          !range ||
+          Number(range[1]) !== start ||
+          Number(range[2]) !== end ||
+          !Number.isSafeInteger(Number(range[3])) ||
+          Number(range[3]) <= end
+        ) {
+          throw new Error(`CDN 返回错位的 Content-Range [${start}-${end}]`);
+        }
+      } else if (response.status !== 200) {
+        throw new Error(`CDN 不支持字节读取 HTTP ${response.status}`);
+      }
+      let bytes = Buffer.from(await response.arrayBuffer());
+      const declaredLength = response.headers.get("content-length");
+      if (declaredLength !== null && Number(declaredLength) !== bytes.length) {
+        throw new Error(`CDN 响应体长度不符 [${start}-${end}]`);
+      }
+      if (response.status === 200) {
+        if (bytes.length < end + 1) throw new Error("CDN 忽略 Range 且未返回完整文件");
+        bytes = Buffer.from(bytes.subarray(start, end + 1));
+      }
+      if (bytes.length !== expectedLength) {
+        throw new Error(`CDN 分片长度不符，期望 ${expectedLength}，实际 ${bytes.length}`);
+      }
+      return bytes;
     },
-    MAX_NETWORK_RETRIES,
+    { headers: { Range: `bytes=${start}-${end}` }, signal },
     FRAGMENT_TIMEOUT_MS,
   );
-
-  if (!res.ok && res.status !== 206) {
-    throw new Error(`CDN 响应异常 HTTP ${res.status} [${start}-${end}]`);
-  }
-
-  const arrayBuf = await res.arrayBuffer();
-  let buf = Buffer.from(arrayBuf);
-  const expectedLen = end - start + 1;
-
-  // 上游若忽略 Range 返回全量数据，按需精确截取
-  if (res.status === 200 && buf.length > expectedLen) {
-    buf = buf.subarray(start, end + 1);
-  }
-
-  return buf;
-};
 
 /**
  * 向 MP4 Init Segment（moov 容器中的 mvhd, tkhd, mdhd）注入曲目真实总时长
@@ -299,84 +328,112 @@ const injectDurationToInit = (initBuf: Buffer, durationSecs: number): Buffer => 
 };
 
 /**
- * 并发安全地初始化会话并准备元数据（M3U8 解析、Init 段修补、密钥模板加载并发进行）
- * @param session - 媒体流会话
- * @returns 解析后的播放列表结构
+ * 按清单中每片的实际密钥缓存模板，失败项移除后允许重新获取
+ * @param session - 所属会话
+ * @param segment - 明确声明加密方式和密钥的分片
+ * @returns 未加密片返回 null，加密片必须返回有效模板
  */
-const ensureSessionReady = async (session: StreamSession): Promise<ParsedMediaPlaylist> => {
-  if (session.playlist && session.patchedInit && session.fixedHandle !== undefined) {
-    return session.playlist;
-  }
-
-  if (!session.readyPromise) {
-    session.readyPromise = (async () => {
-      // 1. 拉取 M3U8 清单
-      const m3u8Res = await fetchWithRetry(session.m3u8Url);
-      if (!m3u8Res.ok) throw new Error(`拉取 M3U8 清单失败 HTTP ${m3u8Res.status}`);
-      const m3u8Text = await m3u8Res.text();
-      const playlist = parseMediaPlaylist(m3u8Text, session.m3u8Url);
-      session.playlist = playlist;
-
-      // 2. 并发初始化 Init 段与 Fixed 模板（首分片秒播所需）
-      const initTask = (async () => {
-        const rawInit = await fetchByteRangeWithRetry(
-          playlist.mediaUrl,
-          playlist.init.start,
-          playlist.init.end,
-        );
-        const patched = await amDecryptor.patchInit(rawInit);
-        session.patchedInit = injectDurationToInit(patched, playlist.duration);
-      })();
-
-      const fixedTask = (async () => {
-        session.fixedHandle = await amDecryptor.getFixedTemplate();
-      })();
-
-      // 3. 异步后台触发 Track Key 获取（Apple Music 第 0 分片使用 Fixed Key，前 15 秒无需阻塞等待 Track Key）
-      if (playlist.keyUri && !session.trackHandle && !session.keyPromise) {
-        session.keyPromise = (async () => {
-          const keyReqUrl = `${session.upstreamUrl}/key?adamId=${encodeURIComponent(session.adamId)}&uri=${encodeURIComponent(playlist.keyUri!)}`;
-          const headers: Record<string, string> = {};
-          if (session.authHeader) {
-            headers.Authorization = session.authHeader;
-          }
-          const keyRes = await fetchWithRetry(
-            keyReqUrl,
-            { headers },
-            MAX_NETWORK_RETRIES,
-            KEY_TIMEOUT_MS,
-          );
-          if (!keyRes.ok) {
-            throw new Error(`拉取解密密钥模板失败 HTTP ${keyRes.status} (${keyReqUrl})`);
-          }
-          session.keyTemplateJson = await keyRes.text();
-          const handle = await amDecryptor.loadTemplate(session.keyTemplateJson, {
-            adamId: session.adamId,
-            keyUri: playlist.keyUri!,
-          });
-          session.trackHandle = handle;
-          return handle;
-        })().catch((err) => {
-          session.keyPromise = undefined;
-          amLog.error(`[proxy] 后台拉取 Track Key 失败 (adamId: ${session.adamId})`, err);
-          throw err;
-        });
-      }
-
-      // 4. 立即在后台触发第 0 分片的网络拉取（与 initTask/fixedTask 并行进行网络 IO）
-      if (playlist.segments.length > 0) {
-        void getDecryptedSegment(session, playlist.segments[0]);
-      }
-
-      await Promise.all([initTask, fixedTask]);
-      return playlist;
-    })().catch((err) => {
-      session.readyPromise = undefined;
-      throw err;
+const getSegmentTemplate = (
+  session: StreamSession,
+  segment: MediaSegment,
+): Promise<AmTemplate | null> => {
+  const signal = session.controller.signal;
+  if (signal.aborted) return Promise.reject(signal.reason);
+  if (segment.keyType === "none") return Promise.resolve(null);
+  const keyUri = segment.keyUri!;
+  let pending = session.templates.get(keyUri);
+  if (!pending) {
+    pending = (async () => {
+      if (segment.keyType === "fixed") return amDecryptor.getFixedTemplate();
+      const params = new URLSearchParams({ adamId: session.adamId, uri: keyUri });
+      const json = await fetchWithRetry(
+        `${session.upstreamUrl}/key?${params.toString()}`,
+        (response) => response.text(),
+        {
+          headers: session.authHeader ? { Authorization: session.authHeader } : undefined,
+          signal,
+        },
+        KEY_TIMEOUT_MS,
+      );
+      signal.throwIfAborted();
+      return amDecryptor.loadTemplate(json);
+    })();
+    session.templates.set(keyUri, pending);
+    void pending.catch(() => {
+      if (session.templates.get(keyUri) === pending) session.templates.delete(keyUri);
     });
   }
+  return pending;
+};
 
+/**
+ * 初始化清单与 init，不把它们就绪误当作轨道密钥就绪
+ * @param session - 所属会话
+ * @returns 已验证的媒体清单
+ */
+const ensureSessionReady = (session: StreamSession): Promise<ParsedMediaPlaylist> => {
+  if (!session.readyPromise) {
+    session.readyPromise = (async () => {
+      const signal = session.controller.signal;
+      const playlist = await fetchWithRetry(
+        session.m3u8Url,
+        async (response) => parseMediaPlaylist(await response.text(), session.m3u8Url),
+        { signal },
+      );
+      session.playlist = playlist;
+      const initTask = (async () => {
+        const raw = await fetchByteRangeWithRetry(
+          playlist.init.url,
+          playlist.init.start,
+          playlist.init.end,
+          signal,
+        );
+        const patched = await amDecryptor.patchInit(raw);
+        session.patchedInit = injectDurationToInit(patched, playlist.duration);
+      })();
+      // 密钥握手与 init 下载并发；开播门槛会再次等待并处理失败
+      for (const segment of [
+        playlist.segments[0],
+        playlist.segments.find((item) => item.keyType === "track"),
+      ]) {
+        if (segment) void getSegmentTemplate(session, segment).catch(() => {});
+      }
+      await initTask;
+      signal.throwIfAborted();
+      return playlist;
+    })();
+    const pending = session.readyPromise;
+    void pending.catch(() => {
+      if (session.readyPromise === pending) session.readyPromise = undefined;
+    });
+  }
   return session.readyPromise;
+};
+
+/**
+ * 首片和第一个轨道密钥片均成功解密后才允许播放或下载
+ * @param session - 所属会话
+ * @returns 完整媒体清单
+ */
+const ensurePlaybackReady = async (session: StreamSession): Promise<ParsedMediaPlaylist> => {
+  const playlist = await ensureSessionReady(session);
+  if (!session.playbackPromise) {
+    session.playbackPromise = (async () => {
+      const first = playlist.segments[0];
+      const firstTrack = playlist.segments.find((segment) => segment.keyType === "track");
+      await Promise.all([
+        getDecryptedSegment(session, first),
+        ...(firstTrack && firstTrack !== first ? [getDecryptedSegment(session, firstTrack)] : []),
+      ]);
+    })();
+    const pending = session.playbackPromise;
+    void pending.catch(() => {
+      if (session.playbackPromise === pending) session.playbackPromise = undefined;
+    });
+  }
+  await session.playbackPromise;
+  session.controller.signal.throwIfAborted();
+  return playlist;
 };
 
 /**
@@ -390,7 +447,7 @@ const triggerPrefetch = (session: StreamSession, currentIndex: number): void => 
   for (let k = 1; k <= PREFETCH_AHEAD; k++) {
     const nextSeg = segments[currentIndex + k];
     if (nextSeg) {
-      void getDecryptedSegment(session, nextSeg);
+      void getDecryptedSegment(session, nextSeg).catch(() => {});
     }
   }
 };
@@ -399,39 +456,24 @@ const triggerPrefetch = (session: StreamSession, currentIndex: number): void => 
  * 获取（或在途合并拉取）并原地解密单个音频切片
  * @param session - 当前流媒体会话
  * @param seg - 切片定义
- * @param signal - 中止信号
  * @returns 已解密的切片 Buffer
  */
-const getDecryptedSegment = (
-  session: StreamSession,
-  seg: MediaSegment,
-  signal?: AbortSignal,
-): Promise<Buffer> => {
+const getDecryptedSegment = (session: StreamSession, seg: MediaSegment): Promise<Buffer> => {
   let inFlight = session.fragCache.get(seg.start);
   if (!inFlight) {
     inFlight = (async () => {
-      const raw = await fetchByteRangeWithRetry(
-        session.playlist!.mediaUrl,
-        seg.start,
-        seg.end,
-        signal,
-      );
-
-      // 解密需要 patchedInit 和 fixedHandle 就绪
-      if (!session.patchedInit || (seg.keyType === "fixed" && session.fixedHandle === undefined)) {
-        if (session.readyPromise) {
-          await session.readyPromise;
-        }
+      const playlist = await ensureSessionReady(session);
+      const signal = session.controller.signal;
+      const [raw, template] = await Promise.all([
+        fetchByteRangeWithRetry(playlist.mediaUrl, seg.start, seg.end, signal),
+        getSegmentTemplate(session, seg),
+      ]);
+      signal.throwIfAborted();
+      const decrypted = await amDecryptor.decryptFragment(template, raw, session.patchedInit!);
+      if (decrypted.length !== seg.end - seg.start + 1) {
+        throw new Error(`解密分片 #${seg.index} 改变了字节长度`);
       }
-
-      let handle = 0;
-      if (seg.keyType === "fixed") {
-        handle = session.fixedHandle || 0;
-      } else if (seg.keyType === "track") {
-        handle = session.trackHandle ?? (session.keyPromise ? await session.keyPromise : 0);
-      }
-
-      return amDecryptor.decryptFragment(handle, raw, session.patchedInit);
+      return decrypted;
     })();
 
     if (session.fragCache.size >= MAX_CACHED_FRAGMENTS) {
@@ -450,12 +492,35 @@ const getDecryptedSegment = (
 };
 
 /**
+ * 推送分片并等待背压解除，连接关闭时同时移除全部等待监听
+ * @param response - 客户端响应
+ * @param bytes - 本次真实字节
+ * @returns 响应仍可继续时返回 true
+ */
+const writeChunk = async (response: http.ServerResponse, bytes: Buffer): Promise<boolean> => {
+  if (response.destroyed) return false;
+  if (response.write(bytes)) return true;
+  const { promise, resolve } = Promise.withResolvers<boolean>();
+  const finish = (writable: boolean): void => {
+    response.off("drain", onDrain);
+    response.off("close", onClose);
+    resolve(writable);
+  };
+  const onDrain = (): void => finish(true);
+  const onClose = (): void => finish(false);
+  response.once("drain", onDrain);
+  response.once("close", onClose);
+  if (response.destroyed) onClose();
+  return promise;
+};
+
+/**
  * 本地 Apple Music 音频解密与边下边播流媒体代理服务
  */
 export class AppleMusicProxyServer {
   private server: http.Server | null = null;
   private port: number = 0;
-  private isStarting: boolean = false;
+  private startPromise: Promise<number> | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private activeUpstreamUrl: string = "";
   private activeAuthHeader?: string;
@@ -464,48 +529,44 @@ export class AppleMusicProxyServer {
    * 启动本地回环 HTTP 服务
    * @returns 分配的服务端口
    */
-  public async start(): Promise<number> {
-    if (this.server && this.port > 0) return this.port;
-    if (this.isStarting) {
-      while (this.isStarting) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
-      return this.port;
-    }
-
-    this.isStarting = true;
-
-    return new Promise((resolve, reject) => {
-      const srv = http.createServer((req, res) => {
-        this.handleRequest(req, res).catch((err) => {
-          amLog.error("[proxy] 处理流媒体请求异常", err);
-          if (!res.headersSent) {
-            res.writeHead(500, { "Content-Type": "text/plain" });
-            res.end("Internal Server Error");
-          }
-        });
-      });
-
-      srv.listen(0, "127.0.0.1", () => {
-        const addr = srv.address();
-        if (typeof addr === "object" && addr) {
-          this.port = addr.port;
-          this.server = srv;
-          this.isStarting = false;
-          amLog.info(`[proxy] 本地流媒体代理服务已就绪: http://127.0.0.1:${this.port}`);
-          resolve(this.port);
+  public start(): Promise<number> {
+    if (this.server && this.port > 0) return Promise.resolve(this.port);
+    if (this.startPromise) return this.startPromise;
+    const { promise, resolve, reject } = Promise.withResolvers<number>();
+    const server = http.createServer((req, res) => {
+      this.handleRequest(req, res).catch((error) => {
+        amLog.error("[proxy] 处理流媒体请求异常", error);
+        if (!res.headersSent && !res.destroyed) {
+          res.writeHead(500, { "Content-Type": "text/plain" });
+          res.end("Internal Server Error");
         } else {
-          this.isStarting = false;
-          reject(new Error("无法获取本地代理服务端口"));
+          res.destroy();
         }
       });
-
-      srv.on("error", (err) => {
-        this.isStarting = false;
-        amLog.error("[proxy] 本地服务启动失败", err);
-        reject(err);
-      });
     });
+    this.server = server;
+    this.startPromise = promise;
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (this.server !== server || !address || typeof address !== "object") {
+        server.close();
+        reject(new Error("本地代理服务已停止"));
+        return;
+      }
+      this.port = address.port;
+      amLog.info(`[proxy] 本地流媒体代理服务已就绪: http://127.0.0.1:${this.port}`);
+      resolve(this.port);
+    });
+    server.on("error", (error) => {
+      if (this.server === server) this.server = null;
+      reject(error);
+    });
+    void promise
+      .finally(() => {
+        if (this.startPromise === promise) this.startPromise = null;
+      })
+      .catch(() => {});
+    return promise;
   }
 
   /**
@@ -524,37 +585,24 @@ export class AppleMusicProxyServer {
   ): Promise<string> {
     const port = await this.start();
     const { cleanUpstreamUrl, token: resolvedToken } = resolveUpstreamAuth(upstreamUrl, token);
-    const session = getOrCreateSession(adamId, m3u8Url, cleanUpstreamUrl, resolvedToken);
+    const session = getOrCreateSession(adamId, m3u8Url, upstreamUrl, token);
     this.keepUpstreamAlive(cleanUpstreamUrl, session.authHeader);
     const params = new URLSearchParams({
       adamId,
       m3u8: m3u8Url,
-      upstream: cleanUpstreamUrl,
+      upstream: upstreamUrl,
     });
     if (resolvedToken) {
       params.set("token", resolvedToken);
     }
 
-    // 预热会话并提取总大小与总时长，确保首分片在播放前已在内存中就绪
     try {
-      const playlist = await Promise.race([
-        ensureSessionReady(session),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("会话准备超时")), DEFAULT_TIMEOUT_MS),
-        ),
-      ]);
-      if (playlist?.totalSize) {
-        params.set("size", String(playlist.totalSize));
-      }
-      if (playlist?.duration && playlist.duration > 0) {
-        params.set("duration", String(playlist.duration));
-      }
-      if (playlist && playlist.segments.length > 0) {
-        // 触发后续分片滑动窗口预取（第 0 分片已在 ensureSessionReady 中并发开始拉取，推流时按需自然就绪）
-        triggerPrefetch(session, 0);
-      }
-    } catch (err) {
-      amLog.warn("[proxy] 会话预热未完成", err);
+      const playlist = await ensurePlaybackReady(session);
+      params.set("size", String(playlist.totalSize));
+      params.set("duration", String(playlist.duration));
+      triggerPrefetch(session, 0);
+    } finally {
+      releaseSession(session);
     }
 
     return `http://127.0.0.1:${port}/am-stream?${params.toString()}`;
@@ -593,13 +641,12 @@ export class AppleMusicProxyServer {
     const session = getOrCreateSession(adamId, m3u8Url, upstream, token);
     let isClientClosed = false;
 
-    req.on("close", () => {
+    res.on("close", () => {
       isClientClosed = true;
     });
 
-    session.activeRequests++;
     try {
-      const playlist = await ensureSessionReady(session);
+      const playlist = await ensurePlaybackReady(session);
       const totalSize = playlist.totalSize;
 
       // 解析客户端传入的 Range 头
@@ -608,66 +655,37 @@ export class AppleMusicProxyServer {
       const rangeHeader = req.headers.range;
 
       if (rangeHeader) {
-        const match = /bytes=(\d+)-(\d*)/.exec(rangeHeader);
-        if (match) {
-          startOffset = Number.parseInt(match[1], 10);
-          if (match[2]) {
-            endOffset = Number.parseInt(match[2], 10);
-          }
+        const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
+        if (!match || (!match[1] && !match[2])) {
+          res.writeHead(416, { "Content-Range": `bytes */${totalSize}` });
+          res.end();
+          return;
+        }
+        if (!match[1]) {
+          const suffix = Number(match[2]);
+          startOffset = Math.max(0, totalSize - suffix);
+          if (suffix === 0) startOffset = totalSize;
+        } else {
+          startOffset = Number(match[1]);
+          if (match[2]) endOffset = Math.min(Number(match[2]), totalSize - 1);
         }
       }
-
-      // 处理客户端探测文件尾 (Range: bytes={totalSize}-) 的边界请求，避免抛出 416
-      if (startOffset === totalSize) {
-        res.writeHead(206, {
-          "Content-Range": `bytes ${totalSize}-${totalSize}/${totalSize}`,
-          "Accept-Ranges": "bytes",
-          "Content-Length": 0,
-          "Content-Type": "audio/mp4",
-          "Cache-Control": "no-cache",
-        });
+      if (
+        !Number.isSafeInteger(startOffset) ||
+        !Number.isSafeInteger(endOffset) ||
+        startOffset >= totalSize ||
+        startOffset > endOffset
+      ) {
+        res.writeHead(416, { "Content-Range": `bytes */${totalSize}` });
         res.end();
         return;
       }
-
-      if (startOffset >= totalSize || endOffset >= totalSize || startOffset > endOffset) {
-        res.writeHead(416, {
-          "Content-Range": `bytes */${totalSize}`,
-        });
-        res.end();
-        return;
-      }
-
       const contentLength = endOffset - startOffset + 1;
 
-      // 仅短路客户端对文件尾部 mfra/sidx 的小型探针，避免把后续音频分片误当成探针
-      const firstSegmentEnd = playlist.segments[0]?.end ?? 0;
-      const lastSegmentStart = playlist.segments[playlist.segments.length - 1]?.start ?? totalSize;
-      const isProbeRequest = shouldShortCircuitProbe(
-        startOffset,
-        firstSegmentEnd,
-        lastSegmentStart,
-        contentLength,
-        session.trackHandle !== undefined,
-      );
-
-      if (isProbeRequest) {
-        // HLS fMP4 没有末尾 mfra 索引，返回零填充让解封装器快速退回起点，避免等待密钥握手
-        const probeLen = Math.min(contentLength, 65536);
-        const probeChunk = Buffer.alloc(probeLen);
-        res.writeHead(206, {
-          "Content-Range": `bytes ${startOffset}-${startOffset + probeLen - 1}/${totalSize}`,
-          "Accept-Ranges": "bytes",
-          "Content-Length": probeLen,
-          "Content-Type": "audio/mp4",
-          "Cache-Control": "no-cache",
-        });
-        res.end(probeChunk);
-        return;
-      }
-
-      res.writeHead(206, {
-        "Content-Range": `bytes ${startOffset}-${endOffset}/${totalSize}`,
+      res.writeHead(rangeHeader ? 206 : 200, {
+        ...(rangeHeader
+          ? { "Content-Range": `bytes ${startOffset}-${endOffset}/${totalSize}` }
+          : {}),
         "Accept-Ranges": "bytes",
         "Content-Length": contentLength,
         "Content-Type": "audio/mp4",
@@ -680,28 +698,26 @@ export class AppleMusicProxyServer {
         `[proxy:req] 开始推流 adamId=${adamId} Range=${rangeHeader ?? "all"} start=${startOffset} end=${endOffset}`,
       );
 
-      // 1. 检查是否包含 Init Segment 范围
+      let written = 0;
       const patchedInit = session.patchedInit!;
       const initLen = patchedInit.length;
       if (startOffset < initLen) {
         const initSliceEnd = Math.min(initLen - 1, endOffset);
         const initSlice = patchedInit.subarray(startOffset, initSliceEnd + 1);
-        if (!res.write(initSlice)) {
-          await new Promise((r) => res.once("drain", r));
-        }
+        if (!(await writeChunk(res, initSlice))) return;
+        written += initSlice.length;
         amLog.debug(
           `[proxy:init] Init段已推送 len=${initSlice.length} 耗时=${(performance.now() - reqStart).toFixed(1)}ms`,
         );
       }
 
-      // 2. 寻找相交的分片并进行滑动窗口流式推送
+      // Range 坐标始终对应原位解密后的完整文件
       const relevantSegments = playlist.segments.filter(
         (seg) => seg.end >= startOffset && seg.start <= endOffset,
       );
 
-      for (let i = 0; i < relevantSegments.length; i++) {
-        if (res.destroyed || isClientClosed) break;
-        const seg = relevantSegments[i];
+      for (const seg of relevantSegments) {
+        if (res.destroyed || isClientClosed) return;
 
         // 触发前向滑动窗口预取
         triggerPrefetch(session, seg.index);
@@ -709,29 +725,24 @@ export class AppleMusicProxyServer {
         const segStart = performance.now();
         const fragBuf = await getDecryptedSegment(session, seg);
         const segWaitMs = (performance.now() - segStart).toFixed(1);
-        if (res.destroyed || isClientClosed) break;
-
-        // 如果请求的 Range 只涵盖分片的一部分，做局部切片
-        let chunk = fragBuf;
-        if (startOffset > seg.start) {
-          const cutStart = startOffset - seg.start;
-          chunk = chunk.subarray(cutStart);
-        }
-        if (endOffset < seg.end) {
-          const cutEnd = chunk.length - (seg.end - endOffset);
-          chunk = chunk.subarray(0, cutEnd);
-        }
+        if (res.destroyed || isClientClosed) return;
+        const chunk = fragBuf.subarray(
+          Math.max(0, startOffset - seg.start),
+          Math.min(fragBuf.length, endOffset - seg.start + 1),
+        );
 
         if (chunk.length > 0) {
           const writeStart = performance.now();
-          if (!res.write(chunk)) {
-            await new Promise((r) => res.once("drain", r));
-          }
+          if (!(await writeChunk(res, chunk))) return;
+          written += chunk.length;
           const drainMs = (performance.now() - writeStart).toFixed(1);
           amLog.info(
             `[proxy:seg] 推送分片 #${seg.index} (${seg.keyType}) size=${chunk.length} 获取等待=${segWaitMs}ms 写入Drain=${drainMs}ms 累计=${(performance.now() - reqStart).toFixed(1)}ms`,
           );
         }
+      }
+      if (written !== contentLength) {
+        throw new Error(`响应字节数不符，期望 ${contentLength}，实际 ${written}`);
       }
 
       res.end();
@@ -742,17 +753,19 @@ export class AppleMusicProxyServer {
       if (!isClientClosed) {
         amLog.error(`[proxy] 推流过程中发生错误 (adamId: ${adamId})`, err);
       }
-      if (!res.destroyed) {
-        res.destroy(err instanceof Error ? err : new Error(String(err)));
+      if (!res.headersSent && !res.destroyed && !isClientClosed) {
+        res.writeHead(502, { "Content-Type": "text/plain", "Cache-Control": "no-store" });
+        res.end("Apple Music 音频解密未就绪");
+      } else {
+        res.destroy();
       }
     } finally {
-      session.activeRequests = Math.max(0, session.activeRequests - 1);
+      releaseSession(session);
     }
   }
 
   /**
-   * 主动轻量预热指定曲目的流媒体会话与 Track Key
-   * 仅拉取 M3U8 清单、Init 段及 Track Key，不拉取后续音频，轻量极速
+   * 预热 init、真实轨道模板及换钥边界两侧分片
    * @param adamId - 曲目 ID
    * @param m3u8Url - Apple CDN 的 Media M3U8 清单地址
    * @param upstreamUrl - am-hook 上游服务地址
@@ -765,13 +778,14 @@ export class AppleMusicProxyServer {
     token?: string,
   ): Promise<void> {
     await this.start();
-    const { cleanUpstreamUrl, token: resolvedToken } = resolveUpstreamAuth(upstreamUrl, token);
-    const session = getOrCreateSession(adamId, m3u8Url, cleanUpstreamUrl, resolvedToken);
-    this.keepUpstreamAlive(cleanUpstreamUrl, session.authHeader);
+    const session = getOrCreateSession(adamId, m3u8Url, upstreamUrl, token);
+    this.keepUpstreamAlive(session.upstreamUrl, session.authHeader);
     try {
-      await ensureSessionReady(session);
+      await ensurePlaybackReady(session);
     } catch (err) {
       amLog.warn(`[proxy] 预热曲目会话失败 (adamId: ${adamId})`, err);
+    } finally {
+      releaseSession(session);
     }
   }
 
@@ -858,11 +872,13 @@ export class AppleMusicProxyServer {
     }
     this.activeUpstreamUrl = "";
     this.activeAuthHeader = undefined;
+    for (const session of sessionCache.values()) disposeSession(session);
+    sessionCache.clear();
     if (this.server) {
       this.server.close();
+      this.server.closeAllConnections();
       this.server = null;
       this.port = 0;
-      sessionCache.clear();
       amLog.info("[proxy] 本地代理服务已停止");
     }
   }

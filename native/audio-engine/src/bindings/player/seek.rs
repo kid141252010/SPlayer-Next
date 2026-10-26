@@ -121,13 +121,12 @@ impl AudioPlayer {
                 }
                 if let Some(src) = current_source {
                     let is_remote = src.starts_with("http://") || src.starts_with("https://");
-                    if let Err(e) = self.load(src, Some(was_playing), None).await {
+                    if let Err(e) = self.load_for_recovery(src, was_playing).await {
                         if is_cancelled_napi_error(&e) {
                             return Ok(());
                         }
-                        // 远端源回退重开失败（多半 URL 过期）：发 sourceError 交 JS 重解析
-                        if is_remote {
-                            self.inner.lock().emit_source_error();
+                        // 失败事件已在恢复加载提交锁内发出。
+                        if is_remote && !is_device_napi_error(&e) {
                             return Ok(());
                         }
                         return Err(e);

@@ -10,7 +10,10 @@ pub enum PlayerEvent {
     /// 播放结束
     Ended,
     /// 音源失效（网络中断 / URL 过期）
-    SourceError,
+    SourceError {
+        source: Option<String>,
+        source_generation: u64,
+    },
     /// 位置更新（秒）—— 由内部定时器推送
     Position { position: f64, duration: f64 },
     /// 实际交叉淡化开始或结束
@@ -37,10 +40,15 @@ pub(super) fn playback_completion_event(
     shared: &Shared,
     duration: f64,
     position: f64,
+    source: Option<&str>,
+    source_generation: u64,
 ) -> PlayerEvent {
     let mid_stream = duration <= 0.0 || duration - position > 3.0;
     if shared.is_decode_failed() && mid_stream {
-        PlayerEvent::SourceError
+        PlayerEvent::SourceError {
+            source: source.map(str::to_owned),
+            source_generation,
+        }
     } else {
         PlayerEvent::Ended
     }

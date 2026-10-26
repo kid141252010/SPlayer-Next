@@ -16,7 +16,9 @@ vi.mock("@main/services/streaming/mediaSource", () => ({
 }));
 vi.mock("electron", () => ({ app: { on: vi.fn() } }));
 vi.mock("@main/utils/config", () => ({ getSongCacheDir: () => state.directory }));
-vi.mock("@main/utils/logger", () => ({ songCacheLog: { info: vi.fn(), warn: vi.fn() } }));
+vi.mock("@main/utils/logger", () => ({
+  songCacheLog: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 vi.mock("@main/store", () => ({
   store: { get: (key: string) => (key.endsWith("sizeLimitGb") ? state.limit : true) },
 }));
@@ -43,9 +45,11 @@ const audioResponse = (): Response =>
   });
 
 describe("歌曲预载缓存生命周期", () => {
+  // 每例重建模块内目录与初始化屏障，静态导入会共享上一例的生命周期状态。
   beforeEach(async () => {
     vi.resetModules();
     state.rows.clear();
+    state.limit = 64 / 1024 ** 3;
     state.resolveMedia.mockReset().mockResolvedValue({ url: "https://server/audio?token=private" });
     state.directory = await fs.mkdtemp(path.join(os.tmpdir(), "splayer-cache-test-"));
   });
@@ -149,5 +153,93 @@ describe("歌曲预载缓存生命周期", () => {
     cache.cancelPreload("next");
     await cache.fetchAsync("fourth", "netease", "https://music/fourth");
     expect(state.rows.has("pinned")).toBe(false);
+  });
+
+  it.each([16, 48])("实际长度 32 与声明 %s 不符时不发布缓存", async (declared) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(Buffer.alloc(32, 1), {
+            headers: { "content-type": "audio/mp4", "content-length": String(declared) },
+          }),
+      ),
+    );
+    const cache = await import("./songCache");
+    expect(await cache.fetchAsync("truncated", "applemusic", "https://music/audio")).toBeNull();
+    expect(await cache.lookup("truncated")).toBeNull();
+    expect(state.rows.size).toBe(0);
+    expect(await fs.readdir(state.directory)).toEqual([]);
+  });
+
+  it("初始化与查询下载共用 AM cutover，保留其它来源和重新下载的新 AM", async () => {
+    state.limit = 10;
+    for (const source of ["applemusic", "netease", "qqmusic", "streaming", "local"] as const) {
+      const filename = `${source}-legacy.bin`;
+      await fs.writeFile(path.join(state.directory, filename), Buffer.alloc(32, 1));
+      state.rows.set(source, {
+        cacheKey: source,
+        source,
+        filename,
+        size: 32,
+        mime: "audio/mp4",
+        cachedAt: 1,
+        lastUsedAt: 1,
+      });
+    }
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => audioResponse()),
+    );
+    const cache = await import("./songCache");
+    const [, oldApple, netease] = await Promise.all([
+      cache.init(),
+      cache.lookup("applemusic"),
+      cache.lookup("netease"),
+    ]);
+    expect(oldApple).toBeNull();
+    expect(netease).toBe(path.join(state.directory, "netease-legacy.bin"));
+    for (const source of ["qqmusic", "streaming", "local"])
+      expect(await cache.lookup(source)).not.toBeNull();
+    const repaired = await cache.fetchAsync("applemusic", "applemusic", "https://music/repaired");
+    expect(repaired).not.toBeNull();
+    vi.resetModules();
+    // 模拟下次启动重新加载服务，验证版本标记不会再次失效修复后的 AM。
+    const restarted = await import("./songCache");
+    await restarted.init();
+    expect(await restarted.lookup("applemusic")).toBe(repaired);
+    expect(await fs.readdir(state.directory)).not.toContain("applemusic-legacy.bin");
+  });
+
+  it("失效会中止同 key 在途请求，迟到请求和失效不能覆盖或删除新下载", async () => {
+    const { promise: response, resolve: finish } = Promise.withResolvers<Response>();
+    const fetcher = vi
+      .fn()
+      .mockImplementationOnce(() => response)
+      .mockImplementationOnce(async () => audioResponse());
+    vi.stubGlobal("fetch", fetcher);
+    const cache = await import("./songCache");
+    const pending = cache.fetchAsync("same", "netease", "https://music/bad");
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    const oldPath = path.join(state.directory, "bad.bin");
+    await fs.writeFile(oldPath, Buffer.alloc(32, 1));
+    state.rows.set("same", {
+      cacheKey: "same",
+      source: "netease",
+      filename: "bad.bin",
+      size: 32,
+      mime: "audio/mp4",
+      cachedAt: 1,
+      lastUsedAt: 1,
+    });
+    const invalidation = cache.invalidate(oldPath);
+    const replacement = await cache.fetchAsync("same", "netease", "https://music/good");
+    await invalidation;
+    expect(replacement).not.toBeNull();
+    finish(audioResponse());
+    expect(await pending).toBeNull();
+    await cache.invalidate(oldPath);
+    expect(await cache.lookup("same")).toBe(replacement);
+    expect(await fs.readdir(state.directory)).toEqual([path.basename(replacement!)]);
   });
 });

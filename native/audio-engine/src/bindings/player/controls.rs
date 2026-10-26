@@ -13,14 +13,13 @@ impl AudioPlayer {
         };
         if let Some(source) = revival_source {
             let is_remote = source.starts_with("http://") || source.starts_with("https://");
-            if let Err(e) = self.load(source, Some(true), None).await {
+            if let Err(e) = self.load_for_recovery(source, true).await {
                 // 复活加载被更新的 load/stop 取代不是错误：已有更新的操作接管播放
                 if is_cancelled_napi_error(&e) {
                     return Ok(());
                 }
-                // 远端源复活失败（多半 URL 过期）：发 sourceError 交 JS 重解析（命中本地缓存 / 拿新 URL）
-                if is_remote {
-                    self.inner.lock().emit_source_error();
+                // 失败事件已在恢复加载提交锁内发出，不能重新读取当前音源。
+                if is_remote && !is_device_napi_error(&e) {
                     return Ok(());
                 }
                 return Err(e);

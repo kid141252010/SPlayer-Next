@@ -153,6 +153,23 @@ Provides a playable URL.
 
 See [Quick start](#quick-start) for a call example. If the requested quality is unavailable, return a lower quality and identify it in `quality`.
 
+#### Local Apple Music decryption
+
+`splayer.appleMusic` is optional. Check that the extension exists before calling it:
+
+- `getStreamUrl(adamId, m3u8Url, upstreamUrl, token?)` returns `Promise<string>`.
+  The host prepares the init segment, templates, and fragments concurrently. It returns a URL only
+  after decrypting both the first fragment and the first fragment that needs the track template.
+  Preparation failures reject instead of returning a preview-only URL. Call again after the upstream recovers.
+- `prewarm(adamId, m3u8Url, upstreamUrl, token?)` warms the same resources on a best-effort basis.
+  Failures are logged. A completed prewarm call does not replace the readiness check in `getStreamUrl`.
+
+`m3u8Url` must describe contiguous byte ranges in one media file. Each fragment uses its declared key URI.
+The upstream `/key` endpoint must return the real, complete `ctx`, `state`, and register template,
+either directly or wrapped in `{ code: 0, msg, data }`. A `contentKey` alone is not sufficient;
+the host does not substitute the fixed template. Playback and caching share the decrypted fragments.
+Fragment errors terminate the response instead of returning ciphertext or fabricated zero bytes.
+
 ### Search tracks {#musicsearch}
 
 Returns independent source search results, or candidates for matching lyrics, covers, and other metadata.
