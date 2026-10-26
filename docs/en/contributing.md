@@ -4,8 +4,8 @@ Thank you for contributing to SPlayer-Next. This page covers the local environme
 
 ## Requirements
 
-- **Node.js** >= 22.19.0
-- **pnpm** >= 10
+- **Node.js** >= 24.0.0
+- **pnpm** >= 12
 - **Rust toolchain** for [native modules](/en/native)
 
 ## Getting started
@@ -30,8 +30,9 @@ pnpm build:win
 pnpm build:mac
 pnpm build:linux
 
-# Build selected electron-builder targets
-pnpm build:win nsis
+# Windows defaults to an x64 NSIS installer; never publish verification builds
+pnpm build:win --publish never
+# macOS / Linux can select electron-builder targets
 pnpm build:mac dmg
 pnpm build:linux tar.gz
 
@@ -49,7 +50,24 @@ pnpm lint
 pnpm format
 pnpm build:native
 pnpm build:native --dev
+pnpm test
+pnpm test:native
 ```
+
+## Integrating dev into master
+
+Use Node.js 24 and the pnpm 12 version pinned by `packageManager`. Commit your work first; untracked files also block synchronization.
+
+```bash
+pnpm sync:master         # Local integration only
+pnpm sync:master --push  # Publish the integration branch and create or reuse a master PR
+```
+
+The script pins the latest `origin/master` and `upstream/dev` (or `origin/dev` without upstream), then merges in a separate sibling worktree. It never switches or merges the current worktree's master/dev, stashes work, overwrites an existing branch, or force-pushes. Conflicts and failed checks remain in the printed worktree for inspection.
+
+Frozen-lockfile installation, type checking, and tests must pass before publication. `--push` publishes only the integration branch, never master. The manual **Sync Dev to Master** workflow uses the same entry point; scheduled direct pushes are disabled. Master PRs run CI, tests, and Windows/macOS/Linux builds. Merge with a merge commit to retain upstream ancestry.
+
+PRs created with `GITHUB_TOKEN` do not trigger downstream push/PR workflows. Configure `SYNC_TOKEN` with repository/workflow permissions, or have a user close and reopen the PR to trigger checks. Test and Build Dev can also be dispatched on the integration branch, but that does not satisfy other required PR checks. Verify real playback, legacy credential decryption, and window-state migration before release.
 
 ## Project structure
 

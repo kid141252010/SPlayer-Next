@@ -106,7 +106,10 @@ export const useSettingsStore = defineStore(
     /** 外观 */
     const appearance = reactive<AppearanceSettings>({
       layoutMode: "default",
+      songListStyle: "comfortable",
       routeTransition: "fade",
+      seamlessTransition: false,
+      reduceMotion: false,
       sidebarCollapsed: false,
       sidebarPlaylistCover: false,
       sidebarNavGroups: DEFAULT_SIDEBAR_NAV_GROUPS.map((group) => ({
@@ -123,6 +126,11 @@ export const useSettingsStore = defineStore(
       fontFamily: "",
       showPerformanceMonitor: false,
     });
+
+    const systemMotion = usePreferredReducedMotion();
+    const reducedMotion = computed(
+      () => appearance.reduceMotion || systemMotion.value === "reduce",
+    );
 
     /** 播放器 */
     const player = reactive<PlayerSettings>({
@@ -158,6 +166,7 @@ export const useSettingsStore = defineStore(
       transitionPreference: "standard",
       searchPlayBehavior: "current",
       dynamicCover: false,
+      songListPlayBehavior: "current",
     });
 
     /** 强迫症设置 */
@@ -354,6 +363,7 @@ export const useSettingsStore = defineStore(
     return {
       locale,
       appearance,
+      reducedMotion,
       player,
       preset,
       lyric,

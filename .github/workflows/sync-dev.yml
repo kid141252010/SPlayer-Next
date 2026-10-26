@@ -1,90 +1,67 @@
 name: Sync Dev to Master
 
 on:
-  schedule:
-    # 每天北京时间凌晨 03:00 自动运行 (UTC 19:00)
-    - cron: "0 19 * * *"
   workflow_dispatch:
-    inputs:
-      auto_push:
-        description: "合并并检查成功后自动推送到 master"
-        type: boolean
-        required: true
-        default: true
 
-# 授予仓库写入权限，确保能够正常 git push
 permissions:
   contents: write
-  issues: write
+  pull-requests: write
 
+# 所有手动同步共享目标 master，串行执行，不中断已经创建的集成现场。
 concurrency:
   group: sync-dev-to-master
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   sync:
-    name: Sync upstream/dev into master
+    name: Prepare checked integration branch and PR
     runs-on: ubuntu-latest
+    env:
+      CI: true
+      GH_TOKEN: ${{ secrets.SYNC_TOKEN || github.token }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: master
           fetch-depth: 0
           token: ${{ secrets.SYNC_TOKEN || github.token }}
 
-      - name: Setup Git identity
+      - name: Setup Git identity and upstream
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/SPlayer-Dev/SPlayer-Next.git
 
-      - name: Setup upstream remote
-        run: |
-          if ! git remote | grep -q "^upstream$"; then
-            git remote add upstream https://github.com/SPlayer-Dev/SPlayer-Next.git
-          fi
-          git fetch upstream dev
-          git fetch origin master
-
-      - name: Check for new commits
-        id: check_commits
-        run: |
-          COMMITS=$(git log master..upstream/dev --oneline)
-          if [ -z "$COMMITS" ]; then
-            echo "has_commits=false" >> $GITHUB_OUTPUT
-            echo "upstream/dev 的所有提交已包含在 master 中，无需合并。"
-          else
-            echo "has_commits=true" >> $GITHUB_OUTPUT
-            echo "发现待合并提交:"
-            echo "$COMMITS"
-          fi
-
-      - name: Merge upstream/dev
-        if: steps.check_commits.outputs.has_commits == 'true'
-        run: |
-          git checkout master
-          git merge upstream/dev -m "Merge branch 'upstream/dev' into master"
-
+      # 不指定 version：pnpm/action-setup 使用 packageManager 中锁定的 pnpm 12。
       - name: Setup pnpm
-        if: steps.check_commits.outputs.has_commits == 'true'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
-        if: steps.check_commits.outputs.has_commits == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 22.x
+          node-version: 24.x
           cache: pnpm
 
-      - name: Install dependencies
-        if: steps.check_commits.outputs.has_commits == 'true'
-        run: pnpm install --frozen-lockfile
+      # Node 24 原生执行 TS；与本地 sync:master 共用唯一实现。
+      # 脚本在独立 worktree 合并后执行 frozen install、typecheck 和 test，再发布分支/PR。
+      - name: Integrate, install, check, test and open PR
+        run: node scripts/sync-master.ts --push
 
-      - name: Verify types
-        if: steps.check_commits.outputs.has_commits == 'true'
-        run: pnpm typecheck
-
-      - name: Push to master
-        if: steps.check_commits.outputs.has_commits == 'true' && (github.event_name == 'schedule' || inputs.auto_push == true)
+      - name: Explain downstream checks
+        if: always()
+        env:
+          HAS_SYNC_TOKEN: ${{ secrets.SYNC_TOKEN != '' }}
         run: |
-          git push origin master
+          {
+            echo '## Dev → master integration'
+            echo 'This workflow never pushes master; pending changes are checked in an isolated worktree and published as an integration branch/PR only after frozen installation, typecheck and tests pass.'
+            echo 'If there are no pending commits, no installation, checks or PR are needed. A failed sync is not a successful validation.'
+            if [ "$HAS_SYNC_TOKEN" = true ]; then
+              echo 'SYNC_TOKEN is configured. New push/PR events can trigger downstream workflows if that token has the required repository/workflow permissions.'
+            else
+              echo 'GITHUB_TOKEN is in use. GitHub suppresses downstream push/PR workflow events created with this token; this sync run does NOT establish that PR CI or the three-platform build ran.'
+              echo 'An authorized user must close and reopen the PR to trigger PR checks, or manually dispatch Test and Build Dev on the integration branch. Required checks must still pass before merging.'
+              echo 'Repository Actions settings must allow GitHub Actions to create pull requests; otherwise configure SYNC_TOKEN and rerun to reuse the published branch.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -7,6 +7,7 @@ import { navigateToArtist } from "@/utils/navigate";
 import { fetchSongArtists } from "@/apis/song/applemusic";
 import { getValidArtists } from "@shared/utils/track";
 import { isDolbyAtmosQuality } from "@/utils/quality";
+import { setPlayerExpanded } from "@/services/playerTransition";
 
 withDefaults(
   defineProps<{
@@ -19,7 +20,7 @@ withDefaults(
 const status = useStatusStore();
 const media = useMediaStore();
 const settings = useSettingsStore();
-const { isPlayerExpanded, isPlaying } = storeToRefs(status);
+const { isPlaying } = storeToRefs(status);
 
 /** 是否为杜比全景声 */
 const isDolbyAtmos = computed(() => {
@@ -94,10 +95,11 @@ const goArtist = async (artist: Artist): Promise<void> => {
     <div
       class="relative shrink-0 rounded-lg overflow-hidden cursor-pointer group"
       :class="compact ? 'size-10 shadow-sm' : 'size-14'"
-      @click="isPlayerExpanded = true"
+      @click="setPlayerExpanded(true)"
     >
-      <SImg :src="media.track?.cover" class="size-full" />
+      <SImg :src="media.track?.cover" class="size-full rounded-lg" data-player-cover="bar" />
       <div
+        data-player-cover-overlay
         class="absolute inset-0 z-10 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors duration-200"
       >
         <IconLucideChevronUp
