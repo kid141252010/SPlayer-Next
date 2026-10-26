@@ -94,6 +94,8 @@ export declare class AudioPlayer {
   setExclusiveMode(enabled: boolean): Promise<void>
   /** 注册事件回调，Rust 侧会在状态变化、位置更新、播放结束时主动调用 */
   onEvent(callback: (event: JsPlayerEvent) => void): void
+  /** 当前音源操作代次，用于 JS 丢弃已排队但被 load/stop/seek 取代的失败事件 */
+  getSourceGeneration(): number
   /** 当前平台是否支持原生音频设备监听 */
   supportsDeviceWatcher(): boolean
   /**
@@ -260,6 +262,10 @@ export interface JsPlayerEvent {
   type: string
   /** 状态（仅 stateChanged 时有值） */
   state?: string
+  /** 失败音源路径（仅 sourceError 时有值） */
+  source?: string
+  /** 失败音源的操作代次（仅 sourceError 时有值） */
+  sourceGeneration?: number
   /** 位置（秒，仅 position 时有值） */
   position?: number
   /** 时长（秒，仅 position 时有值） */
