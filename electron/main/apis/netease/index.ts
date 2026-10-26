@@ -47,6 +47,7 @@ const NON_CACHEABLE: ReadonlySet<string> = new Set([
   "login_status",
   "logout",
   "register_anonimous",
+  "deviceinfo_center_upload",
   "song_url",
   "song_download_url",
   "song_dynamic_cover",

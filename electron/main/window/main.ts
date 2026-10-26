@@ -9,7 +9,6 @@ import { store } from "@main/store";
 import { handleCacheProtocolOnPartition, MAIN_PARTITION } from "@main/utils/protocol";
 import { isAppQuitting } from "@main/utils/lifecycle";
 import { broadcast } from "@main/utils/broadcast";
-import { isWin } from "@main/utils/config";
 import { CURRENT_AGREEMENT_VERSION } from "@shared/constants/agreement";
 import { coreLog } from "@main/utils/logger";
 import { setMainWindowVisible, setPlayerExpanded } from "@main/utils/powerBlocker";
@@ -24,22 +23,27 @@ const isInternalNavigation = (url: string): boolean => {
 let mainWindow: BrowserWindow | null = null;
 let firstPaint: Promise<void> = Promise.resolve();
 let startupShown = false;
+let restoreLegacyMainState: (() => void) | undefined;
 
 /**
  * 创建主窗口
  */
 export const createMainWindow = (): BrowserWindow => {
   const remember = store.get("system.rememberWindowState") ?? true;
-  const saved = remember ? store.get("windowStates.main") : undefined;
+  /** 旧版窗口状态 */
+  const legacyState = remember ? store.get("windowStates.main") : undefined;
 
   // 注册 cache:// 协议
   handleCacheProtocolOnPartition(MAIN_PARTITION);
   const borderlessWindow = store.get("system.borderlessWindow") ?? true;
 
   mainWindow = createWindow({
-    width: saved?.width ?? 1280,
-    height: saved?.height ?? 800,
-    ...(saved?.x != null && saved?.y != null ? { x: saved.x, y: saved.y } : {}),
+    width: legacyState?.width ?? 1280,
+    height: legacyState?.height ?? 800,
+    x: legacyState?.x ?? undefined,
+    y: legacyState?.y ?? undefined,
+    // 位置、尺寸与最大化状态
+    ...(remember ? { name: "main-window", windowStatePersistence: true } : {}),
     frame: !borderlessWindow,
     webPreferences: {
       partition: MAIN_PARTITION,
@@ -49,16 +53,32 @@ export const createMainWindow = (): BrowserWindow => {
     },
   });
 
-  // Electron 43 在混合 DPI 下会先按主屏缩放创建窗口，定位到目标屏幕后需重新应用边界
-  if (isWin && saved?.x != null && saved?.y != null) {
-    mainWindow.setBounds({
-      width: saved.width,
-      height: saved.height,
-      x: saved.x,
-      y: saved.y,
-    });
+  const win = mainWindow;
+  restoreLegacyMainState = undefined;
+  if (legacyState) {
+    let restorationStarted = false;
+    let consumed = false;
+    const consumeLegacyState = (): void => {
+      if (consumed || !restorationStarted || win.isDestroyed() || !win.isVisible()) return;
+      // 最大化在部分平台异步完成；未真正显示为目标状态时仍保留旧记录以便重试。
+      if (legacyState.maximized && !win.isMaximized()) return;
+      consumed = true;
+      win.removeListener("maximize", consumeLegacyState);
+      win.removeListener("show", consumeLegacyState);
+      // 仅消费主窗口记录。下次加载可能补回默认几何，但不会再补回旧最大化标记。
+      store.set("windowStates.main", undefined);
+      store.flushImmediate();
+    };
+    win.on("maximize", consumeLegacyState);
+    win.on("show", consumeLegacyState);
+    restoreLegacyMainState = () => {
+      if (consumed || win.isDestroyed() || !win.isVisible()) return;
+      restorationStarted = true;
+      // Electron 44 在 show() 中恢复原生 display mode；旧标记只能在首次迁移时补用。
+      if (legacyState.maximized && !win.isMaximized()) win.maximize();
+      consumeLegacyState();
+    };
   }
-
   startupShown = false;
   firstPaint = new Promise((resolve) => {
     mainWindow!.once("ready-to-show", resolve);
@@ -88,56 +108,21 @@ export const createMainWindow = (): BrowserWindow => {
     if (startupShown) applyMainWindowZoom();
   });
 
-  // 保存窗口状态
-  const saveWindowState = (): void => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    if (!(store.get("system.rememberWindowState") ?? true)) return;
-    const maximized = mainWindow.isMaximized();
-    const bounds = maximized
-      ? (mainWindow.getNormalBounds?.() ?? mainWindow.getBounds())
-      : mainWindow.getBounds();
-    store.set("windowStates.main", {
-      width: bounds.width,
-      height: bounds.height,
-      x: bounds.x,
-      y: bounds.y,
-      maximized,
-    });
-  };
-
-  // 防抖记录移动位置
-  let saveStateTimer: NodeJS.Timeout | null = null;
-  const scheduleSaveWindowState = (): void => {
-    if (saveStateTimer) clearTimeout(saveStateTimer);
-    saveStateTimer = setTimeout(() => {
-      saveStateTimer = null;
-      saveWindowState();
-    }, 400);
-  };
-
   // 系统级关闭（alt+F4 / 任务栏右键"关闭窗口"）统一隐藏到托盘；
   // 退出由渲染端自定义按钮或托盘"退出"菜单走 app.quit() 触发 isAppQuitting=true 放行
   mainWindow.on("close", (event) => {
-    if (isAppQuitting()) {
-      saveWindowState();
-      return;
-    }
+    if (isAppQuitting()) return;
     event.preventDefault();
     mainWindow?.hide();
   });
   // 最大化
   mainWindow.on("maximize", () => {
-    saveWindowState();
     broadcast("window:maximizeChange", true);
   });
   // 取消最大化
   mainWindow.on("unmaximize", () => {
-    saveWindowState();
     broadcast("window:maximizeChange", false);
   });
-  // 持久化窗口位置与尺寸
-  mainWindow.on("moved", scheduleSaveWindowState);
-  mainWindow.on("resized", scheduleSaveWindowState);
   // 全屏
   mainWindow.on("enter-full-screen", () => {
     broadcast("window:fullscreenChange", true);
@@ -190,8 +175,8 @@ export const createMainWindow = (): BrowserWindow => {
   mainWindow.on("closed", () => {
     setMainWindowVisible(false);
     setPlayerExpanded(false);
-    if (saveStateTimer) clearTimeout(saveStateTimer);
     mainWindow = null;
+    restoreLegacyMainState = undefined;
   });
 
   return mainWindow;
@@ -214,16 +199,13 @@ export const showReadyMainWindow = async (): Promise<void> => {
   await firstPaint;
   if (win.isDestroyed()) throw new Error("主窗口已关闭");
   if (startupShown) return;
-  startupShown = true;
   // file:// 导航可能重置构造参数中的缩放，只在首次绘制完成后校正。
   applyMainWindowZoom();
-  if (
-    (store.get("system.rememberWindowState") ?? true) &&
-    store.get("windowStates.main")?.maximized
-  ) {
-    win.maximize();
-  }
   win.show();
+  if (win.isDestroyed()) throw new Error("主窗口已关闭");
+  if (!win.isVisible()) throw new Error("主窗口未显示");
+  restoreLegacyMainState?.();
+  startupShown = true;
 };
 
 /** 显示并聚焦主窗口（最小化时自动恢复） */

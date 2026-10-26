@@ -4,8 +4,8 @@
 
 ## 环境要求
 
-- **Node.js** >= 22.19.0
-- **pnpm** >= 10
+- **Node.js** >= 24.0.0
+- **pnpm** >= 12
 - **Rust 工具链**（构建原生模块所需，见 [原生模块](/native)）
 
 ## 快速开始
@@ -41,8 +41,9 @@ pnpm build:linux   # 打包 Linux
 高级命令
 
 ```bash
-# 上面的构建命令默认会构建当前平台和架构的全部 target。可以通过下面的方法指定只打包某些 target
-pnpm build:win nsis       # 打包 Windows 的 nsis 格式
+# Windows 默认仅构建 x64 NSIS 安装包；验证时禁止发布
+pnpm build:win --publish never
+# macOS / Linux 可继续指定 target
 pnpm build:mac dmg        # 打包 macOS 的 dmg 格式
 pnpm build:linux tar.gz   # 打包 Linux 的 tar.gz 格式
 # 全部 target 的列表详见 https://www.electron.build/docs/targets
@@ -58,7 +59,24 @@ pnpm typecheck        # tsc + vue-tsc（node + web 双目标）
 pnpm lint             # ESLint
 pnpm format           # Prettier
 pnpm build:native     # 仅构建 Rust 原生模块（加 `--dev` 为 debug 构建）
+pnpm test             # 主进程与渲染层行为回归
+pnpm test:native      # Rust workspace 回归
 ```
+
+## 将 dev 集成到 master
+
+同步入口使用 Node.js 24 和 `packageManager` 锁定的 pnpm 12。运行前提交当前改动；未跟踪文件也会阻止同步。
+
+```bash
+pnpm sync:master         # 仅本地集成，不发布
+pnpm sync:master --push  # 发布集成分支并创建或复用面向 master 的 PR
+```
+
+脚本固定最新 `origin/master` 与 `upstream/dev`（没有 upstream 时使用 `origin/dev`），在独立兄弟 worktree 中合并，不切换或合并当前工作区的 master/dev。冲突或检查失败会保留现场并打印路径，不 stash、不覆盖已有分支，也不强推。
+
+集成结果必须通过冻结锁文件安装、类型检查和测试；`--push` 只推送集成分支，绝不直接推送 master。手动 **Sync Dev to Master** 工作流复用相同入口，已停用定时直推。面向 master 的 PR 会执行 CI、测试与 Windows/macOS/Linux 构建；使用 merge commit 合入以保留上游祖先关系。
+
+若同步工作流使用 `GITHUB_TOKEN` 创建 PR，GitHub 不会因此触发下游 push/PR 工作流。应配置具备仓库及工作流权限的 `SYNC_TOKEN`，或由用户关闭再重新打开 PR 触发检查；也可在集成分支手动运行 Test、Build Dev，但这不代表其他 PR 必需检查已经通过。发布前仍需验收真实播放、旧凭据解密和窗口状态迁移。
 
 ## 项目结构
 
