@@ -14,16 +14,11 @@ import {
 import { navigateToAlbum } from "@/utils/navigate";
 import SongList from "@/components/list/SongList.vue";
 import { formatTime } from "@/utils/time";
+import { coverTransitionActive, getCoverPreview } from "@/services/coverTransition";
 import * as player from "@/core/player";
 import artistFallback from "@/assets/images/artist.jpg";
-import IconLucideDisc3 from "~icons/lucide/disc-3";
-import IconLucideListMusic from "~icons/lucide/list-music";
-import IconLucideHourglass from "~icons/lucide/hourglass";
-import IconLucideMusic from "~icons/lucide/music";
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
 import IconLucideListChecks from "~icons/lucide/list-checks";
-import IconMaterialSymbolsFavoriteRounded from "~icons/material-symbols/favorite-rounded";
-import IconMaterialSymbolsFavoriteOutlineRounded from "~icons/material-symbols/favorite-outline-rounded";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -61,6 +56,13 @@ const loadingMoreReleases = ref(false);
 
 /** 在线头像未到位时，用任一曲目的封面顶替 */
 const fallbackTrackCover = computed(() => artist.value?.tracks.find((t) => t.cover)?.cover);
+const preview = getCoverPreview(route.fullPath);
+const artistName = computed(() => artist.value?.name ?? preview?.title);
+const avatarSource = computed(() =>
+  coverTransitionActive.value && preview
+    ? preview.cover
+    : (artist.value?.avatar ?? preview?.cover ?? fallbackTrackCover.value),
+);
 
 /** 折叠状态 */
 const collapsed = ref(false);
@@ -351,16 +353,17 @@ const compilationItems = computed<CoverItem[]>(() => formatCoverList(artist.valu
 <template>
   <div class="flex flex-col h-full">
     <!-- 头部信息 -->
-    <div v-if="artist" class="shrink-0 px-5 pb-2">
+    <div v-if="artist || preview" class="shrink-0 px-5 pb-2">
       <div
         class="flex mt-2 transition-[gap,margin] duration-300"
         :class="collapsed ? 'gap-3 mb-3' : 'gap-5 mb-4'"
       >
         <!-- 头像 -->
-        <SImg
-          :src="artist.avatar ?? fallbackTrackCover"
-          :fallback="artistFallback"
-          :alt="artist.name"
+        <DetailCover
+          :src="avatarSource"
+          :fallback="preview?.cover ?? artistFallback"
+          :alt="artistName"
+          data-cover-hero
           class="shrink-0 rounded-full transition-[width,height] duration-300"
           :class="collapsed ? 'size-20' : 'size-40'"
         />
@@ -374,7 +377,7 @@ const compilationItems = computed<CoverItem[]>(() => formatCoverList(artist.valu
               class="font-bold text-on-surface truncate lh-normal transition-[font-size,line-height] duration-300"
               :class="collapsed ? 'text-xl' : 'text-3xl'"
             >
-              {{ artist.name }}
+              {{ artistName }}
             </h1>
             <div
               class="grid transition-[grid-template-rows,opacity] duration-300"
@@ -385,9 +388,13 @@ const compilationItems = computed<CoverItem[]>(() => formatCoverList(artist.valu
               >
                 <span class="flex items-center gap-1">
                   <IconLucideListMusic class="shrink-0" />
-                  {{ t("common.totalSongs", { count: artist.trackCount }) }}
+                  {{
+                    t("common.totalSongs", {
+                      count: artist?.trackCount ?? preview?.trackCount ?? 0,
+                    })
+                  }}
                 </span>
-                <span v-if="artist.albumCount" class="flex items-center gap-1">
+                <span v-if="artist?.albumCount" class="flex items-center gap-1">
                   <IconLucideDisc3 class="shrink-0" />
                   {{ t("common.totalAlbums", { count: artist.albumCount }) }}
                 </span>
@@ -405,7 +412,7 @@ const compilationItems = computed<CoverItem[]>(() => formatCoverList(artist.valu
                 type="primary"
                 variant="secondary"
                 round
-                :disabled="artist.tracks.length === 0 || activeTab !== 'songs'"
+                :disabled="!artist?.tracks.length || activeTab !== 'songs'"
                 @click="handlePlayAll"
               >
                 <template #icon>
@@ -428,12 +435,12 @@ const compilationItems = computed<CoverItem[]>(() => formatCoverList(artist.valu
               </SButton>
               <SDropdownMenu
                 :items="moreMenuItems"
-                :disabled="activeTab !== 'songs'"
+                :disabled="!artist || activeTab !== 'songs'"
                 align="start"
                 @select="handleMoreMenu"
               >
                 <template #trigger>
-                  <SButton variant="secondary" circle :disabled="activeTab !== 'songs'">
+                  <SButton variant="secondary" circle :disabled="!artist || activeTab !== 'songs'">
                     <template #icon>
                       <IconLucideEllipsis />
                     </template>
@@ -484,6 +491,7 @@ const compilationItems = computed<CoverItem[]>(() => formatCoverList(artist.valu
               :show-size="source === 'local'"
               :has-more="hasMoreSongs"
               :loading-more="loadingMore"
+              sort-key="artist"
               enable-sort
               @scroll="handleListScroll"
               @change="loadArtist"

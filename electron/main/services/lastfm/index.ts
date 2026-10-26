@@ -20,11 +20,15 @@ const cfg = () => store.get("lastfm");
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** 启动初始化：载入本地凭证并接线 scrobbler 回调 */
-export const init = (): void => {
-  session = credentials.load();
-  if (session) lastfmLog.info(`已载入 Last.fm 凭证: ${session.username}`);
+export const init = async (): Promise<void> => {
+  const credentialsReady = credentials.load().then((loaded) => {
+    session = loaded;
+    if (session) lastfmLog.info(`已载入 Last.fm 凭证: ${session.username}`);
+  });
+  // 播放器不会等待初始化：先接线，再让每次报告等待同一份凭证加载结果。
   scrobbler.setHandlers({
-    onNowPlaying: (track) => {
+    onNowPlaying: async (track) => {
+      await credentialsReady;
       const config = cfg();
       if (!config.enabled || !config.nowPlaying || !session) return;
       client
@@ -37,7 +41,8 @@ export const init = (): void => {
         )
         .catch((err) => lastfmLog.warn("updateNowPlaying 失败:", err));
     },
-    onScrobble: (track) => {
+    onScrobble: async (track) => {
+      await credentialsReady;
       const config = cfg();
       if (!config.enabled || !config.scrobble || !session) return;
       client
@@ -53,6 +58,7 @@ export const init = (): void => {
         .catch((err) => lastfmLog.warn("scrobble 失败:", err));
     },
   });
+  await credentialsReady;
 };
 
 /** 配置变更副作用：关闭总开关时复位状态机 */
@@ -126,7 +132,7 @@ export const connect = async (): Promise<LastfmConnectResult> => {
       try {
         const result = await client.getSession(token);
         session = { username: result.name, sessionKey: result.key };
-        credentials.save(result.name, result.key);
+        await credentials.save(result.name, result.key);
         lastfmLog.info(`已连接 Last.fm: ${result.name}`);
         return { connected: true, username: result.name };
       } catch (err) {

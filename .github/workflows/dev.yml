@@ -1,4 +1,4 @@
-# Dev 分支推送构建
+# master 推送及面向 master 的 PR 三平台构建
 name: Build Dev
 
 on:
@@ -19,14 +19,16 @@ on:
       - "electron.vite.config.ts"
       - "tsconfig*.json"
       - ".github/workflows/dev.yml"
+  pull_request:
+    branches: [master]
   workflow_dispatch:
 
 concurrency:
-  group: dev-build-${{ github.ref }}
+  group: dev-build-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: 22.x
+  NODE_VERSION: 24.x
 
 jobs:
   build:

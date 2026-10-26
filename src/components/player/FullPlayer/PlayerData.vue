@@ -12,6 +12,7 @@ import {
 } from "@/utils/navigate";
 import { fetchSongAlbums, fetchSongArtists } from "@/apis/song/applemusic";
 import { getValidArtists } from "@shared/utils/track";
+import { setPlayerExpanded } from "@/services/playerTransition";
 
 const { t } = useI18n();
 
@@ -127,7 +128,7 @@ const goToResource = async (target: ResourceNavigationTarget | null): Promise<vo
       }
     }
   }
-  if (navigateToResource(target)) status.isPlayerExpanded = false;
+  if (navigateToResource(target)) setPlayerExpanded(false);
 };
 
 /** 来源标签 */
