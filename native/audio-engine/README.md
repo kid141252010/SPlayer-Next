@@ -44,3 +44,26 @@ pnpm --dir native/audio-engine test:integration
 ```
 
 测试默认加载模块目录下的 `audio-engine.node`，也可通过 `SPLAYER_AUDIO_ENGINE_MODULE` 指定 `.node` 的绝对路径。测试音源由临时 WAV 和本机 HTTP 服务提供，无需连接在线音乐服务。
+
+## Apple Music fMP4 首播
+
+`src/decoder/reader.rs` 仅对 `http://127.0.0.1:<port>/am-stream` 启用
+`AudioReaderOptions.ignore_index`，在 `avformat_open_input` 读取容器头之前设置
+`AVFMT_FLAG_IGNIDX`，避免首播为了建立分片索引而扫描整首音频。普通 HTTP 音源和本地文件
+保持默认开流行为；AM 仍使用可 seek 的 IO，总时长沿用代理 URL 中的 `duration`。
+
+工作区通过 `[patch.crates-io]` 使用 `vendor/ffmpeg_audio`，基于 crates.io 的
+`ffmpeg_audio 0.3.1`（上游提交 `d997800046723f22f823ddbcf45ea2e00601ef66`，
+仓库 `https://github.com/apoint123/ffmpeg-audio` 的 `crates/ffmpeg_audio`）。
+本地补丁仅增加 `AudioReaderOptions` 和 `AudioReader::with_options`，并将选项传递到
+解封装器；`AudioReader::new` 默认不忽略索引。未修改上游 HTTP、解码或重采样实现；
+FFmpeg 底层仍依赖原有 `ffmpeg_audio_sys`。升级依赖时应先核对上游是否已提供等价配置入口，
+再移除本地补丁；许可证保存在 `vendor/ffmpeg_audio/COPYING`。
+
+`src/decoder/tests/reader.rs` 覆盖首次开流不扫描后半首、完整解码 PCM 一致，以及未预建索引时
+先前跳再后跳的 PCM 一致。合成样本 `fragmented-alac.m4a` 是 48 秒、8 kHz、440 Hz 的
+单声道正弦波，每片约 16 秒，没有尾索引；测试运行不需要外部 FFmpeg。可在仓库根目录重新生成：
+
+```bash
+ffmpeg -v error -f lavfi -i "sine=frequency=440:sample_rate=8000:duration=48" -c:a alac -movflags empty_moov+default_base_moof+skip_trailer -frag_duration 16000000 -map_metadata -1 -y native/audio-engine/src/decoder/tests/fragmented-alac.m4a
+```

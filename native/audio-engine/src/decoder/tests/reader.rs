@@ -71,3 +71,107 @@ fn lazy_seek_http_source_short_circuits_tail_probe() {
     assert_eq!(next_buf, [0xAB; 10]);
     assert_eq!(source.inner.position(), 20);
 }
+
+const FRAGMENTED_ALAC: &[u8] = include_bytes!("fragmented-alac.m4a");
+
+struct TrackedAudio {
+    cursor: Cursor<&'static [u8]>,
+    furthest_read: Arc<std::sync::atomic::AtomicU64>,
+}
+
+impl Read for TrackedAudio {
+    fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
+        let count = self.cursor.read(bytes)?;
+        self.furthest_read
+            .fetch_max(self.cursor.position(), std::sync::atomic::Ordering::Relaxed);
+        Ok(count)
+    }
+}
+
+impl Seek for TrackedAudio {
+    fn seek(&mut self, from: SeekFrom) -> std::io::Result<u64> {
+        self.cursor.seek(from)
+    }
+}
+
+fn fragmented_reader(ignore_index: bool) -> (AudioReader, Arc<std::sync::atomic::AtomicU64>) {
+    let furthest_read = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let source = TrackedAudio {
+        cursor: Cursor::new(FRAGMENTED_ALAC),
+        furthest_read: Arc::clone(&furthest_read),
+    };
+    let reader = AudioReader::with_options(
+        LazySeekHttpSource::new(source, Some(FRAGMENTED_ALAC.len() as u64)),
+        AudioReaderOptions { ignore_index },
+    )
+    .unwrap();
+    (reader, furthest_read)
+}
+
+fn read_fragmented_pcm(reader: &mut AudioReader) -> Vec<f32> {
+    let mut resampler = reader
+        .build_resampler(
+            ResampleOptions::new()
+                .sample_rate(8000)
+                .channels(1)
+                .format::<f32>(),
+        )
+        .unwrap();
+    let mut pcm = Vec::new();
+    while let Some(frame) = reader.receive_frame().unwrap() {
+        resampler.process::<f32>(Some(&frame)).unwrap();
+        pcm.extend_from_slice(resampler.output_as::<f32>());
+    }
+    pcm
+}
+
+#[test]
+fn fragmented_stream_opens_without_scanning_later_fragments() {
+    // 48 秒的 440 Hz 单声道 ALAC，每片约 16 秒，无尾索引。
+    // 生成命令见 audio-engine/README.md，测试运行不依赖 ffmpeg 可执行文件。
+    let (mut reader, furthest_read) = fragmented_reader(true);
+    assert!(
+        furthest_read.load(std::sync::atomic::Ordering::Relaxed)
+            < (FRAGMENTED_ALAC.len() / 2) as u64,
+        "首播不应为了建立索引而读取后半首音频"
+    );
+    let pcm = read_fragmented_pcm(&mut reader);
+    assert_eq!(pcm.len(), 48 * 8000, "顺序解码不得丢帧或提前结束");
+
+    let (mut indexed, _) = fragmented_reader(false);
+    assert_eq!(pcm, read_fragmented_pcm(&mut indexed));
+}
+
+#[test]
+fn fragmented_stream_can_seek_forward_before_indexing_and_back_again() {
+    let (mut reference, _) = fragmented_reader(false);
+    let expected = read_fragmented_pcm(&mut reference);
+    let (mut reader, _) = fragmented_reader(true);
+    for second in [32, 4] {
+        reader
+            .seek(Duration::from_secs(second), SeekMode::Accurate)
+            .unwrap();
+        assert_eq!(
+            read_fragmented_pcm(&mut reader),
+            expected[second as usize * 8000..],
+            "跳转到 {second} 秒后的 PCM 必须与完整解码对应区间一致"
+        );
+    }
+}
+
+#[test]
+fn only_local_am_proxy_uses_lazy_fragment_indexing() {
+    assert!(is_am_stream(
+        "http://127.0.0.1:8862/am-stream?adamId=123&size=456&duration=48"
+    ));
+    for source in [
+        "https://example.com/am-stream?duration=48",
+        "http://127.0.0.1:8862/song.m4a?duration=48",
+        "http://127.0.0.1:8862/nested/am-stream?duration=48",
+        "http://127.0.0.1:8862/am-stream-other?duration=48",
+        "http://127.0.0.1.example.com:8862/am-stream?duration=48",
+        "C:/Music/am-stream.m4a",
+    ] {
+        assert!(!is_am_stream(source), "普通音源不应忽略索引: {source}");
+    }
+}
