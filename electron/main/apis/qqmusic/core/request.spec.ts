@@ -38,10 +38,10 @@ describe("QQ 搜索签名请求", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(
-      "https://u.y.qq.com/cgi-bin/musics.fcg?sign=zzc1e5fa52xvbbw2xnh0dllekgdd2hmt5j9ya7ea27b8",
+      "https://u.y.qq.com/cgi-bin/musics.fcg?sign=zzcfb9991bffdabwv8oespf5bkuwz5c7ue6q89c30b6d3",
     );
     expect(init.body).toBe(
-      '{"comm":{"ct":11,"cv":14090008,"v":14090008,"chid":"10003505","os_ver":"15","phonetype":"24122RKC7C","tmeAppID":"qqmusic","nettype":"NETWORK_WIFI","udid":"0","OpenUDID":"0","QIMEI36":"0","uin":"0"},"request":{"module":"test.module","method":"Test","param":{"text":"中文 /+="}}}',
+      '{"comm":{"ct":"11","cv":"14090508","v":"14090508","tmeAppID":"qqmusic","phonetype":"EBG-AN10","deviceScore":"553.47","devicelevel":"50","newdevicelevel":"20","rom":"HuaWei/EMOTION/EmotionUI_14.2.0","os_ver":"12","OpenUDID":"0","OpenUDID2":"0","QIMEI36":"0","udid":"0","chid":"0","aid":"0","oaid":"0","taid":"0","tid":"0","wid":"0","uid":"0","sid":"0","modeSwitch":"6","teenMode":"0","ui_mode":"2","nettype":"1020","v4ip":"","uin":"0"},"request":{"module":"test.module","method":"Test","param":{"text":"中文 /+="}}}',
     );
     expect(init.headers.Cookie).toBe("tmeLoginType=-1;");
   });
@@ -54,7 +54,7 @@ describe("QQ 搜索签名请求", () => {
     expect(init.headers.Cookie).toBe("uin=123456; qm_keyst=saved-key");
   });
 
-  it("四类搜索共用签名网关，并保留分页参数和结果映射", async () => {
+  it("四类搜索共用 DoSearchForQQMusicMobile 接口，并保留分页参数和结果映射", async () => {
     fetchMock.mockImplementation(
       async () =>
         new Response(
@@ -84,13 +84,24 @@ describe("QQ 搜索签名请求", () => {
       const result = await search({ keywords: "周杰伦", type, page: 2, limit: 50 });
       expect(result).toMatchObject({ code: 200, total: 100, [field]: [expected] });
       const [url, init] = fetchMock.mock.calls.at(-1)!;
-      expect(new URL(url).pathname).toBe("/cgi-bin/musics.fcg");
-      expect(new URL(url).searchParams.get("sign")).toMatch(/^zzc[a-z0-9]+$/);
+      expect(new URL(url).pathname).toBe("/cgi-bin/musicu.fcg");
       expect(JSON.parse(init.body)).toMatchObject({
-        comm: { tmeAppID: "qqmusiclight", cv: "1003006", uin: "0" },
+        comm: { tmeAppID: "qqmusic", cv: "14090508", uin: "0" },
         request: {
-          method: "DoSearchForQQMusicLite",
-          param: { query: "周杰伦", search_type: searchType, page_num: 2, num_per_page: 50 },
+          method: "DoSearchForQQMusicMobile",
+          param: {
+            query: "周杰伦",
+            search_type: searchType,
+            page_num: 2,
+            num_per_page: 50,
+            highlight: 0,
+            nqc_flag: 0,
+            multi_zhida: 0,
+            cat: 2,
+            grp: 1,
+            sin: 50,
+            sem: 0,
+          },
         },
       });
       expect(init.headers.Cookie).toBe("tmeLoginType=-1;");

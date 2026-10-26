@@ -51,39 +51,26 @@ interface MobilePlaylist {
   nickname?: string;
 }
 
-/** 生成移动端搜索请求所需的会话 ID */
-const createSearchId = (): string => {
-  const group = BigInt(Math.floor(Math.random() * 20) + 1);
-  const random = BigInt(Math.floor(Math.random() * 4194305));
-  const todayMs = BigInt(Date.now() % 86400000);
-  return String(group * 18014398509481984n + random * 4294967296n + todayMs);
-};
-
 const searchMobile = (keywords: string, page: number, limit: number, searchType: number) =>
   qmRequest<MobileSearchResponse>(
     "music.search.SearchCgiService",
-    "DoSearchForQQMusicLite",
+    "DoSearchForQQMusicMobile",
     {
-      search_id: createSearchId(),
-      remoteplace: "search.android.keyboard",
+      search_type: searchType,
       query: keywords,
       page_num: page,
       num_per_page: limit,
-      search_type: searchType,
       highlight: 0,
       nqc_flag: 0,
-      page_id: 1,
+      multi_zhida: 0,
+      cat: 2,
       grp: 1,
+      sin: (page - 1) * limit,
+      sem: 0,
     },
     {
       session: false,
       auth: false,
-      signed: true,
-      comm: {
-        tmeAppID: "qqmusiclight",
-        cv: "1003006",
-        v: "1003006",
-      },
     },
   );
 
