@@ -22,6 +22,13 @@ pnpm build:native         # Rust only; add `--dev` for debug
 
 `audio-engine` static-links FFmpeg via the `ffmpeg_audio` crate (vendor zip + cc-built at compile time). Zero environment dependency — no `FFMPEG_DIR` / `PKG_CONFIG_PATH`, no system FFmpeg required.
 
+## 默认构建与私房包交付
+
+- 用户要求“构建”“打包”或“私房菜”时，默认先将当前功能分支完整合并进 `master`，再切到 `master` 构建；已经在 `master` 时直接构建。用户明确指定例外时按该次要求执行。
+- 合并必须保留 `master` 和功能分支两侧的有效功能；冲突按实际实现整合，不用整文件覆盖或删功能来通过构建。
+- 完整构建包含所有适用原生模块的 Release 编译、主进程与渲染端类型检查、应用生产构建，以及 Windows x64 安装版和便携版；不得设置 `SKIP_NATIVE_BUILD`，不得用分支旧产物代替 `master` 的新产物。
+- 构建前提交必要的合并与冲突修复；构建后验证包内原生模块和本次改动路径，交付安装包路径、构建分支与提交号。默认不自动发布 GitHub Release、不擅自升级版本号。
+
 ## Shell
 
 The development shell is Git Bash on Windows. Write all terminal commands in bash syntax (`&&`, `cd`, etc.) — no PowerShell-only constructs. File paths remain in Windows format (backslashes).

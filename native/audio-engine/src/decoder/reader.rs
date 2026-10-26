@@ -1,5 +1,6 @@
 use super::input::AudioInput;
 use super::*;
+use ffmpeg_audio::AudioReaderOptions;
 
 impl DecoderData {
     /// 在已有 reader 上 seek，失败时调用方应回退到完整 load
@@ -158,6 +159,17 @@ pub(crate) fn extract_stream_duration(url: &str) -> Option<f64> {
     None
 }
 
+/// 仅本地 AM 代理输出按需解密的 fMP4，普通远端文件不改变索引行为。
+fn is_am_stream(source: &str) -> bool {
+    let Some(address) = source.strip_prefix("http://127.0.0.1:") else {
+        return false;
+    };
+    let Some((_, path)) = address.split_once('/') else {
+        return false;
+    };
+    path.split('?').next() == Some("am-stream")
+}
+
 /// 根据 source 协议打开音频：http(s) 走延迟 Range 源，其他走本地 File
 pub(super) fn open_source(
     source: &str,
@@ -167,7 +179,10 @@ pub(super) fn open_source(
         let http = HttpAudioSource::new_with_cancel_handle(source, &cancel_handle)?;
         let total_size = extract_stream_size(source);
         let lazy_http = LazySeekHttpSource::new(http, total_size);
-        let reader = AudioReader::new(AudioInput::new(lazy_http)?)
+        let options = AudioReaderOptions {
+            ignore_index: is_am_stream(source),
+        };
+        let reader = AudioReader::with_options(AudioInput::new(lazy_http)?, options)
             .with_context(|| format!("打开网络音频失败: {source}"))?;
         (reader, Some(cancel_handle))
     } else {

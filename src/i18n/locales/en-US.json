@@ -1863,6 +1863,7 @@
       "description": "Set the target country or region for Apple Music search and metadata retrieval",
       "cn": "Mainland China (cn)",
       "us": "United States (us)",
+      "ca": "Canada (ca)",
       "tr": "Turkey (tr)",
       "jp": "Japan (jp)",
       "kr": "South Korea (kr)"

@@ -8,7 +8,7 @@ export const APPLE_MUSIC_API_BASE = "https://api.music.apple.com/v1";
 export const APPLE_MUSIC_WEB_ORIGIN = "https://music.apple.com";
 
 /** 预设候选 storefront */
-export const PRESET_STOREFRONTS = ["cn", "us", "tr", "jp", "kr"] as const;
+export const PRESET_STOREFRONTS = ["cn", "us", "ca", "tr", "jp", "kr"] as const;
 export type PresetStorefront = (typeof PRESET_STOREFRONTS)[number];
 
 /** 默认 storefront */
