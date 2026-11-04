@@ -447,4 +447,30 @@ describe("下一曲真实预载", () => {
     ).toBeNull();
     expect(preloader.peekPreparedTrack(mocks.candidate.track as Track)?.preparedId).toBeTruthy();
   });
+
+  it("流媒体在未开启 cacheStreaming 时不启动预载，但 Apple Music 等在线音源仍可正常预载", async () => {
+    mocks.settings.system.cache.songCache.enabled = true;
+    mocks.settings.system.cache.songCache.cacheStreaming = false;
+    mocks.candidate.track = { id: "stream-song", source: "streaming" };
+    const preloader = await import("./nextTrackPreloader");
+    preloader.scheduleNextTrackPreload();
+    await flushPromises();
+    expect(mocks.resolve).not.toHaveBeenCalled();
+
+    mocks.candidate.track = { id: "am-song", source: "applemusic" };
+    mocks.resolve.mockResolvedValueOnce({
+      source: "C:/cache/am-song.bin",
+      provider: "cache",
+      fromCache: true,
+    });
+    preloader.scheduleNextTrackPreload();
+    await flushPromises();
+    expect(mocks.resolve).toHaveBeenCalledWith(
+      mocks.candidate.track,
+      expect.objectContaining({ silent: true }),
+    );
+    expect(
+      preloader.consumePreloadedTrack(mocks.candidate.track as Track)?.preparedId,
+    ).toBeTruthy();
+  });
 });

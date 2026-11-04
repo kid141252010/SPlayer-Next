@@ -34,8 +34,8 @@ const MAX_CACHED_FRAGMENTS = 8;
 const PREFETCH_AHEAD = 2;
 /** 单次普通请求超时时间（毫秒） */
 const DEFAULT_TIMEOUT_MS = 15_000;
-/** 覆盖上游密钥服务的 15 秒处理窗口与网络开销 */
-const KEY_TIMEOUT_MS = 20_000;
+/** 覆盖上游密钥服务的处理窗口与网络开销，适配宿主超时预算 */
+const KEY_TIMEOUT_MS = 12_000;
 /** 分片下载请求超时时间（毫秒），确保无损与高解析度音频切片有充裕缓冲时间 */
 const FRAGMENT_TIMEOUT_MS = 30_000;
 /** 网络请求最大失败重试次数 */

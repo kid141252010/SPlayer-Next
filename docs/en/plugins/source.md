@@ -114,7 +114,7 @@ Register a matching handler with `splayer.on` for each action.
 
 Register handlers with `splayer.on(action, handler)`, which returns `void`. `action` is the action name; `handler: (req) => Promise<res>` receives a host request and returns a result. Registering the same action again replaces its handler. Registration requires no permission; methods called inside a handler retain their own requirements.
 
-`musicUrl` has a 20-second timeout; other source actions have 15 seconds. Throw when no result is available. Built-in source resolution can try another plugin; independent source playback calls only the owning plugin.
+`musicUrl` has a 25-second timeout; other source actions have 15 seconds. Throw when no result is available. Built-in source resolution can try another plugin; independent source playback calls only the owning plugin.
 
 ### Playback URL {#musicurl}
 
