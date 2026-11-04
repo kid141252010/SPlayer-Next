@@ -9,15 +9,17 @@ const mocks = vi.hoisted(() => ({
   error: vi.fn(),
   lookup: vi.fn(),
   cacheLookup: vi.fn(),
+  pluginList: [] as any[],
+  resolveUrl: vi.fn(),
   settings: {
-    player: { songLevel: "hq", allowTrialPlay: false },
-    system: { cache: { songCache: { enabled: false } } },
+    player: { songLevel: "hq", allowTrialPlay: false, preferPluginSource: false },
+    system: { cache: { songCache: { enabled: false } }, system: { amStorefront: "cn" } },
   },
 }));
 vi.mock("@/stores/settings", () => ({
   useSettingsStore: () => mocks.settings,
 }));
-vi.mock("@/stores/plugins", () => ({ usePluginsStore: () => ({ list: [] }) }));
+vi.mock("@/stores/plugins", () => ({ usePluginsStore: () => ({ list: mocks.pluginList }) }));
 vi.mock("@/stores/user", () => ({ useUserStore: () => ({ isLoggedIn: false }) }));
 vi.mock("@/apis/song/netease", () => ({ resolveNeteaseUrl: mocks.netease }));
 vi.mock("@/apis/song/qqmusic", () => ({ resolveQQMusicUrl: mocks.qqmusic }));
@@ -28,11 +30,15 @@ import { resolveTrackSource } from "./audioSource";
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.lookup.mockReset().mockResolvedValue(null);
+  mocks.pluginList = [];
+  mocks.resolveUrl.mockReset();
   mocks.settings.system.cache.songCache.enabled = false;
+  mocks.settings.player.preferPluginSource = false;
   Object.assign(window, {
     api: {
       download: { lookup: mocks.lookup },
       cache: { song: { lookup: mocks.cacheLookup } },
+      plugins: { resolveUrl: mocks.resolveUrl },
     },
   });
 });
@@ -130,5 +136,51 @@ describe("音源解析失败原因", () => {
       duration: 1000,
     });
     expect(mocks.error).toHaveBeenCalledExactlyOnceWith(ErrorCode.NETEASE_UNAVAILABLE);
+  });
+});
+
+describe("音源插件瞬态重试", () => {
+  const amTrack: Track = {
+    id: "1720849925",
+    title: "Shape of You",
+    source: "applemusic",
+    artists: [{ name: "Ed Sheeran" }],
+    duration: 233000,
+  };
+
+  const amPlugin = {
+    manifest: { id: "1412.applemusic" },
+    enabled: true,
+    status: {
+      state: "ready",
+      sources: {
+        am: { actions: ["musicUrl"] },
+      },
+    },
+  };
+
+  it("遇上游冷启动超时异常时自动静默重试并在第二次成功返回", async () => {
+    mocks.pluginList = [amPlugin];
+    mocks.resolveUrl
+      .mockRejectedValueOnce(new Error("plugin 1412.applemusic request timeout"))
+      .mockResolvedValueOnce({ url: "http://127.0.0.1:23331/am-stream?test=1" });
+
+    const result = await resolveTrackSource(amTrack, { silent: true });
+    expect(result).toEqual({
+      source: "http://127.0.0.1:23331/am-stream?test=1",
+      fromCache: false,
+      provider: "plugin",
+      pluginId: "1412.applemusic",
+    });
+    expect(mocks.resolveUrl).toHaveBeenCalledTimes(2);
+  });
+
+  it("不可恢复错误不重试直接失败", async () => {
+    mocks.pluginList = [amPlugin];
+    mocks.resolveUrl.mockRejectedValueOnce(new Error("track not found in catalog"));
+
+    const result = await resolveTrackSource(amTrack, { silent: true });
+    expect(result).toBeNull();
+    expect(mocks.resolveUrl).toHaveBeenCalledTimes(1);
   });
 });

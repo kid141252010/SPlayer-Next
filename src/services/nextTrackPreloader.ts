@@ -220,9 +220,11 @@ export const scheduleNextTrackPreload = (): void => {
   }
 
   const candidateTrack = candidateResult.track;
+  const isStreaming = candidateTrack.source === "streaming";
+  const songCache = settings.system.cache.songCache;
   if (
     candidateTrack.source !== "local" &&
-    (!settings.system.cache.songCache.enabled || !settings.system.cache.songCache.cacheStreaming)
+    (!songCache.enabled || (isStreaming && !songCache.cacheStreaming))
   ) {
     invalidateNextTrackPreload();
     return;

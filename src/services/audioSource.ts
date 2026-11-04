@@ -72,6 +72,23 @@ export type OnlineResolveResult =
   | { ok: false; errorCode: ErrorCode };
 
 /**
+ * 判定插件解析异常是否为可静默重试的网络或超时异常
+ * @param err - 异常对象
+ * @returns 是否可重试
+ */
+const isRetryableResolveError = (err: unknown): boolean => {
+  if (!err) return false;
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    msg.includes("timeout") ||
+    msg.includes("network") ||
+    msg.includes("fetch failed") ||
+    msg.includes("econnreset") ||
+    msg.includes("etimedout")
+  );
+};
+
+/**
  * 通过插件解析曲目音频地址，独立来源直接调用所属插件
  * @param track - 待播放曲目
  * @param quality - 请求的音质档位，默认 hq
@@ -98,27 +115,40 @@ export const resolveByPlugin = async (
     ) {
       return fail(ErrorCode.NO_PLUGIN_AVAILABLE);
     }
-    try {
-      const res = await window.api.plugins.resolveUrl({
-        pluginId: origin.pluginId,
-        source: origin.source,
-        quality,
-        musicInfo: { ...origin.musicInfo, songmid: origin.musicInfo.id },
-      });
-      const current = plugins.list.find((info) => info.manifest.id === origin.pluginId);
-      if (
-        !current?.enabled ||
-        current.status.state !== "ready" ||
-        !current.status.sources[origin.source]?.actions.includes("musicUrl")
-      ) {
-        return fail(ErrorCode.NO_PLUGIN_AVAILABLE);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await window.api.plugins.resolveUrl({
+          pluginId: origin.pluginId,
+          source: origin.source,
+          quality,
+          musicInfo: { ...origin.musicInfo, songmid: origin.musicInfo.id },
+        });
+        const current = plugins.list.find((info) => info.manifest.id === origin.pluginId);
+        if (
+          !current?.enabled ||
+          current.status.state !== "ready" ||
+          !current.status.sources[origin.source]?.actions.includes("musicUrl")
+        ) {
+          return fail(ErrorCode.NO_PLUGIN_AVAILABLE);
+        }
+        return res?.url
+          ? {
+              ok: true,
+              url: res.url,
+              isTrial: false,
+              provider: "plugin",
+              pluginId: origin.pluginId,
+            }
+          : fail(ErrorCode.URL_RESOLVE_FAILED);
+      } catch (err) {
+        if (attempt === 0 && isRetryableResolveError(err)) {
+          console.info(`[plugin] ${origin.pluginId} 解析遇瞬态超时/网络波动，500ms 后静默重试`);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          continue;
+        }
+        console.warn("[plugin] resolveUrl failed", origin.pluginId, err);
+        return fail(ErrorCode.URL_RESOLVE_FAILED);
       }
-      return res?.url
-        ? { ok: true, url: res.url, isTrial: false, provider: "plugin", pluginId: origin.pluginId }
-        : fail(ErrorCode.URL_RESOLVE_FAILED);
-    } catch (err) {
-      console.warn("[plugin] resolveUrl failed", origin.pluginId, err);
-      return fail(ErrorCode.URL_RESOLVE_FAILED);
     }
   }
   if (!isOnlinePlatform(track.source)) return fail(ErrorCode.URL_RESOLVE_FAILED);
@@ -175,24 +205,33 @@ export const resolveByPlugin = async (
     },
   };
   for (const plugin of candidates) {
-    try {
-      const res = await window.api.plugins.resolveUrl({
-        pluginId: plugin.manifest.id,
-        source: pluginSource,
-        quality,
-        musicInfo,
-      });
-      if (res?.url) {
-        return {
-          ok: true,
-          url: res.url,
-          isTrial: false,
-          provider: "plugin",
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await window.api.plugins.resolveUrl({
           pluginId: plugin.manifest.id,
-        };
+          source: pluginSource,
+          quality,
+          musicInfo,
+        });
+        if (res?.url) {
+          return {
+            ok: true,
+            url: res.url,
+            isTrial: false,
+            provider: "plugin",
+            pluginId: plugin.manifest.id,
+          };
+        }
+        break;
+      } catch (err) {
+        if (attempt === 0 && isRetryableResolveError(err)) {
+          console.info(`[plugin] ${plugin.manifest.id} 解析遇瞬态超时/网络波动，500ms 后静默重试`);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          continue;
+        }
+        console.warn("[plugin] resolveUrl failed", plugin.manifest.id, err);
+        break;
       }
-    } catch (err) {
-      console.warn("[plugin] resolveUrl failed", plugin.manifest.id, err);
     }
   }
   return fail(ErrorCode.URL_RESOLVE_FAILED);
