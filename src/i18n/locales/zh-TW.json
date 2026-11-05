@@ -1,0 +1,2390 @@
+{
+  "update": {
+    "dialogTitle": "發現新版本",
+    "later": "稍後",
+    "download": "下載",
+    "downloading": "下載中",
+    "installNow": "立即重啟安裝",
+    "goDownload": "前往下載頁",
+    "goStore": "前往商店更新",
+    "upToDate": "當前通道暫無更高版本",
+    "readyToast": "更新已就緒，可重啟安裝",
+    "failed": "更新失敗，請稍後重試",
+    "installing": "正在啟動安裝程式"
+  },
+  "onboarding": {
+    "next": "下一步",
+    "back": "上一步",
+    "finish": "完成",
+    "footer": "可隨時在「設定」中調整本次未配置的內容",
+    "welcome": {
+      "title": "歡迎使用 SPlayer-Next",
+      "subtitle": "一個現代化的桌面音樂播放器，完成幾步設定即可開始享用",
+      "start": "開始設定",
+      "features": {
+        "local": {
+          "title": "本地音樂庫",
+          "desc": "掃描本地目錄，自動整理音樂庫"
+        },
+        "quality": {
+          "title": "無損音質",
+          "desc": "原生音訊引擎，支援多種無損格式"
+        },
+        "streaming": {
+          "title": "流媒體伺服器",
+          "desc": "Subsonic / Jellyfin / Emby 等"
+        },
+        "lyrics": {
+          "title": "豐富歌詞體驗",
+          "desc": "AMLL 逐字歌詞，桌面歌詞、靈動島、工作列歌詞"
+        }
+      }
+    },
+    "agreement": {
+      "title": "使用者協議與免責宣告",
+      "subtitle": "繼續使用前，請閱讀並同意以下協議",
+      "scrollHint": "請滾動閱讀至結尾後再勾選",
+      "agree": "我已閱讀並同意《使用者協議與免責宣告》",
+      "accept": "同意並繼續"
+    },
+    "library": {
+      "title": "本地音樂庫",
+      "subtitle": "新增要掃描的音樂資料夾，SPlayer-Next 會自動建立曲庫索引。可以新增多個目錄，也可以之後再新增"
+    },
+    "streaming": {
+      "title": "流媒體伺服器",
+      "subtitle": "SPlayer-Next 支援連線 Subsonic 相容服務和 Jellyfin / Emby，讓你的家庭音樂伺服器與播放器無縫整合",
+      "hint": "完成引導後，前往「設定 → 媒體源配置 → 流媒體管理」即可新增伺服器並測試連線",
+      "servers": {
+        "subsonic": "Subsonic 相容",
+        "navidrome": "Navidrome",
+        "jellyfin": "Jellyfin",
+        "emby": "Emby"
+      }
+    },
+    "preferences": {
+      "title": "語言與主題",
+      "subtitle": "選擇介面語言與主題，進入應用後還可在「設定」中進一步調整",
+      "languageLabel": "介面語言",
+      "modeLabel": "主題模式",
+      "colorLabel": "主色調"
+    },
+    "hotkeys": {
+      "title": "快捷鍵",
+      "subtitle": "SPlayer-Next 內建了完整的播放控制快捷鍵，需要時隨時呼叫",
+      "tips": {
+        "global": {
+          "title": "全域性快捷鍵",
+          "desc": "無需聚焦應用視窗，例如媒體鍵即可控制播放、暫停、切歌"
+        },
+        "local": {
+          "title": "應用內快捷鍵",
+          "desc": "空格鍵播放暫停、左右切歌、Ctrl+F 搜尋等常用操作"
+        },
+        "customize": {
+          "title": "自由定製",
+          "desc": "「設定 → 快捷鍵」中可以檢視完整列表並修改繫結"
+        }
+      }
+    }
+  },
+  "agreementUpdate": {
+    "title": "使用者協議與免責宣告已更新",
+    "subtitle": "協議內容有變更，請重新閱讀並同意後繼續使用",
+    "accept": "我已閱讀並同意，繼續使用",
+    "reject": "不同意並退出"
+  },
+  "common": {
+    "back": "返回",
+    "confirm": "確認",
+    "cancel": "取消",
+    "close": "關閉",
+    "configure": "配置",
+    "more": "更多",
+    "save": "儲存",
+    "add": "新增",
+    "edit": "編輯",
+    "delete": "刪除",
+    "enable": "啟用",
+    "enabled": "已啟用",
+    "disabled": "未啟用",
+    "active": "已啟用",
+    "saveAndRelaunch": "儲存並重啟",
+    "reset": "重置",
+    "retry": "重試",
+    "prev": "上一頁",
+    "next": "下一頁",
+    "search": "搜尋",
+    "loading": "載入中",
+    "noData": "暫無資料",
+    "noMore": "沒有更多了 ~",
+    "refreshCache": "重新整理快取",
+    "success": "成功",
+    "copied": "已複製",
+    "copyFailed": "複製失敗",
+    "playAll": "播放全部",
+    "totalSongs": "共 {count} 首",
+    "totalAlbums": "共 {count} 張專輯",
+    "totalArtists": "共 {count} 位歌手",
+    "totalPlaylists": "共 {count} 個歌單"
+  },
+  "comments": {
+    "name": "歌曲評論",
+    "title": "「{name}」的評論",
+    "hot": "熱門評論",
+    "new": "最新評論",
+    "loading": "評論載入中...",
+    "empty": "暫無評論",
+    "noSource": "沒有可用的評論來源",
+    "location": "來自{location}",
+    "page": "第 {page} / {total} 頁"
+  },
+  "equalizer": {
+    "title": "均衡器",
+    "preamp": "前級",
+    "preset": {
+      "label": "預設",
+      "flat": "預設",
+      "pop": "流行",
+      "rock": "搖滾",
+      "classical": "古典",
+      "electronic": "電子",
+      "bass": "重低音",
+      "vocal": "人聲",
+      "dance": "舞曲",
+      "soft": "輕音樂",
+      "custom": "自定義"
+    }
+  },
+  "speed": {
+    "title": "播放速度",
+    "speed": "速度",
+    "pitchSync": "音調同步",
+    "pitchSyncTip": "變速時保持原音調",
+    "pitch": "音調",
+    "semitone": "{n} 半音"
+  },
+  "autoClose": {
+    "title": "定時關閉",
+    "duration": "時長",
+    "unitHint": "單位：分鐘",
+    "custom": "自定義",
+    "minute": "{n} 分鐘",
+    "waitSongEnd": "等待整首歌曲結束",
+    "waitSongEndTip": "到時間後等本曲播放完再停",
+    "remaining": "剩餘時間",
+    "start": "啟用",
+    "update": "更新",
+    "stop": "關閉定時"
+  },
+  "abLoop": {
+    "title": "AB 迴圈",
+    "enable": "啟用迴圈",
+    "enableTip": "需要先設定 A 與 B 兩個點，且 B > A",
+    "pointA": "起點 A",
+    "pointB": "終點 B",
+    "setCurrent": "設為當前",
+    "clear": "清除",
+    "minus": "-{n}s",
+    "plus": "+{n}s",
+    "warningBLessThanA": "B 點必須晚於 A 點，迴圈未啟用"
+  },
+  "uiZoom": {
+    "title": "介面縮放",
+    "range": "可調節範圍：50% - 200%",
+    "reset": "恢復預設"
+  },
+  "nav": {
+    "home": "首頁",
+    "library": "音樂庫",
+    "liked": "我喜歡的音樂",
+    "history": "播放歷史",
+    "download": "下載管理",
+    "favorites": "我的收藏",
+    "cloud": "我的雲盤",
+    "streaming": "媒體源",
+    "stats": "統計",
+    "reload": "熱過載",
+    "devtools": "開發者工具",
+    "globalSettings": "全域性設定",
+    "searchPlaceholder": "搜尋歌曲、歌手或專輯",
+    "searchEmpty": "輸入關鍵詞開始搜尋",
+    "searchGoto": "搜尋「{keyword}」",
+    "searchSection": {
+      "quick": "快捷",
+      "history": "搜尋歷史",
+      "hot": "熱搜榜"
+    },
+    "searchMenu": {
+      "copy": "複製",
+      "paste": "貼上",
+      "pasteSearch": "貼上並搜尋"
+    },
+    "menu": {
+      "hideFromSidebar": "在側邊欄中隱藏",
+      "customizeSidebar": "自定義側邊欄"
+    },
+    "link": {
+      "song": "直接播放「{id}」",
+      "album": "前往專輯「{id}」",
+      "artist": "前往歌手「{id}」",
+      "playlist": "前往歌單「{id}」"
+    }
+  },
+  "recognition": {
+    "title": "聽歌識曲",
+    "entry": "聽歌識曲",
+    "description": "識別正在播放的音樂",
+    "start": "開始識別",
+    "sourceLabel": "音訊來源",
+    "hint": {
+      "system": "我們會採集系統中的一小段聲音進行識別",
+      "microphone": "靠近聲源並保持環境安靜，識別效果會更好"
+    },
+    "source": {
+      "system": "系統聲音",
+      "microphone": "麥克風"
+    },
+    "phase": {
+      "capturing": "正在收聽…",
+      "fingerprinting": "正在生成指紋…",
+      "matching": "正在匹配曲庫…"
+    },
+    "empty": "沒有識別到歌曲，請靠近聲源重試",
+    "retry": "再試一次",
+    "cancel": "取消",
+    "play": "播放",
+    "unavailable": "當前裝置不支援聽歌識曲",
+    "searching": "搜尋此歌曲",
+    "error": {
+      "unsupported": "當前平臺不支援本機採集",
+      "no-device": "未找到可用的音訊裝置",
+      "permission-denied": "缺少麥克風許可權，請在系統設定中授權",
+      "capture-failed": "音訊採集失敗",
+      "silent-input": "沒有采集到聲音，請檢查音訊輸出",
+      "network": "匹配服務不可用，請稍後重試",
+      "afp-unavailable": "音訊指紋庫不可用",
+      "unknown": "識別失敗，請重試"
+    }
+  },
+  "home": {
+    "greetingLine": "{greeting}，{name}",
+    "greeting": {
+      "dawn": "凌晨好",
+      "morning": "早上好",
+      "noon": "中午好",
+      "afternoon": "下午好",
+      "evening": "晚上好"
+    },
+    "stats": {
+      "weekDuration": "本週時長",
+      "newFavorites": "新增收藏",
+      "listenStreak": "連續收聽",
+      "unitHour": "h",
+      "unitSong": "首",
+      "unitDay": "天"
+    },
+    "duration": {
+      "hm": "{hours} 小時 {minutes} 分鐘",
+      "hours": "{hours} 小時",
+      "minutes": "{minutes} 分鐘"
+    },
+    "subtitle": {
+      "plain1": "願今天有好音樂與你相伴",
+      "plain2": "戴上耳機，讓世界安靜一會兒",
+      "plain3": "音樂已就緒，挑一首開始吧",
+      "streak": "你已連續收聽 {days} 天，繼續保持",
+      "weekListened": "本週已經聽了 {duration}",
+      "weekMore": "本週比上週多聽了 {duration}",
+      "weekLess": "本週比上週少聽了 {duration}",
+      "favorites": "本週新收藏了 {count} 首歌",
+      "recent": "今天想聽點什麼？繼續上次的 {count} 首最近播放吧"
+    },
+    "quickActions": {
+      "luck": {
+        "title": "試試手氣",
+        "desc": "隨機播放一首",
+        "empty": "曲庫裡還沒有歌曲"
+      },
+      "daily": {
+        "title": "每日推薦",
+        "desc": "每天為你精選"
+      },
+      "heartMode": {
+        "title": "心動模式",
+        "desc": "根據喜好智慧播放"
+      },
+      "fm": {
+        "title": "私人 FM",
+        "desc": "為你不停推薦"
+      }
+    },
+    "continue": {
+      "repeatTitle": "反覆聆聽",
+      "repeatSubtitle": "你最常聽的 {count} 首歌",
+      "continueTitle": "繼續聆聽",
+      "continueSubtitle": "你最近在聽的 {count} 首歌",
+      "empty": "還沒有播放記錄，去聽點什麼吧",
+      "playCount": "播放 {count} 次"
+    },
+    "recommend": {
+      "title": "專屬歌單",
+      "titleGuest": "推薦歌單",
+      "subtitle": "為你量身定製的歌單精選",
+      "subtitleGuest": "大家都在聽的熱門歌單"
+    },
+    "radar": {
+      "title": "雷達歌單",
+      "subtitle": "持續推薦符合你的音樂口味"
+    },
+    "artists": {
+      "title": "歌手推薦",
+      "subtitle": "發現你可能喜歡的音樂人"
+    },
+    "albums": {
+      "title": "新碟上架",
+      "subtitle": "新鮮出爐的專輯"
+    },
+    "hero": {
+      "play": "立即播放",
+      "addQueue": "新增到佇列",
+      "empty": "暫無可播放的曲目",
+      "added": "已新增 {count} 首到播放佇列",
+      "daily": {
+        "tag": "每日推薦",
+        "title": "從「{song}」聽起",
+        "subtitle": "根據你的口味精選 · {count} 首"
+      },
+      "local": {
+        "tag": "本地曲庫",
+        "title": "隨機翻到了「{song}」",
+        "subtitle": "從本地曲庫隨機精選 · {count} 首"
+      },
+      "liked": {
+        "tag": "我的最愛",
+        "title": "聽聽你喜歡的音樂吧~",
+        "subtitle": "你收藏的全部音樂 · {count} 首"
+      }
+    }
+  },
+  "login": {
+    "qrTipWaiting": "請開啟 APP 掃碼登入",
+    "qrTipScanned": "掃描成功，請在 APP 中確認登入",
+    "qrTipExpired": "二維碼已過期，正在重試",
+    "qrTipDone": "登入成功",
+    "qrTipUnknown": "狀態異常，請重試",
+    "qrRefresh": "重新整理二維碼",
+    "autoFetch": "自動獲取",
+    "autoFetchTitle": "使用前告知",
+    "autoFetchTip": "該功能無法保證賬號絕對安全，請自行判斷是否使用。開啟視窗後如出現白屏或無法點選，請關閉並重試",
+    "autoFetchConfirm": "我已瞭解",
+    "manualCookie": "手動輸入",
+    "cookieHint": "只需 Cookie 中的 MUSIC_U 欄位，例如：MUSIC_U=xxxx;",
+    "cookiePlaceholder": "貼上 Cookie，至少需要 MUSIC_U=xxx;",
+    "cookieInvalid": "Cookie 無效，必須包含 MUSIC_U",
+    "cookieConfirm": "登入",
+    "success": "登入成功",
+    "failed": "登入失敗，請重試",
+    "unknownUser": "未知使用者",
+    "logout": "退出登入",
+    "logoutConfirmTitle": "退出登入",
+    "logoutConfirmDesc": "確認退出當前賬號？",
+    "logoutDone": "已退出登入"
+  },
+  "search": {
+    "title": "搜尋",
+    "plugins": "外掛",
+    "pluginSource": "選擇音源",
+    "titleSuffix": "的搜尋結果",
+    "emptyKeyword": "請輸入關鍵詞開始搜尋",
+    "noResults": "沒有找到匹配內容",
+    "noResultsHint": "換個關鍵詞或切換音源試試",
+    "errorTitle": "搜尋失敗",
+    "tabs": {
+      "songs": "單曲",
+      "albums": "專輯",
+      "artists": "歌手",
+      "playlists": "歌單"
+    }
+  },
+  "streaming": {
+    "favoritesOnly": "僅看收藏",
+    "hint": "連線到媒體源",
+    "hintDetail": "新增個人流媒體伺服器，配置內容全程加密",
+    "errorCode": {
+      "auth": "鑑權失敗",
+      "network": "網路錯誤",
+      "protocol": "協議錯誤",
+      "unknown": "未知錯誤"
+    },
+    "tabs": {
+      "songs": "歌曲",
+      "albums": "專輯",
+      "artists": "歌手",
+      "playlists": "歌單"
+    },
+    "empty": {
+      "noFavorites": "當前伺服器暫無收藏歌曲",
+      "noServer": "尚未配置流媒體伺服器",
+      "addHint": "點選右上角新增一個開始使用",
+      "goToSettings": "前往設定新增",
+      "notConnected": "未連線到伺服器",
+      "noResults": "沒有找到內容"
+    },
+    "server": {
+      "type": "型別",
+      "name": "名稱",
+      "namePlaceholder": "用於識別的別名",
+      "url": "伺服器地址",
+      "username": "使用者名稱",
+      "password": "密碼",
+      "test": "測試連線",
+      "testOk": "連線成功",
+      "testFail": "連線失敗",
+      "add": "新增媒體源",
+      "edit": "編輯伺服器",
+      "added": "伺服器已新增",
+      "updated": "伺服器已更新",
+      "removed": "伺服器已刪除",
+      "deleteConfirmTitle": "刪除伺服器",
+      "deleteConfirm": "確定刪除伺服器「{name}」嗎？此操作不可撤銷。",
+      "connect": "連線",
+      "connected": "已連線",
+      "connectFailed": "連線失敗",
+      "disconnect": "斷開",
+      "disconnected": "已斷開",
+      "active": "當前啟用",
+      "lastConnected": "最近連線",
+      "errors": {
+        "nameEmpty": "請輸入伺服器名稱",
+        "urlInvalid": "請輸入合法的 URL（http:// 或 https://）",
+        "usernameEmpty": "請輸入使用者名稱",
+        "passwordEmpty": "請輸入密碼"
+      }
+    },
+    "actions": {
+      "settings": "流媒體配置"
+    }
+  },
+  "player": {
+    "prev": "上一首",
+    "next": "下一首",
+    "transitioning": "過渡",
+    "heartMode": {
+      "needLogin": "登入後才能使用心動模式",
+      "noSeed": "暫無可用的心動種子歌曲",
+      "loading": "正在開啟心動模式…",
+      "entered": "已開啟心動模式",
+      "already": "已處於心動模式",
+      "failed": "心動模式開啟失敗，請稍後重試"
+    },
+    "fm": {
+      "needLogin": "登入後才能使用私人 FM",
+      "loading": "正在開啟私人 FM…",
+      "entered": "已開啟私人 FM",
+      "already": "已處於私人 FM",
+      "failed": "私人 FM 開啟失敗，請稍後重試",
+      "modeSettings": "私人 FM 模式選擇",
+      "modeTooltip": "FM 模式與場景",
+      "modeSettingsTip": "選擇喜好的推薦模式與場景"
+    },
+    "lyricOffset": {
+      "title": "歌詞偏移",
+      "hint": "正值為歌詞提前，單位毫秒"
+    },
+    "lyricCredit": "歌詞製作",
+    "copyLyric": {
+      "title": "複製歌詞",
+      "contentLabel": "要複製的內容",
+      "translation": "翻譯",
+      "romaji": "音譯",
+      "emptyLine": "空行",
+      "songName": "歌名",
+      "artist": "歌手",
+      "selectAll": "全選",
+      "deselectAll": "全不選",
+      "invert": "反選",
+      "selected": "已選 {n} 行",
+      "copy": "複製",
+      "copyRaw": "複製原文",
+      "exportImage": "匯出圖片",
+      "saved": "已儲存到下載資料夾",
+      "fileSuffix": "歌詞分享",
+      "exportFailed": "匯出圖片失敗",
+      "empty": "沒有可複製的內容"
+    },
+    "repeatMode": {
+      "list": "列表迴圈",
+      "one": "單曲迴圈"
+    },
+    "shuffleMode": {
+      "on": "隨機播放",
+      "off": "順序播放"
+    }
+  },
+  "songList": {
+    "title": "標題",
+    "album": "專輯",
+    "actions": "操作",
+    "size": "大小",
+    "duration": "時長",
+    "noResults": "沒有匹配的歌曲",
+    "sort": {
+      "mode": "排列方式",
+      "order": "排序方向",
+      "default": "預設",
+      "asc": "正序",
+      "desc": "倒序",
+      "byTitle": "按標題",
+      "byArtist": "按歌手",
+      "byAlbum": "按專輯",
+      "byPath": "按檔案路徑",
+      "byDuration": "按時長",
+      "bySize": "按大小",
+      "byMtime": "按修改時間",
+      "byCtime": "按建立時間",
+      "byName": "按名稱",
+      "byTrackCount": "按歌曲數量",
+      "byTrack": "按曲目編號"
+    },
+    "context": {
+      "play": "播放",
+      "playNext": "下一首播放",
+      "showInExplorer": "開啟檔案位置",
+      "copyFile": "複製歌曲檔案",
+      "copyPath": "複製檔案路徑",
+      "editTags": "編輯後設資料",
+      "download": "下載歌曲",
+      "deleteFile": "刪除檔案",
+      "searchSame": "同名搜尋",
+      "more": "更多操作",
+      "copyTitle": "複製歌曲名稱",
+      "copyId": "複製歌曲 ID",
+      "copyUrl": "分享歌曲連結"
+    },
+    "batch": {
+      "manage": "批次管理",
+      "selected": "已選 {count} 首",
+      "invert": "反選",
+      "addToQueue": "新增到播放列表",
+      "download": "批次下載",
+      "exit": "退出"
+    },
+    "delete": {
+      "removeConfirmOne": "確認從{type}移除「{title}」？",
+      "removeConfirm": "確認從{type}移除 {count} 首歌曲？",
+      "fileTitle": "刪除檔案",
+      "fileConfirmOne": "確認從磁碟刪除「{title}」？此操作不可撤銷",
+      "fileConfirm": "確認從磁碟刪除 {count} 個檔案？此操作不可撤銷"
+    },
+    "toast": {
+      "addedToNext": "已新增到下一曲播放"
+    }
+  },
+  "quality": {
+    "outputInfo": "輸出資訊",
+    "outputSection": "輸出資訊",
+    "outputMode": "輸出模式",
+    "dspSection": "音訊處理",
+    "details": "音質詳情",
+    "codec": "編碼格式",
+    "sampleRate": "取樣率",
+    "bitDepth": "位深",
+    "bitRate": "位元率",
+    "channels": "聲道",
+    "stereo": "立體聲",
+    "mono": "單聲道",
+    "multiChannel": "多聲道",
+    "tempoPitch": "變速變調",
+    "limiter": "輸出限幅器",
+    "resampling": "重取樣"
+  },
+  "playlist": {
+    "title": "播放列表",
+    "empty": "播放列表為空",
+    "unknownArtist": "未知藝術家",
+    "clearList": "清空列表",
+    "locateCurrent": "當前播放",
+    "clearConfirmTitle": "清空播放列表",
+    "clearConfirmContent": "確認清空全部播放列表嗎？此操作不可撤銷！"
+  },
+  "liked": {
+    "title": "我喜歡的音樂",
+    "tabs": {
+      "local": "本地",
+      "online": "線上"
+    },
+    "empty": {
+      "local": "還沒有收藏的本地歌曲，點選歌曲右側的紅心試試",
+      "online": "還沒有喜歡的線上音樂"
+    },
+    "needLogin": "登入後才能檢視線上喜歡的音樂",
+    "toast": {
+      "added": "已新增到喜歡",
+      "removed": "已從喜歡中移除",
+      "needLogin": "請先登入賬號",
+      "unsupported": "該來源暫不支援喜歡",
+      "failed": "操作失敗，請稍後重試"
+    }
+  },
+  "cloud": {
+    "title": "我的雲盤",
+    "empty": "雲盤裡還沒有歌曲",
+    "needLogin": "登入後才能檢視雲盤歌曲",
+    "removeAction": "從雲盤刪除",
+    "removeTitle": "刪除雲盤歌曲",
+    "removeConfirmOne": "確認從雲盤刪除「{title}」？此操作不可撤銷",
+    "removeConfirm": "確認從雲盤刪除選中的 {count} 首歌？此操作不可撤銷",
+    "upload": {
+      "button": "上傳",
+      "title": "上傳到雲盤",
+      "selectFile": "選擇檔案",
+      "emptyHint": "點選「選擇檔案」新增要上傳的歌曲",
+      "clearFinished": "清除已完成",
+      "instant": "秒傳",
+      "done": "完成",
+      "reading": "讀取中",
+      "retry": "重試",
+      "remove": "移除",
+      "capacityFull": "雲盤空間不足",
+      "riskTip": "上傳操作可能會導致賬號被風控，請謹慎使用。上傳完成後雲端需要一段時間進行匹配，可稍後再重新整理檢視",
+      "error": "上傳失敗",
+      "errorWithCode": "上傳失敗（{code}）"
+    }
+  },
+  "history": {
+    "title": "播放歷史",
+    "empty": "還沒有播放記錄，先去隨便聽點什麼吧",
+    "clear": "清空歷史",
+    "clearConfirmTitle": "清空播放歷史",
+    "clearConfirmContent": "確認清空全部播放歷史嗎？此操作不可撤銷！"
+  },
+  "download": {
+    "title": "下載管理",
+    "activeCount": "{count} 個進行中",
+    "clearFinished": "清空已完成",
+    "clearConfirmTitle": "清空已完成任務",
+    "clearConfirmContent": "將從列表移除所有已完成和出錯的任務記錄，已下載的本地檔案不會被刪除。確認清空？",
+    "tabActive": "待下載",
+    "tabError": "下載出錯",
+    "tabDone": "已完成",
+    "colStatus": "狀態",
+    "colSize": "大小",
+    "empty": "暫無下載任務",
+    "emptyDone": "還沒有下載完成的歌曲",
+    "qualityDefault": "跟隨預設",
+    "cancel": "取消",
+    "retry": "重試",
+    "openFolder": "開啟所在資料夾",
+    "remove": "移除",
+    "deleteFile": "刪除檔案",
+    "deleteConfirmTitle": "刪除下載檔案",
+    "deleteConfirmContent": "將從磁碟永久刪除該歌曲檔案，此操作不可恢復。確認刪除？",
+    "tagWarning": "標籤寫入失敗，檔案已儲存",
+    "resolveFailed": "無法下載：{title}",
+    "alreadyQueued": "該歌曲已在下載佇列",
+    "alreadyDownloaded": "該歌曲已下載",
+    "started": "已加入下載：{title}",
+    "enqueued": "已加入 {count} 首下載",
+    "status": {
+      "queued": "排隊中",
+      "downloading": "下載中",
+      "done": "已完成",
+      "failed": "失敗",
+      "canceled": "已取消",
+      "interrupted": "已中斷"
+    }
+  },
+  "daily": {
+    "title": "每日推薦",
+    "tagline": "根據你的音樂口味",
+    "today": "今天",
+    "refresh": "重新整理日推",
+    "empty": "暫無每日推薦內容",
+    "needLogin": "登入後檢視每日推薦"
+  },
+  "favorites": {
+    "title": "我的收藏",
+    "empty": "這裡還空空如也，去發現一些喜歡的內容吧",
+    "notLogin": "登入後才能檢視收藏的內容",
+    "tabs": {
+      "playlist": "歌單",
+      "album": "專輯",
+      "artist": "歌手"
+    }
+  },
+  "library": {
+    "title": "音樂庫",
+    "empty": "音樂庫為空",
+    "emptyHint": "新增音樂資料夾開始使用",
+    "noLocalData": "暫無本地內容",
+    "noLocalDataHint": "前往音樂庫新增歌曲後將自動聚合",
+    "goLibrary": "前往音樂庫",
+    "addFolder": "新增資料夾",
+    "scanAll": "全量掃描",
+    "scanning": "正在掃描...",
+    "scanProgress": "正在掃描 {scanned}/{total}",
+    "folders": "本地歌曲目錄",
+    "foldersDescription": "資料夾內歌曲增刪自動同步",
+    "removeFolder": "移除此目錄",
+    "removeFolderConfirm": "移除該目錄後，其中的歌曲將從音樂庫中刪除！",
+    "nestedHint": "該目錄與已新增目錄巢狀，已自動跳過"
+  },
+  "settings": {
+    "title": "設定",
+    "subtitle": "調整您的專屬配置",
+    "search": "搜尋設定項...",
+    "group": {
+      "general": "常規設定",
+      "player": "播放設定",
+      "lyric": "歌詞設定",
+      "externalLyric": "外部歌詞",
+      "appearance": "外觀設定",
+      "hotkeys": "快捷鍵配置",
+      "services": "網路與服務",
+      "aiIntegration": "AI 整合",
+      "mediaSource": "媒體源配置",
+      "download": "下載配置",
+      "localCache": "本地與快取",
+      "plugins": "外掛管理",
+      "other": "其他設定",
+      "about": "關於軟體"
+    },
+    "section": {
+      "platformLogin": "平臺登入",
+      "platformConfig": "平臺配置",
+      "network": "網路代理",
+      "aboutApp": "關於軟體",
+      "specialThanks": "特別緻謝",
+      "developers": "開發人員",
+      "community": "社群與資訊",
+      "update": "更新",
+      "language": "語言",
+      "playControl": "播放控制",
+      "playbackTransition": "播放過渡",
+      "audioSource": "播放音源",
+      "scrobble": "聽歌打卡",
+      "lyricContent": "歌詞內容",
+      "lyricTTML": "TTML 歌詞",
+      "lyricExclude": "歌詞排除",
+      "lyricGeneral": "內容樣式",
+      "lyricDisplay": "顯示效果",
+      "lyricAMLLOptimize": "歌詞最佳化",
+      "lyricSpring": "彈簧動畫",
+      "lyricLayout": "佈局與透明度",
+      "desktopLyric": "桌面歌詞",
+      "dynamicIsland": "靈動島歌詞",
+      "taskbarLyric": "工作列歌詞",
+      "theme": "主題與顏色",
+      "appearanceStyle": "外觀風格",
+      "layout": "佈局",
+      "font": "字型",
+      "playerBar": "播放欄",
+      "nowPlaying": "播放頁",
+      "media": "媒體控制",
+      "device": "輸出裝置",
+      "hotkeys": "快捷鍵",
+      "musicSpectrum": "音樂頻譜",
+      "discord": "Discord RPC",
+      "lastfm": "Last.fm",
+      "externalApi": "外部 API",
+      "mcp": "MCP",
+      "aiModel": "AI 模型",
+      "systemConfig": "系統配置",
+      "pluginManage": "匯入外掛",
+      "pluginsList": "外掛管理",
+      "streaming": "媒體源配置",
+      "mediaServerManagement": "媒體源管理",
+      "songCache": "歌曲快取",
+      "cache": "快取管理",
+      "database": "資料庫管理",
+      "downloadLocation": "下載配置",
+      "downloadGeneral": "下載選項",
+      "downloadTags": "寫入內容",
+      "backupReset": "備份與重置",
+      "debug": "除錯",
+      "preset": "強迫症配置",
+      "envInfo": "環境資訊"
+    },
+    "about": {
+      "checkUpdate": "檢查更新",
+      "checking": "檢查中",
+      "newVersion": "發現新版本",
+      "openLogs": "開啟日誌",
+      "officialSite": "官方網站",
+      "showMore": "更多貢獻者",
+      "collapse": "收起",
+      "commit": "提交",
+      "date": "日期",
+      "dependencies": {
+        "lyrics": "類 Apple Music 歌詞顯示元件庫",
+        "neteaseApi": "NCM API 備份 + 增強"
+      }
+    },
+    "storeVersion": "Store",
+    "language": {
+      "label": "介面語言",
+      "description": "切換應用的顯示語言"
+    },
+    "autoPlay": {
+      "label": "自動播放",
+      "description": "載入歌曲後自動開始播放"
+    },
+    "skipKeywordsSongs": {
+      "label": "跳過指定關鍵詞歌曲",
+      "description": "檢測到歌曲標題或歌手名包含指定關鍵詞時自動跳過",
+      "button": "管理",
+      "enable": "啟用跳過關鍵詞歌曲",
+      "enableDesc": "播放時若命中關鍵詞列表則自動跳至下一首"
+    },
+    "skipKeywordsRules": {
+      "label": "關鍵詞列表",
+      "description": "自定義需要跳過的歌曲關鍵詞列表",
+      "button": "管理",
+      "hint": "當歌曲標題或歌手名包含以下關鍵詞時將自動跳過",
+      "placeholder": "輸入關鍵詞",
+      "add": "新增",
+      "clear": "清空當前列表",
+      "empty": "尚未配置任何關鍵詞",
+      "duplicate": "已存在該關鍵詞"
+    },
+    "hideVipTag": {
+      "label": "隱藏 VIP 標籤",
+      "description": "歌曲列表中不顯示 VIP 標籤"
+    },
+    "hideQualityTag": {
+      "label": "隱藏音質標籤",
+      "description": "歌曲列表中不顯示音質標籤"
+    },
+    "showSubtitle": {
+      "label": "顯示副標題",
+      "description": "歌曲列表中顯示別名等副標題資訊"
+    },
+    "rememberLastTrack": {
+      "label": "記憶播放進度",
+      "description": "啟動時恢復上次歌曲的播放進度"
+    },
+    "searchPlayBehavior": {
+      "label": "搜尋頁播放行為",
+      "description": "設定在搜尋頁面雙擊歌曲時的播放與新增策略",
+      "current": "僅播放當前",
+      "all": "播放全部"
+    },
+    "showLyricInBar": {
+      "label": "播放時顯示歌詞",
+      "description": "底部播放欄播放時將歌手名替換為當前歌詞"
+    },
+    "showPlaybackSource": {
+      "label": "顯示播放來源",
+      "description": "在全屏播放器中顯示當前歌曲的來源，點選可跳轉到對應頁面"
+    },
+    "fadeEnabled": {
+      "label": "漸入漸出",
+      "description": "播放和暫停時音訊淡入淡出"
+    },
+    "fadeDuration": {
+      "label": "漸變時長",
+      "description": "漸入漸出的持續時長（毫秒）"
+    },
+    "loudnessNormalization": {
+      "label": "音量均衡",
+      "description": "自動調節不同歌曲之間的音量差異"
+    },
+    "transitionMode": {
+      "label": "過渡方式",
+      "description": "調整歌曲在交替時的播放效果",
+      "none": "無過渡",
+      "crossfade": "交叉過渡"
+    },
+    "transitionPreference": {
+      "label": "交接傾向",
+      "description": "調整曲尾交接時機和過渡長度，積極檔更早、更長",
+      "conservative": "保守",
+      "standard": "標準",
+      "eager": "積極"
+    },
+    "songLevel": {
+      "label": "線上歌曲音質",
+      "description": "線上歌曲的音質偏好，取決於賬號實際可用級別",
+      "switchTitle": "音質切換",
+      "switchHint": "以賬號具體許可權為準",
+      "unsupportedHint": "當前歌曲不支援調節音質",
+      "lq": "標準 (LQ)",
+      "sq": "較高 (SQ)",
+      "hq": "極高 (HQ)",
+      "lossless": "無損 (Lossless)",
+      "hi-res": "高解析度無損 (Hi-Res)"
+    },
+    "allowTrialPlay": {
+      "label": "允許播放試聽",
+      "description": "完整音源和外掛都不可用時，允許播放平臺返回的試聽片段"
+    },
+    "preloadNextTrack": {
+      "label": "預載下一首歌曲",
+      "description": "提前快取並解碼下一曲，可能會增加網路佔用"
+    },
+    "outputDevice": {
+      "label": "輸出裝置",
+      "description": "選擇音訊輸出裝置",
+      "default": "系統預設"
+    },
+    "rememberDeviceVolume": {
+      "label": "獨立裝置音量記憶",
+      "description": "切換或插拔不同音訊輸出裝置時，分別儲存並恢復各自的音量大小"
+    },
+    "audioOutputMode": {
+      "label": "音訊輸出模式",
+      "description": "切換當前 Windows WASAPI 音訊的輸出模式",
+      "shared": "共享模式",
+      "exclusive": "WASAPI 獨佔模式",
+      "fallback": {
+        "deviceBusy": "裝置無法以獨佔模式開啟，已回退共享模式",
+        "formatUnsupported": "裝置不支援獨佔模式所需的音訊格式，已回退共享模式",
+        "unavailable": "獨佔模式暫不可用，已回退共享模式"
+      }
+    },
+    "pauseOnDeviceSwitch": {
+      "label": "切換時暫停播放",
+      "description": "切換輸出裝置時暫停播放，例如藍牙裝置的斷聯"
+    },
+    "timeFormat": {
+      "label": "時間顯示格式",
+      "description": "底欄右側和播放頁面底部的時間如何顯示（單擊時間可以快速切換）",
+      "currentTotal": "播放時間 / 總時長",
+      "remainingTotal": "剩餘時間 / 總時長",
+      "currentRemaining": "播放時間 / 剩餘時間"
+    },
+    "showProgressTooltip": {
+      "label": "顯示進度條懸浮資訊",
+      "description": "拖拽進度條時顯示懸浮提示框"
+    },
+    "showProgressLyric": {
+      "label": "進度條懸浮時顯示歌詞",
+      "description": "懸浮提示框中同時顯示當前時間對應的歌詞"
+    },
+    "snapToLyric": {
+      "label": "進度調節吸附最近歌詞",
+      "description": "調節進度時自動吸附到最近的歌詞行"
+    },
+    "enableSpectrum": {
+      "label": "啟用音樂頻譜",
+      "description": "即時頻譜分析會持續佔用一定的 CPU，效能敏感裝置建議關閉"
+    },
+    "spectrumBarWidth": {
+      "label": "頻譜條寬度",
+      "description": "數值越小柱條越細越密"
+    },
+    "reverseSpectrum": {
+      "label": "頻譜反向",
+      "description": "啟用後頻率從中間向兩側遞減，否則遞增"
+    },
+    "lyricSourcePreference": {
+      "label": "歌詞來源偏好",
+      "description": "匹配線上歌詞時的平臺優先順序",
+      "auto": "智慧選擇",
+      "qqmusic": "優先 QM",
+      "kugou": "優先 KG",
+      "netease": "優先 NCM",
+      "self": "跟隨自身"
+    },
+    "lyricSourceOrder": {
+      "label": "音源排序",
+      "description": "自定義音源優先順序",
+      "hint": "「智慧選擇」時按此順序依次嘗試匹配，未命中則跳到下一個"
+    },
+    "lyricFormatOrder": {
+      "label": "歌詞格式優先順序",
+      "description": "自定義歌詞格式優先順序",
+      "hint": "存在多個可用格式時按此順序選擇，例如本地多個外掛歌詞、線上 TTML 升級等場景"
+    },
+    "smartPreferOnline": {
+      "label": "自動升級歌詞格式",
+      "description": "當前歌詞格式較低時，從其他平臺獲取更高階的格式覆蓋"
+    },
+    "preferPluginLyric": {
+      "label": "優先使用外掛歌詞",
+      "description": "開啟後同時請求外掛歌詞，若返回更優格式則自動替換"
+    },
+    "detectBackgroundLyrics": {
+      "label": "自動識別背景歌詞",
+      "description": "根據括號識別背景人聲，誤判時可關閉"
+    },
+    "cjkTransform": {
+      "label": "繁簡轉換",
+      "description": "對歌詞文本進行簡繁中文或日文漢字轉換",
+      "none": "不轉換",
+      "s2t": "簡體 → 繁體",
+      "t2s": "繁體 → 簡體",
+      "s2tw": "簡體 → 臺灣正體",
+      "tw2s": "臺灣正體 → 簡體",
+      "s2hk": "簡體 → 香港繁體",
+      "hk2s": "香港繁體 → 簡體",
+      "s2twp": "簡體 → 臺灣正體",
+      "tw2sp": "臺灣正體 → 簡體",
+      "t2tw": "繁體 → 臺灣正體",
+      "tw2t": "臺灣正體 → 繁體",
+      "t2hk": "繁體 → 香港繁體",
+      "hk2t": "香港繁體 → 繁體",
+      "jp2t": "日本新字型 → 繁體",
+      "t2jp": "繁體 → 日本新字型"
+    },
+    "enableOnlineTTMLLyric": {
+      "label": "啟用線上 TTML 歌詞",
+      "description": "從 AMLL TTML DB 獲取歌詞，支援逐字、翻譯、音譯"
+    },
+    "amllDbServer": {
+      "label": "AMLL TTML DB 地址",
+      "description": "請確保地址正確，否則將導致歌詞獲取失敗",
+      "placeholder": "請輸入 AMLL TTML DB 地址",
+      "warning": "如果你不清楚這裡是做什麼的，請不要修改",
+      "hint": "請確保地址正確，並且包含指定的佔位符",
+      "placeholders": "%p 為平臺目錄，%s 為歌曲 ID",
+      "docsHint": "更多資訊可前往",
+      "invalid": "請輸入正確的網址，需包含指定的佔位符"
+    },
+    "enableExcludeLyrics": {
+      "label": "啟用歌詞排除",
+      "description": "自動清理歌詞頭尾的後設資料行（如詞、曲、編曲、製作人等）"
+    },
+    "excludeLyricsRules": {
+      "label": "自定義規則",
+      "description": "在內建預設規則之外追加關鍵詞與正規表示式",
+      "button": "管理",
+      "hint": "使用者規則會與內建規則合併使用",
+      "tabKeywords": "關鍵詞",
+      "tabRegexes": "正規表示式",
+      "keywordHint": "後設資料關鍵詞過濾，匹配冒號前的內容",
+      "keywordPlaceholder": "輸入關鍵詞",
+      "regexHint": "支援 JavaScript 正規表示式，編譯時忽略大小寫",
+      "regexPlaceholder": "輸入正則字串",
+      "add": "新增",
+      "remove": "移除",
+      "empty": "尚未配置任何規則",
+      "clear": "清空當前列表",
+      "duplicate": "已存在該規則",
+      "invalidRegex": "無效的正規表示式"
+    },
+    "hotkeys": {
+      "label": "快捷鍵",
+      "description": "管理應用內與全域性快捷鍵",
+      "globalEnabled": "開啟全域性快捷鍵",
+      "globalEnabledHint": "應用未聚焦時也可觸發，可能與系統或其他應用衝突",
+      "colAction": "動作",
+      "colInApp": "應用內",
+      "colGlobal": "全域性",
+      "unbound": "未繫結",
+      "recording": "請按下快捷鍵",
+      "resetRow": "恢復預設",
+      "resetAll": "全部恢復預設",
+      "resetAllHint": "將每個動作的快捷鍵還原為預設值",
+      "confirmResetTitle": "確認恢復預設？",
+      "confirmResetDesc": "所有快捷鍵將被重置，已自定義的繫結會被覆蓋！",
+      "duplicateWith": "與「{action}」衝突",
+      "crossScopeWith": "與「{action}」的應用內繫結相同，會重複觸發",
+      "osOccupied": "該組合鍵已被系統或其他應用佔用",
+      "osDuplicate": "已被另一全域性快捷鍵佔用",
+      "invalid": "組合鍵無效",
+      "groups": {
+        "player": "播放控制",
+        "window": "視窗",
+        "view": "檢視"
+      },
+      "actions": {
+        "togglePlay": "播放 / 暫停",
+        "next": "下一首",
+        "prev": "上一首",
+        "seekForward": "快進 5 秒",
+        "seekBack": "快退 5 秒",
+        "volumeUp": "音量增加",
+        "volumeDown": "音量減小",
+        "cycleRepeat": "切換迴圈模式",
+        "toggleShuffle": "切換隨機播放",
+        "toggleDesktopLyric": "切換桌面歌詞",
+        "toggleDynamicIsland": "切換靈動島",
+        "toggleTaskbarLyric": "切換工作列歌詞",
+        "openPlayer": "開啟播放介面",
+        "closePlayer": "關閉播放介面",
+        "togglePlaylist": "展開 / 收起播放列表",
+        "openSearch": "開啟搜尋",
+        "searchInPage": "頁面內搜尋",
+        "openSettings": "開啟設定"
+      }
+    },
+    "engine": {
+      "label": "歌詞渲染引擎",
+      "description": "選擇用於歌詞渲染與滾動的動效引擎"
+    },
+    "lyricEngine": {
+      "physics": "預設",
+      "amll": "AMLL"
+    },
+    "confirm": {
+      "highResourceTitle": "高佔用功能",
+      "enableTitle": "確認開啟",
+      "scrobbleRiskContent": "聽歌打卡功能目前仍處於測試階段，不保證上報記錄會計入有效聽歌次數，相關風險尚不明確\n開啟後可能觸發賬號風控等賬號安全問題，請充分了解潛在風險後謹慎開啟",
+      "highResourceContent": "開啟後可能明顯增加記憶體與 CPU 佔用，低配裝置上或出現卡頓。確定開啟嗎？",
+      "restartRequiredTitle": "需要重啟應用",
+      "restartRequiredContent": "此設定需要重啟應用後生效。確定儲存並立即重啟嗎？",
+      "testChannelTitle": "切換到測試通道",
+      "testChannelContent": "Beta 與 Alpha 通道會提前收到測試版本，其中 Alpha 版本可能非常不穩定。確定切換嗎？",
+      "kugouLoginVersionTitle": "切換 KG 登入版本",
+      "kugouLoginVersionContent": "切換後當前登入憑據與新版本不匹配，需退出登入並重新掃碼，否則會員權益與高音質解析會失效。確定切換嗎？",
+      "exclusiveModeTitle": "切換到獨佔模式",
+      "exclusiveModeContent": "獨佔模式繞過系統混音器，優先使用音源取樣率與位深，適合外接 DAC / Hi-Fi 裝置。播放器的音量、均衡器等處理仍然生效，不保證逐位無損輸出。獨佔期間其他應用可能無法播放聲音；獨佔不可用時會嘗試共享模式，若裝置被其他應用獨佔，共享模式也可能無法播放。確定切換嗎？",
+      "preloadCacheTitle": "開啟預載所需的快取？",
+      "preloadCacheContent": "歌曲預載需要快取下一首音訊。繼續將同時開啟歌曲快取和流媒體快取，可能增加網路流量和磁碟佔用"
+    },
+    "useAMSpring": {
+      "label": "彈簧動畫除錯開關",
+      "description": "為 applemusic-like-lyrics 啟用物理彈性回彈與焦點行縮放效果"
+    },
+    "amllVerticalSpringMass": {
+      "label": "垂直回彈質量",
+      "description": "垂直彈性滾動的慣性質量。質量越大，回彈慣性越大"
+    },
+    "amllVerticalSpringDamping": {
+      "label": "垂直回彈阻尼",
+      "description": "垂直彈性滾動的阻尼阻力。阻力越大，回彈振幅越小且越快靜止"
+    },
+    "amllVerticalSpringStiffness": {
+      "label": "垂直回彈剛度",
+      "description": "垂直彈性滾動的彈簧剛度。剛度越大，拉力越強，回彈速度越快"
+    },
+    "amllVerticalSpringSoft": {
+      "label": "垂直強制軟彈簧",
+      "description": "啟用後將強制使用較軟的垂直滾動彈簧動效"
+    },
+    "amllScaleSpringMass": {
+      "label": "縮放回彈質量",
+      "description": "焦點行縮放動畫的質量。值越大，縮放回彈的慣性越大"
+    },
+    "amllScaleSpringDamping": {
+      "label": "縮放回彈阻尼",
+      "description": "焦點行縮放動畫的阻尼阻力。值越大，縮放震盪越少且越快靜止"
+    },
+    "amllScaleSpringStiffness": {
+      "label": "縮放回彈剛度",
+      "description": "焦點行縮放動畫的彈簧剛度。值越大，縮放回彈越迅速"
+    },
+    "amllScaleSpringSoft": {
+      "label": "縮放強制軟彈簧",
+      "description": "啟用後將強制使用較軟的焦點行縮放彈簧動效"
+    },
+    "amllCleanUnintentionalOverlaps": {
+      "label": "清洗時間重疊",
+      "description": "自動截斷兩行之間非刻意的微小時間重疊，避免多行同時高亮"
+    },
+    "amllTryAdvanceStartTime": {
+      "label": "提前入場動畫",
+      "description": "嘗試讓歌詞入場動畫提前開始（最多 1 秒），使過渡更加平滑"
+    },
+    "amllSyncMainAndBackgroundLines": {
+      "label": "同步背景人聲時間",
+      "description": "自動同步主歌詞與背景人聲的時間軸"
+    },
+    "amllNormalizeSpaces": {
+      "label": "規範化空格",
+      "description": "將歌詞文本中的多個連續空格合併為單個空格"
+    },
+    "amllResetLineTimestamps": {
+      "label": "重設行時間戳",
+      "description": "將行級時間戳強制重設為字級時間戳範圍"
+    },
+    "autoCenterCover": {
+      "label": "自動居中封面",
+      "description": "無歌詞時自動居中封面並隱藏歌詞區域"
+    },
+    "adaptiveFontSize": {
+      "label": "自適應字號",
+      "description": "歌詞字號隨視窗高度調整"
+    },
+    "fontSize": {
+      "label": "歌詞字號",
+      "description": "主行文字大小"
+    },
+    "translationFontSizeFollowMain": {
+      "label": "副行字號跟隨主行",
+      "description": "副行字號為主行的一半"
+    },
+    "translationFontSize": {
+      "label": "翻譯/音譯字號",
+      "description": "關閉跟隨主行後生效"
+    },
+    "fontWeight": {
+      "label": "歌詞字重",
+      "description": "歌詞文字粗細"
+    },
+    "lyricBlendMode": {
+      "label": "歌詞混合模式",
+      "description": "控制歌詞與背景的混合方式",
+      "normal": "Normal",
+      "screen": "Screen",
+      "plusLighter": "Plus Lighter"
+    },
+    "followCoverColor": {
+      "label": "跟隨封面顏色",
+      "description": "歌詞顏色跟隨當前封面主色調"
+    },
+    "autoImmersive": {
+      "label": "自動沉浸模式",
+      "description": "滑鼠靜止或離開視窗時，自動隱藏全屏播放器頂/底欄與滑鼠"
+    },
+    "keepScreenAwake": {
+      "label": "播放時保持螢幕常亮",
+      "description": "僅在播放頁展開時生效"
+    },
+    "showTranslation": {
+      "label": "顯示翻譯",
+      "description": "顯示歌詞的翻譯文本"
+    },
+    "showRuby": {
+      "label": "顯示詞內注音",
+      "description": "顯示歌詞中漢字詞語的假名或拼音注音"
+    },
+    "showRomanization": {
+      "label": "顯示逐行音譯",
+      "description": "顯示歌詞行的音譯文本"
+    },
+    "showWordRomanization": {
+      "label": "顯示逐詞音譯",
+      "description": "在逐字歌詞中，顯示每個字詞的音譯文本"
+    },
+    "enableScale": {
+      "label": "歌詞縮放",
+      "description": "聚焦播放行，非啟用行輕微縮小"
+    },
+    "lyricAlignment": {
+      "label": "歌詞水平對齊",
+      "description": "自動按演唱聲部分左右顯示，也可統一靠左、居中或靠右",
+      "auto": "自動",
+      "left": "靠左",
+      "center": "居中",
+      "right": "靠右"
+    },
+    "bgAlwaysBelow": {
+      "label": "背景歌詞置於下方",
+      "description": "始終將背景和聲歌詞顯示在主歌詞行下方"
+    },
+    "enableWordHighlight": {
+      "label": "逐字高亮",
+      "description": "逐字顯示歌詞高亮進度"
+    },
+    "enableFloatAnimation": {
+      "label": "逐字上浮",
+      "description": "播放到的文字向上微浮"
+    },
+    "enableEmphasizeEffect": {
+      "label": "強調效果",
+      "description": "長音節文字顯示縮放和輝光動畫"
+    },
+    "enableBlur": {
+      "label": "逐行模糊",
+      "description": "遠離當前行的歌詞逐漸模糊"
+    },
+    "hidePassedLines": {
+      "label": "隱藏已播放行",
+      "description": "播放過的歌詞行自動隱藏"
+    },
+    "springPreset": {
+      "label": "彈簧預設",
+      "description": "歌詞滾動動畫的彈簧物理引數預設",
+      "default": "預設",
+      "smooth": "更平滑",
+      "responsive": "快速跟手",
+      "jello": "果凍感",
+      "heavy": "厚重緩慢",
+      "noBounce": "無彈跳",
+      "custom": "自定義"
+    },
+    "springMass": {
+      "label": "質量",
+      "description": "值越大運動越遲鈍，慣性越大"
+    },
+    "springDamping": {
+      "label": "阻尼",
+      "description": "值越大振盪衰減越快，運動越平滑"
+    },
+    "springStiffness": {
+      "label": "剛度",
+      "description": "值越大彈簧回彈越快，頻率越高"
+    },
+    "alignPosition": {
+      "label": "對齊位置",
+      "description": "當前行在歌詞區域中的垂直位置（0 = 頂部，1 = 底部）"
+    },
+    "wordFadeWidth": {
+      "label": "漸變寬度",
+      "description": "逐字高亮掩碼的漸變寬度比例"
+    },
+    "inactiveAlpha": {
+      "label": "非啟用行透明度",
+      "description": "非當前行的基礎透明度，同時影響翻譯和音譯的透明度"
+    },
+    "desktopLyricEnabled": {
+      "label": "開啟桌面歌詞",
+      "description": "在桌面顯示一個獨立的歌詞懸浮視窗"
+    },
+    "desktopLyricFontSize": {
+      "label": "字號",
+      "description": "桌面歌詞的文字大小（畫素）"
+    },
+    "desktopLyricFontWeight": {
+      "label": "字重",
+      "description": "桌面歌詞的文字粗細"
+    },
+    "desktopLyricShowTranslation": {
+      "label": "顯示翻譯",
+      "description": "在桌面歌詞中顯示翻譯文本"
+    },
+    "desktopLyricDoubleLine": {
+      "label": "雙行顯示",
+      "description": "同時顯示當前行與下一行"
+    },
+    "desktopLyricAlign": {
+      "label": "對齊方式",
+      "description": "歌詞文本的水平對齊",
+      "left": "居左",
+      "center": "居中",
+      "right": "居右",
+      "justify": "兩端對齊"
+    },
+    "desktopLyricWordByWord": {
+      "label": "逐字高亮",
+      "description": "按單詞進度逐字渲染高亮"
+    },
+    "desktopLyricAutoGenerateWordByWord": {
+      "label": "自動生成逐字效果",
+      "description": "關閉後僅真正的逐字歌詞生效"
+    },
+    "desktopLyricPlayedColor": {
+      "label": "已播放顏色",
+      "description": "已播放的歌詞文字顏色"
+    },
+    "desktopLyricUnplayedColor": {
+      "label": "未播放顏色",
+      "description": "未播放的歌詞文字顏色"
+    },
+    "desktopLyricStrokeColor": {
+      "label": "描邊顏色",
+      "description": "歌詞文字的描邊顏色，透明則視為關閉描邊"
+    },
+    "desktopLyricBackgroundMask": {
+      "label": "文本背景遮罩",
+      "description": "為每行歌詞文字加半透明背景色塊，提升弱對比下的可讀性"
+    },
+    "desktopLyricBackgroundMaskColor": {
+      "label": "遮罩顏色",
+      "description": "文本背景遮罩的顏色與透明度"
+    },
+    "desktopLyricAlwaysShowSongInfo": {
+      "label": "常駐顯示歌曲資訊",
+      "description": "始終顯示歌曲名與藝術家，關閉後僅懸停時顯示"
+    },
+    "desktopLyricAnimation": {
+      "label": "切換動畫",
+      "description": "歌詞行切換時的滑入 / 滑出過渡動畫"
+    },
+    "desktopLyricLimitBounds": {
+      "label": "限制在螢幕內",
+      "description": "拖拽時把視窗邊界限制在當前螢幕的工作區範圍內"
+    },
+    "desktopLyricAlwaysOnTop": {
+      "label": "視窗置頂",
+      "description": "桌面歌詞視窗始終保持在最前"
+    },
+    "desktopLyricLocked": {
+      "label": "鎖定視窗",
+      "description": "鎖定後滑鼠點選將穿透到下層視窗，無法拖動"
+    },
+    "desktopLyricUseCSSDrag": {
+      "label": "使用 CSS 拖拽",
+      "description": "使用 CSS -webkit-app-region 拖拽，在 Wayland 環境建議啟用"
+    },
+    "dynamicIslandEnabled": {
+      "label": "開啟靈動島",
+      "description": "在螢幕頂部顯示一個簡潔的懸浮歌詞視窗，可拖離至任意位置"
+    },
+    "dynamicIslandScale": {
+      "label": "縮放比例",
+      "description": "視窗高度與字號同步縮放，100% 為預設大小"
+    },
+    "dynamicIslandFontWeight": {
+      "label": "字重",
+      "description": "靈動島歌詞的文字粗細"
+    },
+    "dynamicIslandWordByWord": {
+      "label": "逐字高亮",
+      "description": "按單詞進度逐字渲染高亮"
+    },
+    "dynamicIslandTransition": {
+      "label": "切換動畫",
+      "description": "選擇靈動島寬度與歌詞行的切換方式",
+      "bounce": "靈動回彈",
+      "smooth": "平滑過渡"
+    },
+    "dynamicIslandDoubleLine": {
+      "label": "總是顯示雙行",
+      "description": "即使沒有翻譯可用也保持雙行佈局"
+    },
+    "dynamicIslandShowTranslation": {
+      "label": "顯示翻譯",
+      "description": "有翻譯的句子在副行顯示翻譯"
+    },
+    "dynamicIslandPlayedColor": {
+      "label": "已播放顏色",
+      "description": "當前已唱到部分的文字顏色"
+    },
+    "dynamicIslandUnplayedColor": {
+      "label": "未播放顏色",
+      "description": "尚未唱到部分及藝術家名的文字顏色"
+    },
+    "dynamicIslandBackgroundColor": {
+      "label": "背景顏色",
+      "description": "視窗背板的顏色與透明度"
+    },
+    "dynamicIslandAlwaysOnTop": {
+      "label": "視窗置頂",
+      "description": "靈動島視窗始終保持在最前"
+    },
+    "dynamicIslandNotchFusion": {
+      "label": "劉海融合",
+      "description": "在 MacBook 劉海屏上讓靈動島從物理劉海向下擴充套件"
+    },
+    "dynamicIslandSnapCentered": {
+      "label": "吸附時居中",
+      "description": "關閉後吸附到頂部時保留拖動到的水平位置"
+    },
+    "dynamicIslandNonOcclusive": {
+      "label": "非遮擋模式",
+      "description": "滑鼠穿透視窗，懸停時隱藏內容"
+    },
+    "dynamicIslandUseCSSDrag": {
+      "label": "使用 CSS 拖拽",
+      "description": "使用 CSS -webkit-app-region 拖拽，在 Wayland 環境建議啟用"
+    },
+    "taskbarLyricEnabled": {
+      "label": "開啟工作列歌詞",
+      "description": "將歌詞嵌入 Windows 工作列中顯示"
+    },
+    "taskbarLyricPosition": {
+      "label": "顯示位置",
+      "description": "歌詞在工作列中的位置，自動模式下根據工作列對齊方式選擇",
+      "auto": "自動",
+      "left": "左側",
+      "right": "右側"
+    },
+    "taskbarLyricAutoMaxWidth": {
+      "label": "自動寬度",
+      "description": "自動使用工作列可用區域作為最大寬度；關閉後手動設定最大寬度"
+    },
+    "taskbarLyricAutoAdjustOccupiedSpace": {
+      "label": "按內容收縮視窗",
+      "description": "在自動寬度範圍內，根據當前主行和懸浮控制元件縮小實際佔用空間"
+    },
+    "taskbarLyricMaxWidth": {
+      "label": "最大寬度",
+      "description": "超出可用空間時仍以可用空間為準，避免擠佔"
+    },
+    "taskbarLyricLeftMargin": {
+      "label": "左邊距",
+      "description": "歌詞與可用空間左側的間距，用於避開工作列上的其他元件"
+    },
+    "taskbarLyricRightMargin": {
+      "label": "右邊距",
+      "description": "歌詞與可用空間右側的間距，用於避開工作列上的其他元件"
+    },
+    "taskbarLyricColorMode": {
+      "label": "配色模式",
+      "description": "工作列歌詞的文字與背景配色",
+      "taskbar": "跟隨工作列",
+      "taskbarInverse": "跟隨工作列（反向）",
+      "light": "淺色",
+      "dark": "深色"
+    },
+    "taskbarLyricShowBackground": {
+      "label": "顯示背景",
+      "description": "獲焦時顯示半透明背景，增強歌詞與工作列的區分"
+    },
+    "taskbarLyricFontSize": {
+      "label": "字號",
+      "description": "工作列歌詞的文字大小（畫素）"
+    },
+    "taskbarLyricFontWeight": {
+      "label": "字重",
+      "description": "工作列歌詞的文字粗細"
+    },
+    "taskbarLyricShowCover": {
+      "label": "顯示封面",
+      "description": "在歌詞旁顯示當前曲目的封面縮圖"
+    },
+    "taskbarLyricDoubleLine": {
+      "label": "雙行顯示",
+      "description": "同時顯示當前歌詞與翻譯或下一行"
+    },
+    "taskbarLyricShowTranslation": {
+      "label": "顯示翻譯",
+      "description": "雙行模式下優先顯示翻譯，無翻譯時回退到下一行"
+    },
+    "taskbarLyricWordByWord": {
+      "label": "逐字高亮",
+      "description": "按單詞進度逐字渲染高亮"
+    },
+    "playerBgType": {
+      "label": "播放器背景",
+      "description": "全屏播放器的背景型別",
+      "blur": "模糊",
+      "solid": "純色",
+      "animation": "流體"
+    },
+    "playerBgRenderer": {
+      "label": "渲染引擎",
+      "description": "選擇流體背景渲染引擎",
+      "mesh": "網格漸變渲染器",
+      "isolation": "isolation 渲染器",
+      "pixi": "PixiJS 渲染器"
+    },
+    "playerBgFlowSpeed": {
+      "label": "流動速度",
+      "description": "流體背景的動畫流動速度"
+    },
+    "playerBgRenderScale": {
+      "label": "渲染縮放",
+      "description": "適當提高可減少分界線鋸齒、畫面更細膩，但會增加顯示卡壓力"
+    },
+    "playerBgFps": {
+      "label": "動畫幀率",
+      "description": "流體背景的渲染幀率，越高越流暢但更耗效能"
+    },
+    "playerBgFreezeOnPause": {
+      "label": "暫停時凍結",
+      "description": "暫停播放時同時停止流體背景動畫"
+    },
+    "playerBgBeat": {
+      "label": "背景跳動",
+      "description": "使流體背景隨音樂低頻節拍產生脈動效果"
+    },
+    "coverLayout": {
+      "label": "封面佈局",
+      "description": "全屏播放器封面的呈現方式",
+      "default": "預設",
+      "fullscreen": "全屏封面"
+    },
+    "coverLyricRatio": {
+      "label": "封面/歌詞佔比",
+      "description": "播放頁封面與歌詞區域的寬度比例"
+    },
+    "themeMode": {
+      "label": "主題模式",
+      "description": "應用的顏色主題",
+      "light": "淺色模式",
+      "dark": "深色模式",
+      "system": "跟隨系統"
+    },
+    "themeSource": {
+      "label": "主題色來源",
+      "description": "主題色的獲取方式",
+      "default": "預設主題色",
+      "custom": "自定義主色",
+      "cover": "跟隨封面 / 背景",
+      "solid": "無主題色"
+    },
+    "customColor": {
+      "label": "自定義主題色",
+      "description": "自定義來源使用的主色"
+    },
+    "globalTint": {
+      "label": "全域性著色",
+      "description": "將主題色應用到全域性介面"
+    },
+    "appearanceStyle": {
+      "label": "外觀風格",
+      "description": "應用主背景的呈現方式",
+      "solid": "純色背景",
+      "image": "自定義圖片"
+    },
+    "backgroundImage": {
+      "label": "背景圖片",
+      "description": "選擇本地圖片作為應用背景",
+      "select": "選擇圖片",
+      "replace": "更換圖片",
+      "clear": "清除"
+    },
+    "backgroundBlur": {
+      "label": "背景模糊",
+      "description": "對背景圖片應用高斯模糊"
+    },
+    "backgroundDim": {
+      "label": "遮罩濃度",
+      "description": "疊加的黑色遮罩透明度，越高前景越易讀"
+    },
+    "backgroundScale": {
+      "label": "縮放大小",
+      "description": "背景圖的縮放倍數"
+    },
+    "layoutMode": {
+      "label": "佈局模式",
+      "description": "應用的整體佈局方式",
+      "default": "經典佈局",
+      "sidebarFull": "沉浸側欄",
+      "floating": "靈動懸浮"
+    },
+    "routeTransition": {
+      "label": "頁面切換動效",
+      "description": "切換頁面時的過渡動畫效果",
+      "none": "無",
+      "fade": "淡入淡出",
+      "slide": "滑動",
+      "zoom": "縮放"
+    },
+    "sidebarCollapsed": {
+      "label": "摺疊側邊欄",
+      "description": "將側邊欄摺疊為圖示模式"
+    },
+    "sidebarPlaylistCover": {
+      "label": "歌單顯示封面",
+      "description": "側邊欄的歌單項以歌單封面替代預設圖示"
+    },
+    "sidebarCustomize": {
+      "label": "自定義側邊欄",
+      "description": "調整側邊欄導航項的分組、順序與顯示",
+      "hint": "拖動手柄調整順序與分組，點選眼睛切換顯示",
+      "nav": "導航項",
+      "groups": "歌單分組",
+      "group": "分組 {n}",
+      "addGroup": "新增分組",
+      "emptyGroup": "拖動導航項到此處",
+      "noPlaylists": "暫無歌單",
+      "keepEmptyDivider": "空分組保留分隔線",
+      "nameWithDivider": "分組名與分隔線疊加顯示",
+      "showName": "在側欄顯示分組名",
+      "confirmResetTitle": "確認恢復預設？",
+      "confirmResetDesc": "分組、命名、排序與顯隱都將重置為預設！",
+      "featureDisabled": "功能未開啟"
+    },
+    "showQualitySwitch": {
+      "label": "顯示快捷音質切換",
+      "description": "在播放欄顯示線上音質標籤，可點選快速切換音質"
+    },
+    "fontConfig": {
+      "label": "字型配置",
+      "description": "統一配置應用、歌詞和外部歌詞視窗的字型",
+      "title": "字型配置",
+      "loading": "正在載入系統字型",
+      "placeholder": "輸入字型名稱",
+      "useSystem": "系統預設",
+      "useGlobal": "跟隨全域性",
+      "useLyric": "跟隨歌詞",
+      "modeLabel": "設定方式",
+      "modeHint": "下方所有欄位統一使用該方式",
+      "modeSelect": "手動選擇",
+      "modeCustom": "自定義字型",
+      "resetRow": "恢復預設",
+      "fieldLabel": "{name}字型",
+      "groups": {
+        "general": "通用字型",
+        "appLyric": "歌詞字型",
+        "externalLyric": "外部歌詞字型"
+      },
+      "fields": {
+        "global": "全域性",
+        "lyric": "歌詞",
+        "lyricChinese": "中文歌詞",
+        "lyricJapanese": "日語歌詞",
+        "lyricKorean": "韓語歌詞",
+        "lyricLatin": "英語 / 拉丁文字歌詞",
+        "desktopLyric": "桌面歌詞",
+        "dynamicIsland": "靈動島歌詞",
+        "taskbarLyric": "工作列歌詞"
+      }
+    },
+    "systemMediaControls": {
+      "label": "系統媒體控制",
+      "description": "在系統媒體控制中顯示當前播放資訊"
+    },
+    "discordEnabled": {
+      "label": "Discord 狀態",
+      "description": "在 Discord 中顯示當前播放狀態"
+    },
+    "discordShowWhenPaused": {
+      "label": "暫停時顯示",
+      "description": "暫停播放時仍然顯示 Discord 狀態"
+    },
+    "discordDisplayMode": {
+      "label": "簡略狀態顯示",
+      "description": "不開啟詳細資訊面板時，在使用者名稱下方顯示的小字",
+      "name": "應用名",
+      "details": "歌曲名",
+      "state": "歌手名"
+    },
+    "lastfmEnabled": {
+      "label": "Last.fm",
+      "description": "連線 Last.fm 賬號，記錄播放並同步喜歡"
+    },
+    "lastfmScrobble": {
+      "label": "記錄播放（Scrobble）",
+      "description": "播放一段時間後自動記錄到 Last.fm"
+    },
+    "lastfmNowPlaying": {
+      "label": "正在播放",
+      "description": "向 Last.fm 同步當前正在播放的歌曲"
+    },
+    "lastfmLoveSync": {
+      "label": "同步喜歡",
+      "description": "點選喜歡時同步為 Last.fm 的 Love / Unlove"
+    },
+    "lastfmAccount": {
+      "label": "Last.fm 賬號"
+    },
+    "lastfm": {
+      "connect": "連線賬號",
+      "connecting": "請在瀏覽器中完成授權…",
+      "cancel": "取消",
+      "disconnect": "斷開連線",
+      "connectedAs": "已連線：{name}",
+      "notConnected": "尚未連線 Last.fm 賬號",
+      "connectHint": "點選連線後將在瀏覽器中開啟授權頁面",
+      "toast": {
+        "connected": "已連線到 Last.fm：{name}",
+        "timeout": "授權超時，請重試",
+        "canceled": "已取消授權",
+        "failed": "連線失敗，請重試",
+        "disconnected": "已斷開 Last.fm 連線"
+      }
+    },
+    "qmAccount": {
+      "label": "QQ 音樂賬號"
+    },
+    "kgAccount": {
+      "label": "酷狗音樂賬號"
+    },
+    "platformLogin": {
+      "title": "登入 {name} 賬號",
+      "desc": "登入後可獲取對應平臺播放地址",
+      "loginWeb": "網頁登入",
+      "loginQr": "掃碼登入",
+      "loginQrQQ": "QQ 掃碼登入",
+      "loginQrWX": "微信掃碼登入",
+      "qrTitle": "掃碼登入",
+      "manualCookie": "Cookie 登入",
+      "logout": "退出登入",
+      "logoutTitle": "退出 {name} 登入",
+      "logoutConfirm": "確定要退出當前 {name} 賬號（{user}）嗎？",
+      "cookieTitle": "設定 {name} Cookie",
+      "cookiePlaceholder": "請輸入 Cookie",
+      "toast": {
+        "loginSuccess": "{name} 登入成功：{user}",
+        "loginFailed": "{name} 登入失敗，請重試",
+        "logoutDone": "已退出 {name} 登入",
+        "cookieSuccess": "{name} Cookie 設定成功",
+        "cookieInvalid": "Cookie 無效，請檢查後重試"
+      }
+    },
+    "rememberWindowState": {
+      "label": "記憶視窗狀態",
+      "description": "下次啟動時恢復視窗的大小、位置和最大化狀態"
+    },
+    "borderlessWindow": {
+      "label": "開啟無邊框視窗",
+      "description": "關閉後使用系統原生視窗邊框和標題欄"
+    },
+    "autoCheckUpdate": {
+      "label": "自動檢查更新",
+      "description": "啟動後及定時在後臺檢查新版本"
+    },
+    "updateChannel": {
+      "label": "更新通道",
+      "description": "選擇接收更新的通道，切換通道不會自動降級",
+      "stable": "正式版",
+      "beta": "Beta 預覽版",
+      "alpha": "Alpha 內測版",
+      "nightly": "Nightly 持續構建"
+    },
+    "showPerformanceMonitor": {
+      "label": "效能監視器",
+      "description": "懸浮顯示 FPS / 幀時間 / 記憶體佔用，點選切換指標"
+    },
+    "taskbarProgress": {
+      "label": "工作列播放進度",
+      "description": "在工作列圖示上顯示當前播放進度"
+    },
+    "taskbarThumbnailCover": {
+      "label": "工作列封面預覽",
+      "description": "懸停工作列時以專輯封面作為視窗預覽，關閉則顯示系統預設的即時視窗"
+    },
+    "networkProxyProtocol": {
+      "label": "網路代理",
+      "description": "為線上請求配置手動代理",
+      "off": "關閉代理",
+      "http": "HTTP 代理",
+      "https": "HTTPS 代理",
+      "socks5": "SOCKS5 代理"
+    },
+    "networkProxyHost": {
+      "label": "代理伺服器地址",
+      "description": "填寫代理伺服器地址，例如 127.0.0.1",
+      "placeholder": "127.0.0.1"
+    },
+    "networkProxyPort": {
+      "label": "代理伺服器埠",
+      "description": "填寫代理伺服器埠，例如 7890"
+    },
+    "networkProxyTest": {
+      "label": "測試代理",
+      "description": "測試代理配置是否可以正常連通",
+      "success": "該代理可正常使用",
+      "failed": "代理測試失敗，請檢查配置"
+    },
+    "neteaseRealIp": {
+      "label": "使用真實IP地址",
+      "description": "在海外或部分地區可能會受到限制，可開啟此處嘗試解決"
+    },
+    "kugouLoginVersion": {
+      "label": "KG 登入版本",
+      "description": "切換後需重新掃碼登入",
+      "standard": "標準版",
+      "concept": "概念版"
+    },
+    "neteaseScrobbleEnabled": {
+      "label": "啟用聽歌打卡",
+      "description": "按實際收聽時長同步 NCM 播放記錄"
+    },
+    "neteaseScrobbleMode": {
+      "label": "NCM 聽歌打卡方式",
+      "description": "選擇同步播放記錄時使用的上報協議",
+      "legacy": "網頁日誌介面",
+      "ncbl": "NCBL 加密介面"
+    },
+    "orpheusProtocol": {
+      "label": "透過 Orpheus 協議喚起本應用",
+      "description": "該協議通常用於官方網頁端喚起官方客戶端，啟用後可能導致官方客戶端無法被喚起"
+    },
+    "streamingServerList": {
+      "label": "媒體源管理"
+    },
+    "streamingEnabled": {
+      "label": "啟用流媒體",
+      "description": "關閉後將隱藏側邊欄的媒體源入口"
+    },
+    "externalApiEnabled": {
+      "label": "允許外部控制",
+      "description": "允許外部應用透過 API 控制播放器"
+    },
+    "externalApiWs": {
+      "label": "啟用 WebSocket",
+      "description": "外部應用可訂閱播放事件併傳送控制指令"
+    },
+    "externalApiAllowLan": {
+      "label": "允許區域網訪問",
+      "description": "開啟後區域網內的其他裝置可透過本機 IP 訪問，關閉時僅本機可訪問"
+    },
+    "externalApiPort": {
+      "label": "監聽埠",
+      "description": "外部 API 服務監聽的埠（1024–65535）"
+    },
+    "externalApi": {
+      "restart": "重啟服務",
+      "restarted": "服務已重啟",
+      "portInUse": "埠 {port} 已被佔用，請換一個",
+      "running": "服務執行中",
+      "stopped": "服務未執行"
+    },
+    "mcpEnabled": {
+      "label": "啟用 MCP 服務",
+      "description": "啟用本地 MCP 服務，讓 AI Agent 接入應用生態，按需擴充套件能力"
+    },
+    "aiModelConfig": {
+      "label": "AI 模型",
+      "description": "配置應用使用的 AI 模型"
+    },
+    "aiModel": {
+      "hint": "AI 模型配置",
+      "hintDetail": "可為專案中的部分 AI 功能提供支援",
+      "add": "新增模型",
+      "editModel": "編輯模型",
+      "empty": "暫未配置 AI 模型",
+      "emptyHint": "新增一個 AI 模型配置以供應用使用",
+      "protocol": "介面協議",
+      "name": "配置名稱",
+      "namePlaceholder": "例如：OpenAI",
+      "baseUrl": "API 地址",
+      "apiKey": "API Key",
+      "apiKeyPlaceholder": "輸入 API Key",
+      "apiKeySavedPlaceholder": "已儲存，留空則保持不變",
+      "model": "模型 ID",
+      "added": "模型已新增",
+      "updated": "模型已更新",
+      "removed": "模型已刪除",
+      "activated": "已切換啟用模型",
+      "deleteConfirmTitle": "刪除 AI 模型？",
+      "deleteConfirm": "確定刪除“{name}”嗎？儲存的 API Key 也會一併移除。",
+      "errors": {
+        "nameEmpty": "請填寫配置名稱",
+        "urlInvalid": "請輸入以 http:// 或 https:// 開頭的 API 地址",
+        "modelEmpty": "請填寫模型 ID",
+        "apiKeyEmpty": "請填寫 API Key"
+      }
+    },
+    "mcpPort": {
+      "label": "監聽埠",
+      "description": "修改埠後需要點選“重啟服務”生效（1024–65535）"
+    },
+    "mcpConfigDetails": {
+      "label": "MCP 配置詳情",
+      "description": "檢視並複製 AI Agent 連線所需的 MCP 配置"
+    },
+    "mcp": {
+      "restart": "重啟服務",
+      "restarted": "MCP 服務已重啟",
+      "portInUse": "埠 {port} 已被佔用，請換一個",
+      "running": "MCP 服務執行中",
+      "stopped": "MCP 服務未執行",
+      "detectHint": "檢測到以下 AI Agent 應用，支援的平臺可一鍵寫入 MCP 配置",
+      "inject": "一鍵配置",
+      "notSupported": "暫不支援",
+      "injected": "已配置",
+      "injectSuccess": "配置成功"
+    },
+    "closeAction": {
+      "label": "關閉按鈕行為",
+      "description": "點選標題欄關閉按鈕時執行的操作",
+      "quit": "退出應用",
+      "hide": "最小化到托盤"
+    },
+    "rememberCloseChoice": {
+      "label": "記憶關閉選擇",
+      "description": "關閉此項後，每次點選關閉都會彈窗詢問"
+    },
+    "closeDialog": {
+      "title": "關閉視窗",
+      "description": "選擇本次關閉要執行的操作",
+      "remember": "記住我的選擇，不再詢問",
+      "quit": "退出應用",
+      "hide": "最小化到托盤"
+    },
+    "storageManager": {
+      "label": "資料管理",
+      "description": "備份、恢復、重置設定或清除全部資料"
+    },
+    "backup": {
+      "label": "備份設定",
+      "description": "將當前的設定項匯出為備份檔案",
+      "button": "備份",
+      "exported": "備份已儲存",
+      "failed": "備份失敗"
+    },
+    "restore": {
+      "label": "恢復設定",
+      "description": "從備份檔案匯入設定項，將覆蓋當前設定",
+      "button": "恢復",
+      "confirmTitle": "恢復設定並重啟？",
+      "confirmDesc": "將用備份檔案覆蓋當前的設定項，應用會立即重啟以讓全部設定生效；本地音樂庫、歌單與播放歷史不受影響",
+      "invalid": "備份檔案無效",
+      "failed": "恢復失敗"
+    },
+    "resetSettings": {
+      "label": "重置設定",
+      "description": "將全部設定項還原為預設值，不影響歌單與本地音樂庫",
+      "button": "重置",
+      "confirmTitle": "重置設定？",
+      "confirmDesc": "全部設定項將還原為預設值，操作不可恢復",
+      "done": "設定已重置"
+    },
+    "resetAll": {
+      "label": "清除全部資料",
+      "description": "清空全部歌單、登入狀態、快取並重置設定",
+      "button": "清除",
+      "confirmTitle": "清除全部資料？",
+      "confirmDesc": "將清空全部歌單、登入狀態、快取並重置設定，操作不可恢復",
+      "done": "全部資料已清除"
+    },
+    "pluginImport": {
+      "label": "匯入外掛"
+    },
+    "pluginList": {
+      "label": "已安裝外掛"
+    },
+    "plugins": {
+      "securityWarningTitle": "安裝前請注意安全風險",
+      "securityWarning": "外掛為第三方程式碼，軟體已儘可能做了沙箱隔離，但仍無法完全杜絕風險，惡意外掛可能訪問你的資料或執行危險操作。請僅安裝來自可信來源的外掛。",
+      "hint": "從本地或線上安裝",
+      "hintDetail": "透過外掛擴充套件軟體功能，詳見",
+      "docs": "外掛文件",
+      "importLocal": "本地匯入",
+      "importFromUrl": "線上匯入",
+      "importUrlTitle": "從 URL 匯入外掛",
+      "importUrlPlaceholder": "貼上 .js 指令碼的 https:// 連結",
+      "importUrlSubmit": "匯入",
+      "importUrlInvalid": "請輸入合法的 http 或 https 連結",
+      "market": "外掛市場",
+      "install": "安裝",
+      "installed": "已安裝",
+      "marketEmpty": "暫無外掛",
+      "marketError": "載入失敗",
+      "publishHint": "想分享你的外掛？",
+      "publishAction": "前往釋出",
+      "importSuccess": "外掛匯入成功",
+      "importFailed": "外掛匯入失敗",
+      "empty": "暫無已安裝的外掛",
+      "emptyHint": "從本地或線上匯入外掛以啟用擴充套件能力",
+      "uninstall": "解除安裝",
+      "configSubtitle": "外掛配置",
+      "uninstallConfirmTitle": "解除安裝外掛",
+      "uninstallConfirm": "確定要解除安裝外掛「{name}」嗎？此操作不可撤銷。",
+      "uninstallSuccess": "外掛已解除安裝",
+      "uninstallFailed": "解除安裝失敗",
+      "by": "作者",
+      "sources": "支援源",
+      "pendingUpdate": "待更新",
+      "noChangelog": "暫無更新說明",
+      "openUpdateUrl": "檢視更新",
+      "checkUpdate": "檢查更新",
+      "checkUpdateFailed": "檢查更新失敗",
+      "updateFound": "發現新版本",
+      "updateLatest": "已是最新版本",
+      "update": "更新",
+      "updateSuccess": "外掛已更新",
+      "updateFailed": "更新失敗，可點「檢視更新」手動安裝",
+      "status": {
+        "ready": "已就緒",
+        "loading": "載入中",
+        "error": "錯誤",
+        "disabled": "已停用",
+        "unloaded": "未載入"
+      },
+      "detail": {
+        "title": "外掛詳情",
+        "intro": "簡介",
+        "grants": "許可權",
+        "contributes": "能力",
+        "info": "資訊",
+        "noDescription": "暫無簡介",
+        "grantNone": "該外掛未宣告任何許可權",
+        "sources": "音源",
+        "events": "事件",
+        "controls": "反向控制",
+        "controlsYes": "是",
+        "settingsCount": "設定項",
+        "menus": "選單項",
+        "id": "ID",
+        "author": "作者",
+        "apiLevel": "API 級別",
+        "installed": "安裝",
+        "updated": "更新",
+        "homepage": "主頁"
+      },
+      "grant": {
+        "network": {
+          "label": "聯網",
+          "desc": "外掛可發起網路請求"
+        },
+        "control": {
+          "label": "控制",
+          "desc": "外掛可控制播放器"
+        },
+        "ui": {
+          "label": "介面",
+          "desc": "外掛可新增歌曲選單併傳送系統通知"
+        },
+        "library": {
+          "label": "曲庫",
+          "desc": "外掛可搜尋本地曲庫並讀取歌曲資訊"
+        },
+        "api": {
+          "label": "平臺介面",
+          "desc": "使用當前登入態呼叫音樂平臺介面"
+        }
+      }
+    },
+    "pluginManager": {
+      "label": "外掛管理",
+      "description": "匯入、啟用或解除安裝擴充套件指令碼"
+    },
+    "enableLocalTTMLOverride": {
+      "label": "啟用本地 TTML 歌詞庫",
+      "description": "從指定目錄按歌曲元資訊匹配 .ttml，命中後優先於線上歌詞"
+    },
+    "localLyricRepoDir": {
+      "label": "歌詞庫目錄",
+      "description": "選擇一個存放 TTML 歌詞的目錄，軟體會按元資訊在其中查詢",
+      "choose": "選擇目錄",
+      "clear": "清除",
+      "unset": "未設定目錄"
+    },
+    "fileCacheManager": {
+      "label": "快取管理",
+      "description": "檢視快取佔用並清理"
+    },
+    "dbCacheManager": {
+      "label": "資料庫管理",
+      "description": "檢視資料庫佔用並清理"
+    },
+    "cacheDir": {
+      "label": "快取目錄",
+      "open": "在檔案管理器中開啟",
+      "change": "更改",
+      "reset": "還原預設",
+      "hint": "封面、歌手頭像、背景圖都會存到該目錄下；切換會先清空舊快取，新位置必須是空資料夾",
+      "changedHint": "快取目錄已切換",
+      "notEmpty": "所選資料夾不為空，請選擇一個空資料夾",
+      "switchConfirmTitle": "切換快取目錄？",
+      "switchConfirmDesc": "切換前會清空當前的封面、歌手頭像、背景圖快取，新位置必須是空資料夾。歌詞等資料庫快取不受影響。",
+      "switchConfirmOk": "選擇資料夾",
+      "resetConfirmTitle": "還原預設快取目錄？",
+      "resetConfirmDesc": "還原前同樣會清空當前的檔案類快取"
+    },
+    "cacheUsage": {
+      "label": "佔用情況",
+      "total": "合計",
+      "refresh": "重新整理"
+    },
+    "cacheCategory": {
+      "covers": "封面縮圖",
+      "artists": "歌手頭像",
+      "backgrounds": "背景圖",
+      "songs": "歌曲檔案",
+      "lyric": "歌詞內容快取",
+      "lyricTTML": "TTML 歌詞快取",
+      "lyricMatch": "歌詞匹配快取"
+    },
+    "enableSongCache": {
+      "label": "歌曲快取",
+      "description": "播放線上歌曲時快取至本地，提升載入速度"
+    },
+    "cacheStreaming": {
+      "label": "快取流媒體",
+      "description": "播放個人流媒體伺服器歌曲時快取至本地"
+    },
+    "songCacheSizeLimit": {
+      "label": "快取上限",
+      "description": "快取達到上限後將自動清理，∞ 表示不限制"
+    },
+    "downloadEnabled": {
+      "label": "啟用下載功能"
+    },
+    "downloadDir": {
+      "label": "下載目錄",
+      "change": "更換"
+    },
+    "downloadQuality": {
+      "label": "下載音質",
+      "description": "下載時優先使用的音質，實際可用受平臺與賬號許可權限制"
+    },
+    "downloadUsePlayback": {
+      "label": "模擬播放下載",
+      "description": "下載時優先使用播放連結作為音訊來源"
+    },
+    "downloadFileTemplate": {
+      "label": "檔名格式",
+      "description": "下載檔案的命名方式",
+      "titleOnly": "歌曲名",
+      "artistTitle": "歌手 - 歌曲名",
+      "titleArtist": "歌曲名 - 歌手"
+    },
+    "downloadFolderScheme": {
+      "label": "檔案智慧分類",
+      "description": "下載時按規則歸入子資料夾",
+      "none": "不分資料夾",
+      "artist": "按歌手分資料夾",
+      "artistAlbum": "按歌手 / 專輯分資料夾"
+    },
+    "downloadOverwrite": {
+      "label": "重名處理",
+      "description": "目標檔案已存在時的處理方式",
+      "rename": "保留兩者（加序號）",
+      "overwrite": "覆蓋",
+      "skip": "跳過"
+    },
+    "downloadEmbedCover": {
+      "label": "內嵌封面",
+      "description": "將封面寫入下載的音訊檔案"
+    },
+    "downloadEmbedMeta": {
+      "label": "內嵌元資訊",
+      "description": "將標題、藝術家、專輯寫入檔案標籤"
+    },
+    "downloadEmbedLyric": {
+      "label": "內嵌歌詞",
+      "description": "將歌詞寫入檔案標籤"
+    },
+    "downloadWriteLrc": {
+      "label": "同時儲存歌詞檔案",
+      "description": "下載歌曲時在同目錄額外儲存一份歌詞檔案"
+    },
+    "downloadLyricFormat": {
+      "label": "歌詞檔案格式",
+      "description": "儲存及內嵌到標籤的歌詞格式",
+      "lrc": "LRC（逐行）",
+      "enhanced": "增強 LRC（逐字）"
+    },
+    "downloadSaveTtml": {
+      "label": "同時儲存為 TTML",
+      "description": "額外匯出一份 TTML，單檔案含原文、翻譯與音譯"
+    },
+    "cacheCategoryClear": {
+      "label": "清除",
+      "confirmTitle": "清除「{name}」？",
+      "confirmDesc": "此操作將刪除該類別下的全部快取資料，不可撤銷"
+    },
+    "fileClearAll": {
+      "label": "清空檔案快取",
+      "description": "清空全部快取，操作不可恢復",
+      "button": "清空全部",
+      "confirmTitle": "清空全部檔案快取？",
+      "confirmDesc": "將刪除上方全部檔案類快取，下次使用時會重新生成，不可撤銷"
+    },
+    "dbClearAll": {
+      "label": "清空資料庫快取",
+      "description": "清空歌詞及匹配資訊等資料庫快取；本地音樂庫與賬號資訊不受影響",
+      "button": "清空全部",
+      "confirmTitle": "清空全部資料庫快取？",
+      "confirmDesc": "將刪除上方全部資料庫快取，操作不可恢復"
+    }
+  },
+  "collection": {
+    "totalDuration": "約 {time}",
+    "unknownAlbum": "未知專輯",
+    "empty": "暫無歌曲",
+    "noDescription": "還沒有描述哦~",
+    "introduction": "{type}簡介",
+    "viewIntroduction": "檢視完整簡介",
+    "album": "專輯",
+    "playlist": "歌單",
+    "radio": "電臺",
+    "scope": {
+      "local": "本地",
+      "online": "線上"
+    },
+    "my": "我的{type}",
+    "subscribed": "收藏的{type}",
+    "localPlaylist": "本地歌單",
+    "onlinePlaylist": "線上歌單",
+    "playlistNamePlaceholder": "輸入歌單名稱",
+    "create": "新建{type}",
+    "name": "{type}名稱",
+    "description": "{type}描述",
+    "delete": "刪除{type}",
+    "deleteConfirm": "確認刪除{type}「{title}」？此操作不可撤銷",
+    "addTo": "新增到{type}",
+    "removeFrom": "從{type}移除",
+    "tracksAdded": "新增成功，共 {count} 首",
+    "alreadyInPlaylist": "歌曲已在歌單中",
+    "edit": "編輯{type}",
+    "subscribe": "收藏",
+    "unsubscribe": "取消收藏",
+    "privacy": {
+      "private": "設為私密"
+    },
+    "context": {
+      "more": "更多操作",
+      "album": {
+        "copyTitle": "複製專輯名稱",
+        "copyId": "複製專輯 ID",
+        "copyUrl": "分享專輯連結"
+      },
+      "playlist": {
+        "copyTitle": "複製歌單名稱",
+        "copyId": "複製歌單 ID",
+        "copyUrl": "分享歌單連結"
+      },
+      "radio": {
+        "copyTitle": "複製電臺名稱",
+        "copyId": "複製電臺 ID",
+        "copyUrl": "分享電臺連結"
+      },
+      "cloud": {
+        "copyTitle": "複製雲盤名稱",
+        "copyId": "複製雲盤 ID",
+        "copyUrl": "分享雲盤連結"
+      }
+    }
+  },
+  "artist": {
+    "label": "藝術家",
+    "songs": "歌曲",
+    "totalArtists": "共 {count} 位",
+    "albums": "專輯"
+  },
+  "album": {
+    "label": "專輯"
+  },
+  "folder": {
+    "label": "資料夾",
+    "totalFolders": "共 {count} 個"
+  },
+  "stats": {
+    "label": "統計",
+    "songs": "歌曲",
+    "albums": "專輯",
+    "artists": "歌手",
+    "totalDuration": "總時長",
+    "totalSize": "總大小",
+    "topSongs": "最常聽的歌曲",
+    "topAlbums": "最常聽的專輯",
+    "topArtists": "最常聽的歌手",
+    "plays": "{count} 次播放",
+    "playsUnit": "次播放",
+    "noData": "暫無播放資料",
+    "noDataHint": "暫無資料，去聽一些歌吧",
+    "unknown": "未知",
+    "less": "少",
+    "more": "多",
+    "audioQuality": "音訊格式",
+    "formatCount": "{count} 種格式",
+    "losslessRatio": "無損佔比",
+    "trackUnit": "首",
+    "listeningHours": "播放時段",
+    "peakListening": "最常播放",
+    "favoriteHour": "你最喜歡在 {hour}:00 聽歌，共計 {count} 首",
+    "noPlayHistory": "暫無播放時段資料",
+    "listeningActivity": "聆聽足跡",
+    "last90Days": "近 90 天"
+  },
+  "errors": {
+    "PERMISSION_DENIED": "當前賬號沒有執行此操作的許可權",
+    "dialogTitle": "出錯了",
+    "deviceHint": "未檢測到可用的音訊輸出裝置，請連線耳機或音箱後重試。",
+    "DEVICE_NOT_FOUND": "未找到音訊輸出裝置",
+    "DEVICE_INIT_FAILED": "音訊裝置初始化失敗",
+    "FILE_NOT_FOUND": "檔案不存在或無法訪問",
+    "FILE_NO_AUDIO_STREAM": "檔案中未找到音訊流",
+    "FILE_DECODE_ERROR": "音訊解碼失敗",
+    "FILE_NOT_SELECTED": "未選擇檔案",
+    "NETWORK_ERROR": "音源連線失敗，請檢查網路或更換音源",
+    "NETWORK_TIMEOUT": "音源響應超時，請檢查網路或更換音源",
+    "URL_RESOLVE_FAILED": "無法獲取播放地址",
+    "NO_PLUGIN_AVAILABLE": "未找到可用的音源外掛",
+    "NETEASE_LOGIN_EXPIRED": "登入已失效，已切換為遊客模式",
+    "NETEASE_VIP_REQUIRED": "該歌曲需要會員或單獨購買",
+    "NETEASE_TRIAL_DISABLED": "該歌曲僅提供試聽，請在設定中允許試聽播放",
+    "NETEASE_UNAVAILABLE": "該歌曲暫無可用音源",
+    "SCAN_NO_DIRS": "未配置掃描目錄",
+    "SCAN_DIR_EXISTS": "該目錄已存在",
+    "SCAN_DIR_NOT_FOUND": "目錄不存在",
+    "SCAN_DIR_NOT_SELECTED": "未選擇目錄",
+    "TAG_READ_FAILED": "讀取標籤失敗",
+    "TAG_WRITE_FAILED": "寫入標籤失敗",
+    "MAX_CONSECUTIVE_FAILURES": "連續播放失敗次數過多",
+    "UNKNOWN": "操作失敗"
+  },
+  "tagEditor": {
+    "title": "編輯後設資料",
+    "replaceCover": "替換封面",
+    "onlineMatch": "自動匹配標籤",
+    "matchHint": "不想手動填寫標籤？",
+    "noMatches": "未找到匹配結果",
+    "lyricsPlaceholder": "純文本歌詞，原樣寫入檔案標籤",
+    "saveSuccess": "後設資料已儲存",
+    "saveFailed": "儲存失敗",
+    "fields": {
+      "title": "標題",
+      "artist": "藝術家",
+      "album": "專輯",
+      "albumArtist": "專輯藝術家",
+      "year": "年份",
+      "genre": "流派",
+      "trackNumber": "音軌號",
+      "discNumber": "碟號",
+      "lyrics": "內嵌歌詞"
+    }
+  }
+}

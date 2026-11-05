@@ -2,6 +2,10 @@
 
 This page covers the basics of SPlayer-Next. See [Download](/en/download) for installation packages.
 
+## Interface language
+
+Open **Settings → General → Language** to choose Simplified Chinese, Traditional Chinese, or English. The interface and system tray menu update immediately.
+
 ## Playing music
 
 - **Search and play:** Enter a song, artist, or album in the top search box, then play it or add it to the queue.

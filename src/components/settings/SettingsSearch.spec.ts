@@ -2,11 +2,19 @@ import { mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createI18n } from "vue-i18n";
 import { nextTick } from "vue";
+import type { LocaleCode } from "@shared/types/settings";
 import type { SettingCategory } from "@/types/settings-schema";
 import zhCN from "@/i18n/locales/zh-CN.json";
+import zhTW from "@/i18n/locales/zh-TW.json";
 import enUS from "@/i18n/locales/en-US.json";
 import SInput from "@/components/ui/SInput.vue";
 import SettingsSearch from "./SettingsSearch.vue";
+
+const messages: Record<LocaleCode, typeof zhCN> = {
+  "zh-CN": zhCN,
+  "zh-TW": zhTW,
+  "en-US": enUS,
+};
 
 const fixtures = vi.hoisted(() => ({ schema: [] as SettingCategory[] }));
 vi.mock("@/settings/schema", () => ({ settingsSchema: fixtures.schema }));
@@ -17,11 +25,11 @@ let wrapper: VueWrapper;
  * 挂载指定语言的设置搜索
  * @param locale - 界面语言
  */
-const mountSearch = (locale: "zh-CN" | "en-US" = "zh-CN") => {
+const mountSearch = (locale: LocaleCode = "zh-CN") => {
   const i18n = createI18n({
     legacy: false,
     locale,
-    messages: { "zh-CN": zhCN, "en-US": enUS },
+    messages,
   });
   wrapper = mount(SettingsSearch, {
     global: {
@@ -77,22 +85,25 @@ beforeEach(() => {
 afterEach(() => wrapper.unmount());
 
 describe("设置搜索文案", () => {
-  it.each(["zh-CN", "en-US"] as const)("%s 显示账号标题和组件共用的描述", async (locale) => {
-    mountSearch(locale);
-    await search(locale === "zh-CN" ? "登录" : "account");
-    const messages = locale === "zh-CN" ? zhCN : enUS;
-    expect(wrapper.text()).toContain(messages.settings.qmAccount.label);
-    expect(wrapper.text()).toContain(messages.settings.kgAccount.label);
-    expect(wrapper.text()).toContain(messages.settings.platformLogin.desc);
-    expect(wrapper.text()).not.toContain("settings.");
-  });
+  it.each(["zh-CN", "zh-TW", "en-US"] as const)(
+    "%s 显示账号标题和组件共用的描述",
+    async (locale) => {
+      mountSearch(locale);
+      await search(locale === "en-US" ? "account" : locale === "zh-TW" ? "登入" : "登录");
+      const localeMessages = messages[locale];
+      expect(wrapper.text()).toContain(localeMessages.settings.qmAccount.label);
+      expect(wrapper.text()).toContain(localeMessages.settings.kgAccount.label);
+      expect(wrapper.text()).toContain(localeMessages.settings.platformLogin.desc);
+      expect(wrapper.text()).not.toContain("settings.");
+    },
+  );
 
-  it.each(["zh-CN", "en-US"] as const)("%s 没有描述的下载目录仍可搜索", async (locale) => {
+  it.each(["zh-CN", "zh-TW", "en-US"] as const)("%s 没有描述的下载目录仍可搜索", async (locale) => {
     mountSearch(locale);
-    const messages = locale === "zh-CN" ? zhCN : enUS;
-    await search(messages.settings.downloadDir.label);
+    const localeMessages = messages[locale];
+    await search(localeMessages.settings.downloadDir.label);
     expect(wrapper.findAll(".font-medium").map((item) => item.text())).toEqual([
-      messages.settings.downloadDir.label,
+      localeMessages.settings.downloadDir.label,
     ]);
     expect(wrapper.find(".truncate").exists()).toBe(false);
   });
