@@ -297,6 +297,44 @@ describe("lyric loader", () => {
     expect(mockResolveOnlineByPreference).not.toHaveBeenCalled();
   });
 
+  it.each([true, false])(
+    "切换严格匹配后本地库未命中，不再保留旧专辑 TTML（在线回退：%s）",
+    async (hasOnline) => {
+      const settings = useSettingsStore();
+      const media = useMediaStore();
+      media.track = createTrack("album_match_switch", "local");
+      mockResolveLocalRepoLyric.mockResolvedValue({
+        source: { source: "external", format: "ttml" },
+        input: {
+          content: `<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="00:01.00" end="00:03.00">旧专辑歌词</p></div></body></tt>`,
+        },
+      });
+      await loadForTrack(null);
+      expect(media.parsedLyric[0].words[0].word).toBe("旧专辑歌词");
+
+      mockResolveLocalRepoLyric.mockResolvedValue(null);
+      mockResolveOnlineByPreference.mockResolvedValue(
+        hasOnline
+          ? {
+              source: { source: "online", format: "lrc", platform: "netease" },
+              input: { content: "[00:01.00]在线回退歌词" },
+            }
+          : null,
+      );
+      settings.system.localLyric.matchLevel = "strict";
+
+      await vi.waitFor(() => {
+        if (hasOnline) {
+          expect(media.activeLyric?.format).toBe("lrc");
+          expect(media.parsedLyric[0].words[0].word).toBe("在线回退歌词");
+        } else {
+          expect(media.activeLyric).toBeNull();
+          expect(media.parsedLyric).toEqual([]);
+        }
+      });
+    },
+  );
+
   it("插件歌词优选：开启插件优先时，插件较快返回可率先上屏展示", async () => {
     const settings = useSettingsStore();
     settings.lyric.preferPluginLyric = true;

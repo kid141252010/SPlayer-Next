@@ -491,12 +491,20 @@ export const watchLyricPreference = (): void => {
       settings.lyric.preferPluginLyric,
       settings.lyric.detectBackgroundLyrics,
       settings.system.lyric.enableOnlineTTMLLyric,
+    ],
+    () => {
+      refreshPreference();
+    },
+  );
+  // 本地库规则变化会使旧命中失效，必须重载，不能继续以旧 TTML 阻挡回退歌词
+  watch(
+    () => [
       settings.system.localLyric.enableLocalTTMLOverride,
       settings.system.localLyric.repoDir,
       settings.system.localLyric.matchLevel,
     ],
     () => {
-      refreshPreference();
+      loadForTrack(useMediaStore().detail);
     },
   );
 };

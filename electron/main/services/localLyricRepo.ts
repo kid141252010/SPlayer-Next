@@ -3,7 +3,8 @@
  *
  * 用户指定一个目录作为 TTML 歌词仓库。按需扫描目录下所有 .ttml，解析 AMLL
  * `<amll:meta>` 头建立索引：
- * - 平台标识（ISRC / Apple Music / 网易云 / QQ）→ 文件路径（精确命中）
+ * - 平台标识（Apple Music / 网易云 / QQ）→ 文件路径（精确命中）
+ * - ISRC 录音编码 → 候选列表（同一录音可有多个专辑版本）
  * - 归一化标题（支持多语种别名）→ 候选列表
  * 命中返回文件原文，交由渲染层 parseTTML 解析。
  *
@@ -39,7 +40,8 @@ interface RepoIndex {
   byNcm: Map<string, string>;
   byQq: Map<string, string>;
   byAppleMusic: Map<string, string>;
-  byIsrc: Map<string, string>;
+  /** 同一录音可收录于多张专辑，保留全部发行版本 */
+  byIsrc: Map<string, NameCandidate[]>;
   /** 归一化标题 → 同名候选 */
   byTitle: Map<string, NameCandidate[]>;
 }
@@ -148,6 +150,11 @@ const buildIndex = async (dir: string): Promise<RepoIndex> => {
       continue;
     }
     const meta = extractMeta(text);
+    const candidate: NameCandidate = {
+      artists: meta.artists,
+      albums: meta.albums,
+      file,
+    };
     for (const ncmId of meta.ncmIds) {
       if (!index.byNcm.has(ncmId)) index.byNcm.set(ncmId, file);
     }
@@ -158,15 +165,12 @@ const buildIndex = async (dir: string): Promise<RepoIndex> => {
       if (!index.byAppleMusic.has(amId)) index.byAppleMusic.set(amId, file);
     }
     for (const isrc of meta.isrcs) {
-      if (!index.byIsrc.has(isrc)) index.byIsrc.set(isrc, file);
+      const list = index.byIsrc.get(isrc);
+      if (list) list.push(candidate);
+      else index.byIsrc.set(isrc, [candidate]);
     }
 
     if (meta.names.length > 0) {
-      const candidate: NameCandidate = {
-        artists: meta.artists,
-        albums: meta.albums,
-        file,
-      };
       const seenTitles = new Set<string>();
       for (const name of meta.names) {
         const titleKey = normalize(name);
@@ -272,53 +276,19 @@ const pickCandidate = (
     return best.file;
   }
 
-  // 严格模式：必须歌曲与候选均有艺术家且严格一致，若双方均有专辑则专辑也必须一致
+  // 严格模式：无真实平台 ID 时，艺术家与专辑都必须有明确的完全匹配
   if (level === "strict") {
-    if (trackArtists.length === 0) return null;
-    let best: NameCandidate | null = null;
-    let bestScore = -1;
-
+    if (trackArtists.length === 0 || !trackAlbum) return null;
     for (const candidate of candidates) {
-      let matchExact = false;
-      for (const candArtist of candidate.artists) {
-        if (artistMatches(candArtist, trackArtists).exact) {
-          matchExact = true;
-          break;
-        }
-      }
+      const matchExact = candidate.artists.some(
+        (artist) => artistMatches(artist, trackArtists).exact,
+      );
       if (!matchExact) continue;
-
-      let albumScore = 0;
-      if (trackAlbum && candidate.albums.length > 0) {
-        let hasExactAlbum = false;
-        let hasContainsAlbum = false;
-        for (const candAlbumRaw of candidate.albums) {
-          const candAlbum = normalize(candAlbumRaw);
-          if (!candAlbum) continue;
-          if (candAlbum === trackAlbum) {
-            hasExactAlbum = true;
-            break;
-          }
-          if (bothContains(candAlbum, trackAlbum)) {
-            hasContainsAlbum = true;
-          }
-        }
-        if (hasExactAlbum) {
-          albumScore = 20;
-        } else if (hasContainsAlbum) {
-          albumScore = 10;
-        } else {
-          continue; // 双方均有专辑但均不匹配，严格模式直接排除
-        }
-      }
-
-      const score = 100 + albumScore;
-      if (score > bestScore) {
-        bestScore = score;
-        best = candidate;
+      if (candidate.albums.some((album) => normalize(album) === trackAlbum)) {
+        return candidate.file;
       }
     }
-    return best ? best.file : null;
+    return null;
   }
 
   // 标准模式 (standard，默认)：必须艺术家匹配；多候选根据艺术家与专辑匹配度综合择优
@@ -407,13 +377,6 @@ export const matchLocalTTML = async (track: Track): Promise<string | null> => {
 
   const matchLevel = (store.get("localLyric.matchLevel") as LocalLyricMatchLevel) || "standard";
 
-  // ISRC 全球唯一录音编码精确命中（跨平台最高置信度）
-  if (track.isrc) {
-    const isrcKey = track.isrc.trim().toUpperCase();
-    const hit = await tryRead(index.byIsrc.get(isrcKey));
-    if (hit) return hit;
-  }
-
   // Apple Music ID 精确命中
   const isAppleMusic =
     (track.source as string) === "appleMusic" || (track.source as string) === "applemusic";
@@ -445,6 +408,16 @@ export const matchLocalTTML = async (track: Track): Promise<string | null> => {
     }
   }
 
+  // ISRC 只标识录音，不能区分原专辑与精选集；平台 ID 优先，再按专辑筛选同录音候选
+  if (track.isrc) {
+    const candidates = index.byIsrc.get(track.isrc.trim().toUpperCase());
+    if (candidates?.length) {
+      const picked = pickCandidate(candidates, track, matchLevel);
+      const hit = await tryRead(picked ?? undefined);
+      if (hit) return hit;
+    }
+  }
+
   // 标题命中：按匹配强度筛选候选（支持多语种别名标题、艺术家与专辑）
   const candidates = index.byTitle.get(normalize(track.title));
   if (candidates && candidates.length > 0) {
@@ -454,6 +427,9 @@ export const matchLocalTTML = async (track: Track): Promise<string | null> => {
       if (hit) return hit;
     }
   }
+
+  // 在线模糊搜索得到的 ID 不是当前歌曲的真实平台 ID，不能绕过严格匹配
+  if (matchLevel === "strict") return null;
 
   // 兜底：平台 ID 指纹缓存回查
   return matchByCachedId(track, index);
