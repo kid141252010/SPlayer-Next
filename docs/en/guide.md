@@ -37,6 +37,9 @@ If you maintain your own TTML files, select a local directory as a lyrics librar
 - Enable **Settings → Lyrics → Local TTML lyrics library** (Beta).
 - Choose a folder containing `.ttml` files. Tracks are matched by metadata such as title and artist.
 - A local match takes precedence over online lyrics.
+- **Strict matching** prioritizes the current track's actual platform ID. Other matches require an exact artist and album match; title-based lookup also requires an exact title. Comparisons ignore whitespace and common separators, but an album substring or missing album metadata is not enough.
+- An **ISRC** identifies a recording, not an album release: an original album and a compilation can share it. All versions are retained and filtered by artist and album. Strict mode does not let IDs cached from fuzzy online searches bypass these checks.
+- Changing the matching level, directory, or library toggle reloads lyrics for the current track. If the new rules find no match, other enabled lyric sources are tried instead of keeping the old library match. Matching strictness applies only to the local TTML library, not independent online lyric matching.
 
 ### Lyrics windows
 
