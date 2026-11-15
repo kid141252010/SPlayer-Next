@@ -87,7 +87,7 @@ export const installCoverTransitions = (
     releaseNavigation = null;
     for (const cover of covers) cover.removeAttribute("data-cover-shared");
     document.documentElement.removeAttribute("data-cover-transition");
-    getScope()?.style.removeProperty("--cover-transition-radius");
+    document.documentElement.style.removeProperty("--cover-transition-radius");
     covers = [];
     preview = null;
     coverTransitionActive.value = false;
@@ -135,7 +135,10 @@ export const installCoverTransitions = (
 
     covers.push(cover);
     cover.setAttribute("data-cover-shared", "");
-    scope.style.setProperty("--cover-transition-radius", getComputedStyle(cover).borderRadius);
+    document.documentElement.style.setProperty(
+      "--cover-transition-radius",
+      getComputedStyle(cover).borderRadius,
+    );
     if (entering) preview = current;
     coverTransitionActive.value = true;
 
