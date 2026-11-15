@@ -17,6 +17,7 @@ import {
   setExclusiveMode,
   syncEngineProxy,
   syncJocSettings,
+  syncPlaybackSettings,
 } from "@main/services/engine";
 import { applyGlobalFetchProxy, applySessionsProxy } from "@main/utils/proxy";
 import {
@@ -40,13 +41,18 @@ import { getUpdateState, syncUpdateChannel } from "@main/services/updater";
 import { UPDATE_CHANNELS } from "@shared/types/settings";
 import { syncProxyEnv } from "@main/utils/proxy";
 import { refreshPowerBlocker } from "@main/utils/powerBlocker";
+import { requestAllDataReset } from "@main/services/dataReset";
 
 /**
  * 应用配置写入后的副作用
  * @param keyPath - 配置路径
  * @param value - 新值
  */
-const applyConfigChange = (keyPath: string, value: unknown): void => {
+const applyConfigChange = async (
+  keyPath: string,
+  value: unknown,
+  notifyWindows = true,
+): Promise<void> => {
   switch (keyPath) {
     case "player.keepScreenAwake":
       refreshPowerBlocker();
@@ -102,10 +108,10 @@ const applyConfigChange = (keyPath: string, value: unknown): void => {
       setOrpheusProtocolRegistered(value as boolean);
       break;
     case "externalApi.enabled":
-      void (value ? startServer() : stopServer());
+      await (value ? startServer() : stopServer());
       break;
     case "mcp.enabled":
-      void (value ? startMcpServer() : stopMcpServer());
+      await (value ? startMcpServer() : stopMcpServer());
       break;
     case "system.uiZoom":
       applyMainWindowZoom();
@@ -139,25 +145,56 @@ const applyConfigChange = (keyPath: string, value: unknown): void => {
   }
   if (keyPath.startsWith("system.networkProxy")) {
     syncEngineProxy();
-    applyGlobalFetchProxy().catch((err) => systemLog.warn("[proxy] apply fetch proxy failed", err));
-    applySessionsProxy().catch((err) => systemLog.warn("[proxy] apply sessions proxy failed", err));
+    syncProxyEnv();
+    await Promise.all([applyGlobalFetchProxy(), applySessionsProxy()]);
   }
   // 桌面歌词配置变更广播到所有窗口
-  if (keyPath.startsWith("desktopLyric.")) {
+  if (notifyWindows && keyPath.startsWith("desktopLyric.")) {
     broadcast("desktopLyric:configChange", store.get("desktopLyric"));
   }
   // 灵动岛配置变更广播到所有窗口
-  if (keyPath.startsWith("dynamicIsland.")) {
+  if (notifyWindows && keyPath.startsWith("dynamicIsland.")) {
     broadcast("dynamicIsland:configChange", store.get("dynamicIsland"));
   }
   // 任务栏歌词配置变更广播到所有窗口（仅 Windows）
-  if (isWin && keyPath.startsWith("taskbarLyric.")) {
+  if (notifyWindows && isWin && keyPath.startsWith("taskbarLyric.")) {
     broadcast("taskbarLyric:configChange", store.get("taskbarLyric"));
   }
-  // 网络代理配置变更，实时同步环境变量
-  if (keyPath.startsWith("system.networkProxy")) {
-    syncProxyEnv();
-  }
+};
+
+/** 整盘替换也复用逐项写入的真实副作用，窗口配置最后各广播一次。 */
+const applyAllConfigChanges = async (): Promise<void> => {
+  const paths: ConfigPath[] = [
+    "player.keepScreenAwake",
+    "update.channel",
+    "media.systemMediaControls",
+    "media.discord.enabled",
+    "lastfm.enabled",
+    "player.loudnessNormalization",
+    "player.joc",
+    "player.equalizer.enabled",
+    "player.equalizer.bands",
+    "player.equalizer.preamp",
+    "system.taskbarProgress",
+    "system.taskbarThumbnailCover",
+    "system.registerOrpheusProtocol",
+    "externalApi.enabled",
+    "mcp.enabled",
+    "system.uiZoom",
+    "desktopLyric.locked",
+    "desktopLyric.alwaysOnTop",
+    "dynamicIsland.alwaysOnTop",
+    "dynamicIsland.snapCentered",
+    "dynamicIsland.notchFusion",
+    "dynamicIsland.nonOcclusive",
+    "taskbarLyric.position",
+    "system.networkProxy",
+  ];
+  for (const keyPath of paths) await applyConfigChange(keyPath, store.get(keyPath), false);
+  broadcast("desktopLyric:configChange", store.get("desktopLyric"));
+  broadcast("dynamicIsland:configChange", store.get("dynamicIsland"));
+  if (isWin) broadcast("taskbarLyric:configChange", store.get("taskbarLyric"));
+  await syncPlaybackSettings();
 };
 
 /** 注册配置相关 IPC */
@@ -171,24 +208,24 @@ export const registerConfigIpc = (): void => {
       throw new Error(`无效的更新通道: ${String(value)}`);
     }
     store.set(keyPath, value);
-    applyConfigChange(keyPath, value);
+    return applyConfigChange(keyPath, value);
   });
   ipcMain.handle("config:getAll", () => store.store);
   ipcMain.handle("config:reset", () => {
     if (getUpdateState().phase === "installing") throw new Error("安装启动中，无法重置配置");
     store.clear();
-    syncJocSettings();
-    syncUpdateChannel();
-    refreshPowerBlocker();
+    return applyAllConfigChanges();
+  });
+  ipcMain.handle("config:clearAllData", () => {
+    if (getUpdateState().phase === "installing") throw new Error("安装启动中，无法清除数据");
+    return requestAllDataReset();
   });
 
   /** 替换整盘配置 */
   ipcMain.handle("config:replaceAll", (_event, payload: unknown) => {
     if (getUpdateState().phase === "installing") throw new Error("安装启动中，无法替换配置");
     store.replaceAll(payload);
-    syncJocSettings();
-    syncUpdateChannel();
-    refreshPowerBlocker();
+    return applyAllConfigChanges();
   });
 
   /** 备份 */

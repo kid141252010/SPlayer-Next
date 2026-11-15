@@ -81,7 +81,7 @@ describe("queue", () => {
     expect(originalQueue.value?.map((item) => item.track.id)).toEqual(["a", "c", "b", "d", "e"]);
   });
 
-  it("删除歌曲时按 ID 同步洗牌备份", () => {
+  it("删除歌曲时按来源身份同步洗牌备份", () => {
     queueEntries.value = [entry("c"), entry("a"), entry("b")];
     originalQueue.value = [entry("a"), entry("b"), entry("c")];
 
@@ -89,6 +89,19 @@ describe("queue", () => {
 
     expect(queue.value.map(({ id }) => id)).toEqual(["a", "b"]);
     expect(originalQueue.value?.map((item) => item.track.id)).toEqual(["a", "b"]);
+  });
+
+  it("删除服务器曲目时不误删随机备份内同 ID 的本地和其他服务器曲目", () => {
+    const local = track("shared");
+    const other: Track = { ...local, source: "streaming", serverId: "other" };
+    const removed: Track = { ...local, source: "streaming", serverId: "server" };
+    queueEntries.value = [{ track: removed }, { track: other }, { track: local }];
+    originalQueue.value = [{ track: local }, { track: other }, { track: removed }];
+
+    removeFromQueue(0);
+
+    expect(queue.value).toEqual([other, local]);
+    expect(originalQueue.value).toEqual([{ track: local }, { track: other }]);
   });
 
   it("移动和更新曲目时保持队列身份操作正确", () => {

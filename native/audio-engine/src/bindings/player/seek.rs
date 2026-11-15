@@ -1,5 +1,7 @@
 use super::*;
 
+const SEEK_SUPERSEDED_REASON: &str = "[Cancelled] seek 已被新的播放操作取代";
+
 /// async seek 阶段 2 的输出
 enum SeekOutcome {
     /// 提交完成或被新的播放操作取代，资源已经在阻塞线程处理
@@ -19,15 +21,22 @@ impl AudioPlayer {
     /// seek 失败时回退到完整加载。
     #[napi]
     pub async fn seek(&self, position: f64) -> Result<()> {
+        // 普通 load 已取走 decoder 时不排队、更不回退旧源；在途 seek 则保留请求。
+        let Some(epoch) = self.inner.lock().seek_request_epoch() else {
+            return Err(Error::from_reason(
+                "[Cancelled] seek 当前没有可跳转的解码器",
+            ));
+        };
+        let _serial = self.seek_serial.lock().await;
         let take = {
             let mut player = self.inner.lock();
+            if !player.is_seek_epoch_current(epoch) {
+                return Err(Error::from_reason(SEEK_SUPERSEDED_REASON));
+            }
             player.take_for_async_seek()
         };
-        // 无解码线程：空闲 / 已停止 / 正在异步加载（句柄被 load 取走）
-        // 此时 seek 无意义，且绝不能走回退重载——current_source 仍指向旧曲，
-        // 重载会顶掉在途的新歌加载、复活旧曲
         let Some(take) = take else {
-            return Ok(());
+            return Err(Error::from_reason("seek 无法继续：当前解码器不可用"));
         };
 
         let SeekTake {
@@ -46,12 +55,21 @@ impl AudioPlayer {
         } = take;
 
         let inner = Arc::clone(&self.inner);
-        let outcome: SeekOutcome = tokio::task::spawn_blocking(move || {
+        #[cfg(test)]
+        let worker_gate = self.seek_worker_gate.lock().take();
+        let outcome = tokio::task::spawn_blocking(move || {
+            #[cfg(test)]
+            if let Some(gate) = worker_gate {
+                gate.wait();
+            }
             let decoder_data = old_threads.join_aux().and_then(|h| h.join().ok());
             let mut decoder_data = match decoder_data {
                 Some(d) => d,
                 None => return SeekOutcome::Fallback,
             };
+            if !inner.lock().is_load_token_current(token) {
+                return SeekOutcome::Committed(Ok(false));
+            }
             if !decoder_data.seek(position) {
                 return SeekOutcome::Fallback;
             }
@@ -95,35 +113,45 @@ impl AudioPlayer {
             )
         })
         .await
-        .map_err(|e| Error::from_reason(format!("seek task join error: {e}")))?;
+        .map_err(|e| {
+            self.inner.lock().finish_async_seek(token);
+            Error::from_reason(format!("seek task join error: {e}"))
+        })?;
 
         match outcome {
             SeekOutcome::Committed(result) => {
+                self.inner.lock().finish_async_seek(token);
                 let committed = result?;
                 if !committed {
                     info!(position, "seek 已被更新的 load/seek/stop 取代，丢弃结果");
+                    return Err(Error::from_reason(SEEK_SUPERSEDED_REASON));
                 }
                 Ok(())
             }
             SeekOutcome::OutputFailed { error } => {
                 let mut player = self.inner.lock();
+                player.finish_async_seek(token);
                 if !player.is_load_token_current(token) {
-                    return Ok(());
+                    return Err(Error::from_reason(SEEK_SUPERSEDED_REASON));
                 }
                 player.enter_paused_for_recovery();
                 Err(error).into_napi()
             }
             SeekOutcome::Fallback => {
+                // 保留 pending_seek 直到恢复 load 接管，交接间隙的新请求也必须可以排队。
                 // seek 期间已被新的 load/stop 取代时不再回退重载，避免复活旧源
                 if !self.inner.lock().is_load_token_current(token) {
                     info!(position, "seek 失败且已被取代，跳过回退重载");
-                    return Ok(());
+                    return Err(Error::from_reason(SEEK_SUPERSEDED_REASON));
                 }
                 if let Some(src) = current_source {
                     let is_remote = src.starts_with("http://") || src.starts_with("https://");
-                    if let Err(e) = self.load_for_recovery(src, was_playing).await {
+                    if let Err(e) = self
+                        .load_for_seek_recovery(src, was_playing, token, position)
+                        .await
+                    {
                         if is_cancelled_napi_error(&e) {
-                            return Ok(());
+                            return Err(e);
                         }
                         // 失败事件已在恢复加载提交锁内发出。
                         if is_remote && !is_device_napi_error(&e) {
@@ -133,9 +161,13 @@ impl AudioPlayer {
                     }
                     Ok(())
                 } else {
+                    self.inner.lock().finish_async_seek(token);
                     Err(Error::from_reason("seek 失败且无 current_source"))
                 }
             }
         }
     }
 }
+
+#[cfg(test)]
+pub(super) mod tests;

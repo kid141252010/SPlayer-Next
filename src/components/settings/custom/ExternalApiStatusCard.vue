@@ -45,15 +45,23 @@ const restart = async (): Promise<void> => {
 };
 
 let unsubscribe: (() => void) | undefined;
+let mounted = false;
 
 onMounted(async () => {
-  status.value = await window.api.externalApi.getStatus();
+  mounted = true;
+  let receivedUpdate = false;
   unsubscribe = window.api.externalApi.onStatus((value) => {
+    receivedUpdate = true;
     status.value = value;
   });
+  const snapshot = await window.api.externalApi.getStatus();
+  if (mounted && !receivedUpdate) status.value = snapshot;
 });
 
-onBeforeUnmount(() => unsubscribe?.());
+onBeforeUnmount(() => {
+  mounted = false;
+  unsubscribe?.();
+});
 </script>
 
 <template>

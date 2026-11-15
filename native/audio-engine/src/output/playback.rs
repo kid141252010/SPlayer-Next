@@ -99,7 +99,6 @@ impl PlaybackHandle {
         })
     }
 
-
     /// 将备用 PCM 提交到现有输出流，由回调按音频帧执行过渡
     pub fn queue_transition(
         &self,
@@ -154,6 +153,8 @@ impl OutputStream {
     fn play(&self) -> Result<()> {
         match self {
             Self::Shared(stream) => stream.play().map_err(Into::into),
+            #[cfg(test)]
+            Self::Headless { .. } => Ok(()),
             #[cfg(target_os = "windows")]
             Self::Exclusive(stream) => {
                 stream.play();
@@ -165,6 +166,8 @@ impl OutputStream {
     fn pause(&self) -> Result<()> {
         match self {
             Self::Shared(stream) => stream.pause().map_err(Into::into),
+            #[cfg(test)]
+            Self::Headless { .. } => Ok(()),
             #[cfg(target_os = "windows")]
             Self::Exclusive(stream) => {
                 stream.pause();

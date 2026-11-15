@@ -7,7 +7,8 @@ import type {
   StreamingServerInput,
   StreamingFavoriteChange,
 } from "@shared/types/streaming";
-import { queue, removeServerTracks, updateQueueTracks } from "@/stores/queue";
+import { queue, updateQueueTracks } from "@/stores/queue";
+import { purgeServerTracks } from "@/core/player";
 import { useMediaStore } from "@/stores/media";
 
 export const useStreamingStore = defineStore("streaming", () => {
@@ -188,7 +189,7 @@ export const useStreamingStore = defineStore("streaming", () => {
       previous?.username !== updated.username ||
       input.password
     )
-      removeServerTracks(id);
+      await purgeServerTracks(id);
     if (
       activeServerId.value === id &&
       (previous?.mediaRevision ?? 0) !== (updated.mediaRevision ?? 0)
@@ -206,7 +207,7 @@ export const useStreamingStore = defineStore("streaming", () => {
    */
   const removeServer = async (id: string): Promise<void> => {
     await window.api.streaming.removeServer(id);
-    removeServerTracks(id);
+    await purgeServerTracks(id);
     servers.value = servers.value.filter((s) => s.id !== id);
     if (activeServerId.value === id) {
       activeServerId.value = null;

@@ -528,6 +528,8 @@ export interface ConfigApi {
   getAll: () => Promise<SystemConfig>;
   /** 重置为默认值 */
   reset: () => Promise<void>;
+  /** 清除应用拥有的数据、登录态与缓存，并受控重启 */
+  clearAllData: () => Promise<void>;
   /** 整盘替换主进程配置 */
   replaceAll: (config: unknown) => Promise<void>;
   /** 写入用户选择的备份文件 */

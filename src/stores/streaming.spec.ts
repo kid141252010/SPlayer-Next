@@ -21,8 +21,8 @@ vi.mock("@/stores/media", async () => {
 vi.mock("@/stores/queue", () => ({
   queue: state.queue,
   updateQueueTracks: state.updateQueue,
-  removeServerTracks: vi.fn(),
 }));
+vi.mock("@/core/player", () => ({ purgeServerTracks: vi.fn() }));
 import { useStreamingStore } from "./streaming";
 import { useMediaStore } from "./media";
 const track: Track = {

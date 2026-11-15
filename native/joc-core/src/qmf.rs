@@ -6,8 +6,10 @@
 //! by the frame's clipgain and by the caller's gain.
 
 use crate::tables_qmf as tables;
-use crate::{FRAME_SAMPLES, LFE_DELAY_SAMPLES, MAX_CORE_CHANNELS, MAX_DPOINTS, MAX_OBJECTS,
-            MAX_PARAMETER_BANDS, OUTPUT_CHANNELS, SUBBANDS, TIMESLOTS};
+use crate::{
+    FRAME_SAMPLES, LFE_DELAY_SAMPLES, MAX_CORE_CHANNELS, MAX_DPOINTS, MAX_OBJECTS,
+    MAX_PARAMETER_BANDS, OUTPUT_CHANNELS, SUBBANDS, TIMESLOTS,
+};
 
 use std::f64::consts::PI;
 
@@ -46,10 +48,10 @@ fn parameter_band_map(bands: u8) -> Option<&'static [u8; 64]> {
 
 /// Per-frame descriptors, in the layout the reference kernel consumes.
 pub struct ObjectDescriptor {
-    pub n_bands: u8,
-    pub n_dpoints: u8,
-    pub slope_idx: u8,
-    pub offset_ts: [u8; MAX_DPOINTS],
+    pub n_bands: [u8; MAX_OBJECTS],
+    pub n_dpoints: [u8; MAX_OBJECTS],
+    pub slope_idx: [u8; MAX_OBJECTS],
+    pub offset_ts: [[u8; MAX_DPOINTS]; MAX_OBJECTS],
     /// `[object][dpoint][channel][band]`
     pub dq: Vec<f64>,
 }
@@ -63,10 +65,10 @@ impl Default for ObjectDescriptor {
 impl ObjectDescriptor {
     pub fn new() -> Self {
         Self {
-            n_bands: 0,
-            n_dpoints: 0,
-            slope_idx: 0,
-            offset_ts: [0; MAX_DPOINTS],
+            n_bands: [0; MAX_OBJECTS],
+            n_dpoints: [0; MAX_OBJECTS],
+            slope_idx: [0; MAX_OBJECTS],
+            offset_ts: [[0; MAX_DPOINTS]; MAX_OBJECTS],
             dq: vec![0.0; MAX_OBJECTS * MAX_DPOINTS * MAX_CORE_CHANNELS * MAX_PARAMETER_BANDS],
         }
     }
@@ -144,7 +146,10 @@ impl Renderer {
         }
         for i in 0..32 {
             let angle = -2.0 * PI * i as f64 / 64.0;
-            self.fft_twiddle[i] = Complex { re: angle.cos(), im: angle.sin() };
+            self.fft_twiddle[i] = Complex {
+                re: angle.cos(),
+                im: angle.sin(),
+            };
         }
     }
 
@@ -179,9 +184,14 @@ impl Renderer {
                 for j in 0..half {
                     let even = values[base + j];
                     let odd = cmul(values[base + j + half], twiddle[j * twiddle_step]);
-                    values[base + j] = Complex { re: even.re + odd.re, im: even.im + odd.im };
-                    values[base + j + half] =
-                        Complex { re: even.re - odd.re, im: even.im - odd.im };
+                    values[base + j] = Complex {
+                        re: even.re + odd.re,
+                        im: even.im + odd.im,
+                    };
+                    values[base + j + half] = Complex {
+                        re: even.re - odd.re,
+                        im: even.im - odd.im,
+                    };
                 }
                 base += length;
             }
@@ -213,15 +223,22 @@ impl Renderer {
             let im = v36[source];
             let a = self.rotation_sin[k];
             let b = self.rotation_cos[k];
-            frequency[k] = Complex { re: im * a - re * b, im: im * b + re * a };
+            frequency[k] = Complex {
+                re: im * a - re * b,
+                im: im * b + re * a,
+            };
         }
         Self::fft64_tables(&self.bit_reverse, &self.fft_twiddle, &mut frequency);
         const SCALE: f64 = 1.0 / 64.0;
         for k in 0..32 {
-            self.x[channel][2 * k][timeslot] =
-                Complex { re: frequency[k].re * SCALE, im: -frequency[k].im * SCALE };
-            self.x[channel][2 * k + 1][timeslot] =
-                Complex { re: frequency[63 - k].re * SCALE, im: frequency[63 - k].im * SCALE };
+            self.x[channel][2 * k][timeslot] = Complex {
+                re: frequency[k].re * SCALE,
+                im: -frequency[k].im * SCALE,
+            };
+            self.x[channel][2 * k + 1][timeslot] = Complex {
+                re: frequency[63 - k].re * SCALE,
+                im: frequency[63 - k].im * SCALE,
+            };
         }
         for history in (1..9).rev() {
             self.analysis_fifo[channel][history] = self.analysis_fifo[channel][history - 1];
@@ -233,22 +250,50 @@ impl Renderer {
 
     fn surround_post(&mut self) {
         const DC_A: [f64; 21] = [
-            -0.0006242550443857908, -0.0019234686624258757, -0.0042654648423194885,
-            -0.008168308064341545, -0.014327201060950756, -0.023759860545396805,
-            -0.03757232800126076, -0.05577569454908371, -0.07568276673555374,
-            -0.09172472357749939, -0.5979374051094055, -0.09172472357749939,
-            -0.07568276673555374, -0.05577569454908371, -0.03757232800126076,
-            -0.023759860545396805, -0.014327201060950756, -0.008168308064341545,
-            -0.0042654648423194885, -0.0019234686624258757, -0.0006242550443857908,
+            -0.0006242550443857908,
+            -0.0019234686624258757,
+            -0.0042654648423194885,
+            -0.008168308064341545,
+            -0.014327201060950756,
+            -0.023759860545396805,
+            -0.03757232800126076,
+            -0.05577569454908371,
+            -0.07568276673555374,
+            -0.09172472357749939,
+            -0.5979374051094055,
+            -0.09172472357749939,
+            -0.07568276673555374,
+            -0.05577569454908371,
+            -0.03757232800126076,
+            -0.023759860545396805,
+            -0.014327201060950756,
+            -0.008168308064341545,
+            -0.0042654648423194885,
+            -0.0019234686624258757,
+            -0.0006242550443857908,
         ];
         const DC_B: [f64; 21] = [
-            0.0013996040215715766, 0.003839150769636035, 0.007512642536312342,
-            0.012419373728334904, 0.018367428332567215, 0.0249701626598835,
-            0.03167900815606117, 0.03785000368952751, 0.04283412545919418,
-            0.04607561603188515, 0.047200120985507965, 0.04607561603188515,
-            0.04283412545919418, 0.03785000368952751, 0.03167900815606117,
-            0.0249701626598835, 0.018367428332567215, 0.012419373728334904,
-            0.007512642536312342, 0.003839150769636035, 0.0013996040215715766,
+            0.0013996040215715766,
+            0.003839150769636035,
+            0.007512642536312342,
+            0.012419373728334904,
+            0.018367428332567215,
+            0.0249701626598835,
+            0.03167900815606117,
+            0.03785000368952751,
+            0.04283412545919418,
+            0.04607561603188515,
+            0.047200120985507965,
+            0.04607561603188515,
+            0.04283412545919418,
+            0.03785000368952751,
+            0.03167900815606117,
+            0.0249701626598835,
+            0.018367428332567215,
+            0.012419373728334904,
+            0.007512642536312342,
+            0.003839150769636035,
+            0.0013996040215715766,
         ];
         for surround in 0..2 {
             let channel = surround + 3;
@@ -261,7 +306,10 @@ impl Renderer {
                         current[slot][band] = self.x[channel][band][group + slot];
                         let delayed = self.surround_delay[surround][slot][band];
                         self.x[channel][band][group + slot] = if self.phase_shift {
-                            Complex { re: delayed.im, im: -delayed.re }
+                            Complex {
+                                re: delayed.im,
+                                im: -delayed.re,
+                            }
                         } else {
                             delayed
                         };
@@ -281,8 +329,10 @@ impl Renderer {
                             sum.re += sample.re * cr - sample.im * ci;
                             sum.im += sample.re * ci + sample.im * cr;
                         }
-                        self.x[channel][0][group + slot] =
-                            Complex { re: 2.0 * sum.re, im: 2.0 * sum.im };
+                        self.x[channel][0][group + slot] = Complex {
+                            re: 2.0 * sum.re,
+                            im: 2.0 * sum.im,
+                        };
                     }
                 }
                 self.surround_history[surround].copy_from_slice(&dc_buffer[4..24]);
@@ -322,7 +372,8 @@ impl Renderer {
             let ring: [f32; 64] = if use_delay {
                 let delayed = self.analysis_delay[delay_lane][0];
                 for slot in 0..9 {
-                    self.analysis_delay[delay_lane][slot] = self.analysis_delay[delay_lane][slot + 1];
+                    self.analysis_delay[delay_lane][slot] =
+                        self.analysis_delay[delay_lane][slot + 1];
                 }
                 self.analysis_delay[delay_lane][9] = scaled;
                 delayed
@@ -349,10 +400,10 @@ impl Renderer {
 
     fn matrix_object(&mut self, object: usize, descriptors: &ObjectDescriptor) {
         self.z[object] = [[Complex::default(); TIMESLOTS]; SUBBANDS];
-        let bands = descriptors.n_bands as usize;
-        let points = descriptors.n_dpoints as usize;
-        let slope = descriptors.slope_idx;
-        let Some(pb_map) = parameter_band_map(descriptors.n_bands) else {
+        let points = descriptors.n_dpoints[object] as usize;
+        let slope = descriptors.slope_idx[object];
+        let offsets = &descriptors.offset_ts[object];
+        let Some(pb_map) = parameter_band_map(descriptors.n_bands[object]) else {
             return;
         };
         for channel in 0..self.core_channels {
@@ -379,18 +430,18 @@ impl Renderer {
                             target0 * (1.0 - alpha) + target1 * alpha
                         }
                     } else if points == 1 {
-                        if timeslot < descriptors.offset_ts[0] as usize {
+                        if timeslot < offsets[0] as usize {
                             previous
                         } else {
                             target0
                         }
                     } else {
-                        let mut coefficient = if timeslot < descriptors.offset_ts[0] as usize {
+                        let mut coefficient = if timeslot < offsets[0] as usize {
                             previous
                         } else {
                             target0
                         };
-                        if timeslot >= descriptors.offset_ts[1] as usize {
+                        if timeslot >= offsets[1] as usize {
                             coefficient = target1;
                         }
                         coefficient
@@ -404,7 +455,6 @@ impl Renderer {
                 self.matrix_previous[object][channel][subband] = last;
             }
         }
-        let _ = bands;
     }
 
     fn qmf5_step(state: &mut [f64; 640], rotated: &[f64; 128], output: &mut [f64; 64]) {
@@ -414,14 +464,13 @@ impl Renderer {
                 let base = block * 36 + lane;
                 let even = rotated[block * 8 + lane * 2];
                 let odd = rotated[block * 8 + lane * 2 + 1];
-                output[sample] =
-                    2.0 * (tables::QMF5_WINDOW[sample] * even + state[base]);
+                output[sample] = 2.0 * (tables::QMF5_WINDOW[sample] * even + state[base]);
                 state[base] = tables::QMF5_WINDOW[64 + sample] * odd + state[base + 4];
                 for slot in 0..7 {
                     let alternating = if slot & 1 == 0 { even } else { odd };
-                    state[base + (slot + 1) * 4] =
-                        tables::QMF5_WINDOW[(slot + 2) * 64 + sample] * alternating
-                            + state[base + (slot + 2) * 4];
+                    state[base + (slot + 1) * 4] = tables::QMF5_WINDOW[(slot + 2) * 64 + sample]
+                        * alternating
+                        + state[base + (slot + 2) * 4];
                 }
                 state[base + 8 * 4] = tables::QMF5_WINDOW[9 * 64 + sample] * odd;
             }
@@ -443,8 +492,14 @@ impl Renderer {
             for k in 0..32 {
                 let even = z[2 * k][timeslot];
                 let odd = z[2 * k + 1][timeslot];
-                frequency[k] = Complex { re: even.re, im: -even.im };
-                frequency[63 - k] = Complex { re: odd.re, im: odd.im };
+                frequency[k] = Complex {
+                    re: even.re,
+                    im: -even.im,
+                };
+                frequency[63 - k] = Complex {
+                    re: odd.re,
+                    im: odd.im,
+                };
             }
             Self::fft64_tables(&reverse, &twiddle, &mut frequency);
             for k in 0..64 {
@@ -558,8 +613,8 @@ mod tests {
             lfe[sample] = (0.02 * (2.0 * std::f64::consts::PI * 55.0 * t).sin()) as f32;
         }
         let mut descriptor = ObjectDescriptor::new();
-        descriptor.n_bands = 1;
-        descriptor.n_dpoints = 1;
+        descriptor.n_bands[0] = 1;
+        descriptor.n_dpoints[0] = 1;
         descriptor.dq[0] = 1.0;
         Inputs {
             bed,
