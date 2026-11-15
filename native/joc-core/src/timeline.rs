@@ -104,6 +104,9 @@ impl ObjectPositionTrack {
         Ok(())
     }
 
+    /// 查询单调递增的采样位置，并回收不再参与插值的历史
+    /// @param sample - 当前渲染块的起始采样位置
+    /// @returns 插值后的对象坐标
     pub fn position_at(&mut self, sample: i64) -> Result<[f64; 3]> {
         if sample < self.last_query_sample {
             return fail(
@@ -121,6 +124,12 @@ impl ObjectPositionTrack {
             self.initial = transition.target;
             self.cursor += 1;
         }
+        // 保留最近完成的一条，供后续更新的重叠校验使用
+        let expired = self.cursor.saturating_sub(1);
+        if expired > 0 {
+            self.transitions.drain(..expired);
+            self.cursor -= expired;
+        }
         if self.cursor >= self.transitions.len() {
             return Ok(self.initial);
         }
@@ -134,8 +143,8 @@ impl ObjectPositionTrack {
         let amount = (sample - transition.start_sample) as f64 / transition.duration_samples as f64;
         let mut out = [0.0f64; 3];
         for index in 0..3 {
-            out[index] =
-                transition.origin[index] + (transition.target[index] - transition.origin[index]) * amount;
+            out[index] = transition.origin[index]
+                + (transition.target[index] - transition.origin[index]) * amount;
         }
         Ok(out)
     }
@@ -281,5 +290,53 @@ impl OamdPositionTimeline {
             positions[index] = self.tracks[index].position_at(sample)?;
         }
         Ok(positions)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 长时间顺序播放只保留当前插值和最近完成的转换，容量不随时长增长
+    #[test]
+    fn consumed_transitions_remain_bounded() {
+        let mut track = ObjectPositionTrack::default();
+        let mut previous = [0.0; 3];
+        let mut capacity = 0;
+        for index in 0..10_000 {
+            let start = index * 64;
+            let target = [index as f64 + 1.0, 2.0, -1.0];
+            track.append(start, 32, &target, 1).unwrap();
+            if index == 0 {
+                capacity = track.transitions.capacity();
+            }
+            let expected = core::array::from_fn(|axis| (previous[axis] + target[axis]) / 2.0);
+            assert_eq!(track.position_at(start + 16).unwrap(), expected);
+            assert!(track.transitions.len() <= 2, "已消费的转换未回收");
+            assert!(track.transitions.capacity() <= capacity);
+            assert_eq!(track.position_at(start + 32).unwrap(), target);
+            previous = target;
+        }
+    }
+
+    /// 回收历史不影响当前插值、尚未开始的更新和重叠检测
+    #[test]
+    fn pruning_preserves_pending_interpolation_and_timing_checks() {
+        let mut track = ObjectPositionTrack::default();
+        for index in 0..3 {
+            track
+                .append(index * 64, 32, &[index as f64 + 1.0; 3], 1)
+                .unwrap();
+        }
+        assert_eq!(track.position_at(16).unwrap(), [0.5; 3]);
+        assert_eq!(track.position_at(80).unwrap(), [1.5; 3]);
+        assert_eq!(track.position_at(144).unwrap(), [2.5; 3]);
+        assert_eq!(track.transitions.len(), 2);
+        assert_eq!(track.position_at(160).unwrap(), [3.0; 3]);
+        assert!(track.append(159, 32, &[4.0; 3], 1).is_err());
+        assert!(track.position_at(159).is_err());
+        track.append(192, 32, &[4.0; 3], 1).unwrap();
+        assert_eq!(track.position_at(176).unwrap(), [3.0; 3]);
+        assert_eq!(track.position_at(208).unwrap(), [3.5; 3]);
     }
 }
