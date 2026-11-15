@@ -3,12 +3,25 @@ import { app } from "electron";
 import path from "node:path";
 import { store } from "@main/store";
 import { defaultCacheDir } from "./paths";
+import type { JocSettings } from "@shared/types/joc";
 
 /**
  * 是否为开发环境
  * @returns boolean
  */
 export const isDev = is.dev;
+
+/**
+ * 解析随应用分发的 HRTF 路径，开发目录与原生模块使用相同根目录
+ * @param hrtf - HRTF 标识
+ * @returns 原生引擎可读取的文件路径
+ */
+export const getJocHrtfPath = (hrtf: JocSettings["hrtf"]): string =>
+  path.join(
+    app.isPackaged ? process.resourcesPath : path.join(process.cwd(), "resources"),
+    "joc",
+    `joc-hrtf-${hrtf}.jochrtf`,
+  );
 
 /** 是否为 Windows 系统 */
 export const isWin = process.platform === "win32";

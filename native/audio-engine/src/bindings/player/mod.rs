@@ -45,6 +45,8 @@ pub struct AudioPlayer {
 }
 
 mod controls;
+mod joc;
+pub use joc::*;
 mod device;
 mod events;
 mod load;

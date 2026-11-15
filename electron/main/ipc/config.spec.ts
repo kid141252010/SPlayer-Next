@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   clear: vi.fn(),
   replaceAll: vi.fn(),
   sync: vi.fn(),
+  syncJoc: vi.fn(),
 }));
 vi.mock("electron", () => ({
   dialog: {},
@@ -28,7 +29,7 @@ vi.mock("@main/utils/config", () => ({ isWin: true }));
 vi.mock("@main/utils/broadcast", () => ({}));
 vi.mock("@main/services/media", () => ({}));
 vi.mock("@main/services/lastfm", () => ({}));
-vi.mock("@main/services/engine", () => ({}));
+vi.mock("@main/services/engine", () => ({ syncJocSettings: mocks.syncJoc }));
 vi.mock("@main/window", () => ({}));
 vi.mock("@main/server", () => ({}));
 vi.mock("@main/services/mcp/http", () => ({}));
@@ -67,5 +68,24 @@ describe("更新配置入口", () => {
     );
     expect(mocks.set).not.toHaveBeenCalled();
     expect(mocks.sync).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["player.joc.mode", "binaural"],
+    ["player.joc.hrtf", "H20"],
+    ["player.joc.gainDb", -12],
+    ["player.joc", { mode: "off", hrtf: "D2", gainDb: 0 }],
+  ])("写入 %s 后同步对象渲染配置", (key, value) => {
+    mocks.handlers.get("config:set")!(null, key, value);
+    expect(mocks.set).toHaveBeenCalledWith(key, value);
+    expect(mocks.syncJoc).toHaveBeenCalledOnce();
+    expect(mocks.set.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.syncJoc.mock.invocationCallOrder[0],
+    );
+  });
+
+  it.each(["config:reset", "config:replaceAll"])("%s 后同步对象渲染默认值或新配置", (channel) => {
+    mocks.handlers.get(channel)!(null, {});
+    expect(mocks.syncJoc).toHaveBeenCalledOnce();
   });
 });

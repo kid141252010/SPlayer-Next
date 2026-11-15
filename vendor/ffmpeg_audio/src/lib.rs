@@ -50,6 +50,12 @@ pub struct AudioReader {
 unsafe impl Send for AudioReader {}
 
 impl AudioReader {
+    /// 开关解码包旁路，启用后通过 AudioFrame::take_packets 获取载荷
+    /// @param enabled - 是否保留原始包
+    pub fn set_packet_passthrough(&mut self, enabled: bool) {
+        self.engine.set_packet_passthrough(enabled);
+    }
+
     pub fn new<T>(source: T) -> Result<Self>
     where
         T: Read + Seek + Send + 'static,

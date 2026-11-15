@@ -67,6 +67,27 @@ export declare class AudioPlayer {
   /** 获取"音调同步"开关状态 */
   getPitchSync(): boolean
   /**
+   * 切换对象渲染模式，重建当前播放链以避免旧 PCM 缓冲延迟生效
+   * @param options - 模式、HRTF 路径与输出增益
+   * @returns 设置和必要的当前位置重载完成
+   */
+  setJocMode(options: JsJocMode): Promise<void>
+  /**
+   * 更新头部姿态、站位与对象增益，省略 gains 时保持原值
+   * @param options - 与 joc_set_controls 相同的交互参数
+   */
+  setJocControls(options: JsJocControls): void
+  /**
+   * 获取最近一帧的 64 浮点场景布局，非生效双耳模式返回空
+   * @returns 15 组位置、16 路电平与 3 个站位值
+   */
+  getJocScene(): Float32Array | null
+  /**
+   * 获取当前对象渲染是否生效及峰值统计
+   * @returns 模式、生效状态、峰值、超限样本和缺失元数据帧数
+   */
+  getJocStatus(): JsJocStatus
+  /**
    * 重新初始化音频输出设备（系统休眠唤醒、设备热插拔或输出流错误后调用）
    *
    * 恢复为全成全败：新输出创建失败时不启动解码、不提交状态，保留当前曲目与位置，
@@ -226,6 +247,35 @@ export interface JsFftData {
   rdata: Array<number>
 }
 
+/** 双耳交互参数，角度单位为弧度、位移单位为米 */
+export interface JsJocControls {
+  yaw: number
+  pitch: number
+  roll: number
+  x: number
+  y: number
+  z: number
+  focus: number
+  height: number
+  gains?: Array<number>
+}
+
+/** 对象渲染模式与当前 HRTF */
+export interface JsJocMode {
+  mode: 'off' | 'speaker' | 'binaural'
+  hrtfPath?: string
+  gainDb: number
+}
+
+/** 当前对象渲染状态 */
+export interface JsJocStatus {
+  active: boolean
+  mode: string
+  peak: number
+  overUnity: number
+  missingJocFrames: number
+}
+
 /** 歌曲完整元信息，返回给 JS 侧（load 时一次性返回） */
 export interface JsMusicMetadata {
   /** 复用了预载 PCM 时的起点（秒），普通加载为空 */
@@ -259,6 +309,8 @@ export interface JsMusicMetadata {
 
 /** 播放器事件，推送给 JS 侧 */
 export interface JsPlayerEvent {
+  /** 对象渲染是否生效，仅 jocStateChanged 提供 */
+  jocActive?: boolean
   /** 事件类型："stateChanged" | "ended" | "sourceError" | "position" | "transitionChanged" | "fftData" | "outputStalled" | "outputFailed" | "outputFallback" */
   type: string
   /** 状态（仅 stateChanged 时有值） */

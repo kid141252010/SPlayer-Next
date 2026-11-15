@@ -1431,6 +1431,8 @@ export const initPlayer = async (): Promise<void> => {
   // 先订阅事件，确保 load 触发播放后 position 事件能被接收
   if (unsubscribe) unsubscribe();
   unsubscribe = window.api.player.onEvent(handleEvent);
+  const jocStatus = await window.api.player.getJocStatus();
+  if (jocStatus.success && jocStatus.data) status.jocActive = jocStatus.data.active;
   // 安装播放统计累加器
   installPlayStats();
   // 订阅主进程下发的歌词偏移变化

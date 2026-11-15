@@ -67,6 +67,9 @@ const finishCurrentTrack = async (): Promise<void> => {
 export const handleEvent = async (event: PlayerEvent): Promise<void> => {
   const status = useStatusStore();
   switch (event.type) {
+    case "jocStateChanged":
+      status.jocActive = event.data.active;
+      break;
     case "status":
       // 歌曲加载中或 loading 事件不更新 UI，保持当前封面/进度/播放状态平滑过渡
       if (event.data.state === "loading" || status.trackLoading) break;

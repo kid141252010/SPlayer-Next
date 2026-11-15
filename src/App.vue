@@ -1,5 +1,11 @@
 <script setup lang="ts">
 import { useSettingsStore } from "@/stores/settings";
+import { useSpatialStore } from "@/stores/spatial";
+
+const SpatialScene = defineAsyncComponent(
+  () => import("@/components/player/SpatialScene/SpatialScene.vue"),
+);
+const spatial = useSpatialStore();
 
 const settings = useSettingsStore();
 
@@ -15,4 +21,5 @@ watchEffect(() => {
 <template>
   <AppBackground />
   <RouterView />
+  <SpatialScene v-if="spatial.open" />
 </template>

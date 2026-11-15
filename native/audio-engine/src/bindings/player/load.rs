@@ -37,6 +37,7 @@ impl AudioPlayer {
         notify_source_error: bool,
     ) -> Result<JsMusicMetadata> {
         let auto_play = auto_play.unwrap_or(true);
+        let joc_settings = Arc::clone(&self.inner.lock().joc);
         info!(source = %source, auto_play, "加载音频源");
 
         let handle = HttpCancelHandle::new();
@@ -128,7 +129,6 @@ impl AudioPlayer {
                 shared.set_normalization_enabled(normalization_enabled);
                 if let Some(mut ready) = prepared_playback.take() {
                     if Arc::ptr_eq(&shared, &ready.shared) {
-                        shared.set_preloading(false);
                         let decode_handle = ready.decoder.take().unwrap();
                         return Ok((
                             ready.metadata.clone(),
@@ -158,8 +158,10 @@ impl AudioPlayer {
                     .lock()
                     .set_output_format(output.sample_rate(), output.channels());
                 tempo.lock().reset();
+                let mut prepared = prepared.unwrap();
+                prepared.set_joc_settings(joc_settings);
                 let (metadata, decode_handle, cancel) = decoder::start_prepared_decode(
-                    prepared.unwrap(),
+                    prepared,
                     Arc::clone(&shared),
                     Arc::clone(&equalizer),
                     Arc::clone(&tempo),

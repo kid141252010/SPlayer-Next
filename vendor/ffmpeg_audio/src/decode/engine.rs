@@ -57,9 +57,18 @@ pub struct DecodeEngine {
     has_buffered_seek_frame: bool,
     /// Stores the calculated sample offset for the buffered seek frame
     buffered_seek_offset: usize,
+    packet_passthrough: bool,
+    pending_packets: Vec<Vec<u8>>,
 }
 
 impl DecodeEngine {
+    /// 开关原始包旁路，关闭时释放未消费载荷
+    /// @param enabled - 是否保留送入解码器的包
+    pub fn set_packet_passthrough(&mut self, enabled: bool) {
+        self.packet_passthrough = enabled;
+        self.pending_packets.clear();
+    }
+
     /// 将开流选项传递给解封装器，不改变解码和 seek 逻辑。
     pub fn new<T>(source: T, options: AudioReaderOptions) -> Result<Self>
     where
@@ -84,6 +93,8 @@ impl DecodeEngine {
             is_exhausted: false,
             has_buffered_seek_frame: false,
             buffered_seek_offset: 0,
+            packet_passthrough: false,
+            pending_packets: Vec::new(),
         })
     }
 
@@ -100,12 +111,8 @@ impl DecodeEngine {
         debug_assert!(tb.num > 0, "Time base numerator is zero or negative.");
     }
 
-    /// Pulls and decodes the next available audio frame from the underlying stream.
-    ///
-    /// # Returns
-    /// * `Ok(Some(AudioFrame))` containing the decompressed audio data ready for consumption.
-    /// * `Ok(None)` if the stream has reached the End Of File (EOF).
-    /// * `Err(AudioError)` if an I/O failure or a fatal FFmpeg decoding error occurs.
+    /// 解码下一音频帧，开启旁路时关联自上一帧以来送入的原始包
+    /// @returns 解码帧、流末尾空值或解码错误
     pub fn receive_frame(&mut self) -> Result<Option<AudioFrame<'_>>> {
         self.debug_verify();
 
@@ -118,7 +125,8 @@ impl DecodeEngine {
             let frame_ptr = self.decoder.current_frame();
             let audio_frame = AudioFrame::new(frame_ptr, self.time_base)
                 .with_timeline_origin(self.timeline_origin_pts)
-                .with_offset(self.buffered_seek_offset);
+                .with_offset(self.buffered_seek_offset)
+                .with_packets(std::mem::take(&mut self.pending_packets));
 
             self.buffered_seek_offset = 0;
             self.current_pts = audio_frame.pts();
@@ -137,6 +145,7 @@ impl DecodeEngine {
                         (audio_frame.pts_micros(), audio_frame.end_micros())
                     {
                         if end_us <= 0 {
+                            self.pending_packets.clear();
                             #[cfg(feature = "tracing")]
                             tracing::debug!(
                                 "Dropped preroll frame (start: {start_us} us, end: {end_us} us)"
@@ -152,11 +161,14 @@ impl DecodeEngine {
                             if offset_samples < audio_frame.samples() {
                                 audio_frame = audio_frame.with_offset(offset_samples);
                             } else {
+                                self.pending_packets.clear();
                                 continue;
                             }
                         }
                     }
 
+                    audio_frame =
+                        audio_frame.with_packets(std::mem::take(&mut self.pending_packets));
                     self.current_pts = audio_frame.pts();
                     self.debug_verify();
                     return Ok(Some(audio_frame));
@@ -164,6 +176,16 @@ impl DecodeEngine {
                 Err(AudioError::Eagain) => {
                     if let Some(packet) = self.demuxer.read_packet()? {
                         self.decoder.send_packet(packet)?;
+                        if self.packet_passthrough {
+                            // send_packet 已接受该包，解封装器下一次读取前复制载荷
+                            let packet = unsafe { &*packet };
+                            if packet.size > 0 {
+                                let bytes = unsafe {
+                                    std::slice::from_raw_parts(packet.data, packet.size as usize)
+                                };
+                                self.pending_packets.push(bytes.to_vec());
+                            }
+                        }
                     } else {
                         if self.decoder.is_flushing() {
                             self.is_exhausted = true;
@@ -184,19 +206,16 @@ impl DecodeEngine {
         }
     }
 
-    /// Seeks the underlying audio stream to the specified target presentation time.
-    ///
-    /// # Arguments
-    /// * `target` - The exact chronological point in the audio stream to seek to.
-    ///
-    /// # Errors
-    /// Returns an `AudioError` if the underlying demuxer fails to seek, or if a decoding
-    /// error occurs during the frame alignment process.
+    /// 跳转并清理旧包，精确模式保留目标帧的载荷与裁剪量
+    /// @param target - 目标播放时间
+    /// @param mode - 精确或粗略定位策略
+    /// @returns 定位及帧对齐结果
     pub fn seek(&mut self, target: Duration, mode: SeekMode) -> Result<()> {
         self.debug_verify();
 
         self.demuxer.seek_to(target)?;
         self.decoder.flush();
+        self.pending_packets.clear();
 
         self.is_exhausted = false;
         self.current_pts = None;
@@ -210,12 +229,15 @@ impl DecodeEngine {
 
         loop {
             match self.receive_frame() {
-                Ok(Some(frame)) => {
+                Ok(Some(mut frame)) => {
                     if let Some(offset_samples) = frame.sample_offset_to(target) {
                         if offset_samples >= frame.samples() {
                             continue;
                         }
-                        self.buffered_seek_offset = frame.offset() + offset_samples;
+                        let offset = frame.offset() + offset_samples;
+                        let packets = frame.take_packets();
+                        self.pending_packets = packets;
+                        self.buffered_seek_offset = offset;
                         self.has_buffered_seek_frame = true;
                         break;
                     } else {
