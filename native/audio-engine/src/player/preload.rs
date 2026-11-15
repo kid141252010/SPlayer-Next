@@ -16,6 +16,20 @@ pub struct PreparedPlayback {
     pub(crate) tempo: Arc<Mutex<StretchProcessor>>,
 }
 
+impl PreparedPlayback {
+    /// 将备用解码链提升为当前播放链
+    /// @param settings - 播放器共享的对象渲染状态
+    pub(crate) fn activate(&self, settings: &Mutex<crate::joc::Settings>) {
+        {
+            let mut settings = settings.lock();
+            settings.set_active(false);
+            settings.info = joc_core::stream::StreamInfo::default();
+            settings.scene = None;
+        }
+        self.shared.set_preloading(false);
+    }
+}
+
 impl Drop for PreparedPlayback {
     fn drop(&mut self) {
         if self.decoder.is_some() {

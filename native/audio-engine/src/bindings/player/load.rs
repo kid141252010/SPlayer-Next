@@ -129,7 +129,7 @@ impl AudioPlayer {
                 shared.set_normalization_enabled(normalization_enabled);
                 if let Some(mut ready) = prepared_playback.take() {
                     if Arc::ptr_eq(&shared, &ready.shared) {
-                        shared.set_preloading(false);
+                        ready.activate(&joc_settings);
                         let decode_handle = ready.decoder.take().unwrap();
                         return Ok((
                             ready.metadata.clone(),
