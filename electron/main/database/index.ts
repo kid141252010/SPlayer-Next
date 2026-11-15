@@ -81,6 +81,22 @@ export const initDatabase = (): void => {
       PRIMARY KEY (fingerprint, platform)
     );
 
+    CREATE TABLE IF NOT EXISTS lyric_manual_match (
+      track_key TEXT PRIMARY KEY,
+      platform TEXT NOT NULL,
+      platform_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      artist TEXT NOT NULL,
+      duration INTEGER,
+      picked_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS motion_cover_cache (
+      fingerprint TEXT PRIMARY KEY,
+      video_url TEXT,
+      matched_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS lyric_ttml_cache (
       platform TEXT NOT NULL,
       id TEXT NOT NULL,
@@ -241,6 +257,7 @@ export {
   upsertTracks,
   deleteTracksByPaths,
   searchTracks,
+  quickSearchLibrary,
   deleteTracksByDir,
   getAlbumList,
   getArtistList,

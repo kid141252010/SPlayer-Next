@@ -141,11 +141,12 @@ export const useSettingsStore = defineStore(
       playerBgRenderScale: 0.5,
       playerBgFreezeOnPause: false,
       playerBgBeat: false,
-      coverLayout: "default",
+      layout: "classic",
       coverLyricRatio: 0.45,
       autoCenterCover: true,
       showPlaybackSource: false,
       followCoverColor: true,
+      motionCoverSource: "off",
       autoImmersive: true,
       outputDevice: null,
       pauseOnDeviceSwitch: false,
@@ -161,11 +162,12 @@ export const useSettingsStore = defineStore(
       showProgressLyric: false,
       snapToLyric: false,
       showLyricInBar: true,
+      barLyricMode: "translation",
       preloadNextTrack: false,
       transitionMode: "none",
       transitionPreference: "standard",
+      automixCrossfadeFallback: true,
       searchPlayBehavior: "current",
-      dynamicCover: false,
       songListPlayBehavior: "current",
     });
 
@@ -184,9 +186,10 @@ export const useSettingsStore = defineStore(
       lyricSourcePreference: "auto",
       lyricSourceOrder: [...DEFAULT_LYRIC_SOURCE_ORDER],
       lyricFormatOrder: [...DEFAULT_LYRIC_FORMAT_ORDER],
-      smartPreferOnline: false,
+      smartPreferOnline: true,
       preferPluginLyric: false,
       detectBackgroundLyrics: true,
+      autoGenerateWordByWord: false,
       cjkTransform: "none",
       adaptiveFontSize: true,
       fontSize: 48,
@@ -205,6 +208,7 @@ export const useSettingsStore = defineStore(
       showWordRomanization: true,
       enableScale: true,
       bgAlwaysBelow: false,
+      enableBalancedWrap: true,
       enableWordHighlight: true,
       enableFloatAnimation: false,
       enableEmphasizeEffect: false,
@@ -380,14 +384,32 @@ export const useSettingsStore = defineStore(
     persist: {
       storage: localStorage,
       omit: ["system"],
+      serializer: {
+        serialize: JSON.stringify,
+        deserialize: (value) => {
+          const saved = JSON.parse(value) as {
+            player?: Partial<PlayerSettings> & { dynamicCover?: boolean };
+          };
+          // 先于默认值合并迁移，避免默认 off 掩盖旧开关；显式的新来源设置优先。
+          if (saved.player) {
+            if (saved.player.motionCoverSource === undefined && saved.player.dynamicCover) {
+              saved.player.motionCoverSource = "ncm";
+            }
+            delete saved.player.dynamicCover;
+          }
+          return saved;
+        },
+      },
       afterHydrate: ({ store }) => {
-        const { lyric, appearance, preset, player } = store as unknown as {
+        const { player, preset, lyric, appearance } = store as unknown as {
+          player: PlayerSettings;
+          preset: PresetSettings;
           lyric: LyricSettings;
           appearance: AppearanceSettings;
-          preset: PresetSettings;
-          player: PlayerSettings;
         };
-        if (player.transitionMode !== "crossfade") player.transitionMode = "none";
+        if (player.transitionMode !== "crossfade" && player.transitionMode !== "automix") {
+          player.transitionMode = "none";
+        }
         if (
           player.transitionPreference !== "conservative" &&
           player.transitionPreference !== "eager"

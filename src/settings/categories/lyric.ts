@@ -40,7 +40,7 @@ const lyricCategory: SettingCategory = {
               key: "smartPreferOnline",
               type: "switch",
               binding: { store: "settings", path: "lyric.smartPreferOnline" },
-              defaultValue: false,
+              defaultValue: true,
             },
           ],
         },
@@ -278,6 +278,19 @@ const lyricCategory: SettingCategory = {
           key: "bgAlwaysBelow",
           type: "switch",
           binding: { store: "settings", path: "lyric.bgAlwaysBelow" },
+          defaultValue: false,
+        },
+        {
+          key: "enableBalancedWrap",
+          type: "switch",
+          binding: { store: "settings", path: "lyric.enableBalancedWrap" },
+          defaultValue: true,
+          visible: () => lyricEngine() === "physics",
+        },
+        {
+          key: "autoGenerateWordByWord",
+          type: "switch",
+          binding: { store: "settings", path: "lyric.autoGenerateWordByWord" },
           defaultValue: false,
         },
         {

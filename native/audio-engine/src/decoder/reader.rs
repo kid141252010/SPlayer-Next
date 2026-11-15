@@ -35,6 +35,9 @@ impl DecoderData {
 
 use std::io::{Read, Seek, SeekFrom};
 
+/// 网络音频代理策略，由主进程按应用代理设置同步，不读取系统代理
+pub(crate) static HTTP_PROXY: RwLock<HttpProxy> = RwLock::new(HttpProxy::Direct);
+
 /// 对网络流进行延迟 Seek 包装，消除 AVSEEK_SIZE 探测触发的断网与重连。
 ///
 /// FFmpeg 打开流时探测大小（AVSEEK_SIZE）会先后调用 seek(Current(0))、seek(End(0)) 与 seek(Start(0))。
@@ -159,7 +162,8 @@ pub(super) fn open_source(
     cancel_handle: HttpCancelHandle,
 ) -> Result<(AudioReader, Option<HttpCancelHandle>)> {
     let (reader, cancel) = if source.starts_with("http://") || source.starts_with("https://") {
-        let http = HttpAudioSource::new_with_cancel_handle(source, &cancel_handle)?;
+        let proxy = HTTP_PROXY.read().clone();
+        let http = HttpAudioSource::new_with_proxy(source, &cancel_handle, &proxy)?;
         let total_size = extract_stream_size(source);
         let lazy_http = LazySeekHttpSource::new(http, total_size);
         let options = AudioReaderOptions {
@@ -211,6 +215,8 @@ pub(super) fn build_resamplers(
 }
 
 /// 核心解码循环：每帧解码一次，使用复用缓冲分发到播放与 FFT 重采样器
+/// @param data - 当前解码器和重采样器
+/// @param shared - 音频缓冲与响度参数
 pub(super) fn run_decoding_loop(data: &mut DecoderData, shared: &Shared) {
     // 响度归一化：有 ReplayGain 标签时用固定增益，否则用实时分析
     let has_replay_gain = (shared.normalization_gain() - 1.0).abs() > f32::EPSILON;
@@ -254,12 +260,15 @@ pub(super) fn run_decoding_loop(data: &mut DecoderData, shared: &Shared) {
                 }
                 had_success = true;
 
+                let mut normalization_gain = 1.0;
+
                 if shared.is_normalization_enabled() && !player_samples.is_empty() {
                     let gain = if has_replay_gain {
                         shared.normalization_gain()
                     } else {
                         loudness.process(&player_samples)
                     };
+                    normalization_gain = gain;
                     if (gain - 1.0).abs() > f32::EPSILON {
                         for s in &mut player_samples {
                             *s *= gain;
@@ -268,6 +277,8 @@ pub(super) fn run_decoding_loop(data: &mut DecoderData, shared: &Shared) {
                 }
 
                 shared.push(AudioChunk {
+                    normalization_gain,
+                    stem_samples: None,
                     source_sample_count: player_samples.len() as u64,
                     player_samples,
                     fft_samples,
@@ -283,6 +294,8 @@ pub(super) fn run_decoding_loop(data: &mut DecoderData, shared: &Shared) {
                 fft_samples.extend_from_slice(data.fft_resampler.output_as::<f32>());
                 if !player_samples.is_empty() || !fft_samples.is_empty() {
                     shared.push(AudioChunk {
+                        normalization_gain: 1.0,
+                        stem_samples: None,
                         source_sample_count: player_samples.len() as u64,
                         player_samples,
                         fft_samples,

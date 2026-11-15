@@ -9,7 +9,7 @@
  */
 
 import { callNetease } from "@main/apis/netease";
-import { getCachedLyric, setCachedLyric } from "@main/database/lyricCache";
+import { withLyricCache } from "@main/database/lyricCache";
 import { buildFingerprint, getMatchedId, setMatchedId } from "@main/database/lyricMatchCache";
 import { coreLog } from "@main/utils/logger";
 import type { LyricMatchResult } from "@shared/types/lyrics";
@@ -46,42 +46,72 @@ const pickSub = (
 /**
  * 按 id 直取歌词
  * @param id 歌曲 id
+ * @param prefetch 是否预热 TTML，手动选择的歌词不做 TTML 升级，不需要预热
  */
-export const getByPlatformId = async (id: string): Promise<LyricMatchResult | null> => {
-  // 立刻预热 TTML 抓取
-  prefetchTTML("netease", [id]);
-  // 缓存命中直接返回
-  const cached = getCachedLyric("netease", id);
-  if (cached) {
-    // 纠正旧版本格式
-    if (cached.translationFormat === "yrc") cached.translationFormat = "lrc";
-    if (cached.romajiFormat === "yrc") cached.romajiFormat = "lrc";
-    return cached;
-  }
-  try {
-    const { status, body } = await callNetease("lyric_new", { id });
-    if (status !== 200 || body.code !== 200) return null;
-    // 主歌词：yrc > lrc
-    const main = pickMain(body.yrc?.lyric, body.lrc?.lyric);
-    if (!main) return null;
-    // 翻译 / 罗马音
-    const trans = pickSub(body.ytlrc?.lyric, body.tlyric?.lyric);
-    const roma = pickSub(body.yromalrc?.lyric, body.romalrc?.lyric);
-    const result: LyricMatchResult = {
-      platform: "netease",
-      format: main.format,
-      content: main.content,
-      translation: trans?.content,
-      translationFormat: trans?.format,
-      romaji: roma?.content,
-      romajiFormat: roma?.format,
-    };
-    setCachedLyric("netease", id, result);
-    return result;
-  } catch (err) {
-    coreLog.warn(`[lyric:netease] getByPlatformId(${id}) failed:`, err);
-    return null;
-  }
+export const getByPlatformId = async (
+  id: string,
+  prefetch = true,
+): Promise<LyricMatchResult | null> => {
+  if (prefetch) prefetchTTML("netease", [id]);
+  const result = await withLyricCache("netease", id, async () => {
+    try {
+      const { status, body } = await callNetease("lyric_new", { id });
+      if (status !== 200 || body.code !== 200) return null;
+      // 主歌词：yrc > lrc
+      const main = pickMain(body.yrc?.lyric, body.lrc?.lyric);
+      if (!main) return null;
+      // 翻译 / 罗马音
+      const trans = pickSub(body.ytlrc?.lyric, body.tlyric?.lyric);
+      const roma = pickSub(body.yromalrc?.lyric, body.romalrc?.lyric);
+      return {
+        platform: "netease",
+        format: main.format,
+        content: main.content,
+        translation: trans?.content,
+        translationFormat: trans?.format,
+        romaji: roma?.content,
+        romajiFormat: roma?.format,
+      };
+    } catch (err) {
+      coreLog.warn(`[lyric:netease] getByPlatformId(${id}) failed:`, err);
+      return null;
+    }
+  });
+  // 纠正旧版本缓存格式
+  if (result?.translationFormat === "yrc") result.translationFormat = "lrc";
+  if (result?.romajiFormat === "yrc") result.romajiFormat = "lrc";
+  return result;
+};
+
+/**
+ * 搜索歌词候选
+ * @param keyword 搜索关键词
+ * @returns 归一化后的候选列表
+ */
+export const searchCandidates = async (
+  keyword: string,
+): Promise<LyricCandidate<{ id: string }>[]> => {
+  const { status, body } = await callNetease("cloudsearch", {
+    keywords: keyword,
+    type: 1,
+    limit: 20,
+  });
+  if (status !== 200) throw new Error(`cloudsearch status=${status}`);
+  return (body.result?.songs ?? []).map(
+    (song: {
+      id: number | string;
+      name: string;
+      ar?: { name: string }[];
+      al?: { name?: string };
+      dt?: number;
+    }) => ({
+      name: song.name,
+      artist: (song.ar ?? []).map((artist) => artist.name).join(" / "),
+      album: song.al?.name,
+      duration: song.dt,
+      extra: { id: String(song.id) },
+    }),
+  );
 };
 
 /**
@@ -96,25 +126,9 @@ export const getByQuery = async (track: Track): Promise<LyricMatchResult | null>
 
   const keyword = buildLyricSearchKeyword(track);
   if (!keyword) return null;
-  // 搜索 + 归一化
-  const candidates: LyricCandidate<{ id: string }>[] = [];
+  let candidates: LyricCandidate<{ id: string }>[];
   try {
-    const { status, body } = await callNetease("search", {
-      keywords: keyword,
-      type: 1,
-      limit: 20,
-    });
-    if (status !== 200) return null;
-    const songs = body.result?.songs ?? [];
-    for (const song of songs) {
-      candidates.push({
-        name: song.name,
-        artist: (song.artists ?? []).map((artist: { name: string }) => artist.name).join(" / "),
-        album: song.album?.name,
-        duration: song.duration,
-        extra: { id: String(song.id) },
-      });
-    }
+    candidates = await searchCandidates(keyword);
   } catch (err) {
     coreLog.warn(`[lyric:netease] search("${keyword}") failed:`, err);
     return null;

@@ -71,15 +71,16 @@ HTTP Range、尾部读取和 seek 返回真实字节，不再使用零填充模�
 pnpm exec vitest run --config vitest.config.ts electron/main/services/appleMusic electron/main/services/songCache.spec.ts electron/main/ipc/playerTransition.spec.ts
 ```
 
-工作区通过 `[patch.crates-io]` 使用 `vendor/ffmpeg_audio`，基于 crates.io 的
-`ffmpeg_audio 0.3.1`（上游提交 `d997800046723f22f823ddbcf45ea2e00601ef66`，
-仓库 `https://github.com/apoint123/ffmpeg-audio` 的 `crates/ffmpeg_audio`）。
-本地补丁增加 `AudioReaderOptions` 和 `AudioReader::with_options`，将选项传到解封装器；
-`AudioReader::new` 默认不忽略索引。精确 seek 和 preroll 裁剪直接按原始 PTS、采样率与目标
-样本位置换算，避免 44.1 kHz 时间戳先舍入到微秒再向上取整时多裁掉一个样本。
-未改变上游 HTTP、解码算法或重采样实现；FFmpeg 仍依赖原有 `ffmpeg_audio_sys`。
-升级依赖时先核对上游的等价配置和精确裁剪实现，再移除本地补丁；许可证位于
-`vendor/ffmpeg_audio/COPYING`。
+工作区通过 `[patch."https://github.com/SPlayer-Dev/ffmpeg-audio"]` 使用
+`vendor/ffmpeg_audio`，基于 `SPlayer-Dev/ffmpeg-audio` 的 `v0.4.0-spn.1`
+（提交 `fe78660bd7e3a231f70222f3da5f1eadc0db87ba`，`crates/ffmpeg_audio`）。
+本地补丁保留 `AudioReaderOptions` 和 `AudioReader::with_options`，将开流选项传到解封装器；
+`AudioReader::new` 默认不忽略索引。精确 seek 与 preroll 裁剪采用 0.4 的统一 `Timeline`，
+直接按原始 PTS、采样率与目标样本位置做有理数运算，不再保留旧的微秒换算实现；
+44.1 kHz 的整秒、半样本边界及 preroll 回归迁入 `Timeline` 测试，逐样本解码回归继续保留。
+HTTP 延迟 seek、取消句柄与应用显式代理策略共同生效，读取代理配置后即释放锁再打开网络源。
+`ffmpeg_audio_sys 0.2.0` 仍取同一锁定 git tag，保留上游自带 FFmpeg 构建方式；许可证位于
+`vendor/ffmpeg_audio/COPYING`。升级依赖时先核对上游等价开流配置，再移除本地补丁。
 
 `src/decoder/tests/reader.rs` 覆盖首次开流不扫描后半首、完整 PCM 一致、索引未预建时的双向
 seek，以及尾部真实字节。44.1 kHz 双声道非周期音源另行校验逐样本精确 seek，避免周期正弦波

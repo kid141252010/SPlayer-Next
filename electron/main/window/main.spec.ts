@@ -36,7 +36,6 @@ vi.mock("@main/store", () => ({
 }));
 vi.mock("@main/utils/protocol", () => ({
   MAIN_PARTITION: "persist:main",
-  handleCacheProtocolOnPartition: vi.fn(),
 }));
 vi.mock("@main/utils/lifecycle", () => ({ isAppQuitting: () => false }));
 vi.mock("@main/utils/broadcast", () => ({ broadcast: vi.fn() }));
@@ -357,4 +356,23 @@ describe("主窗口启动交接", () => {
     expect(mocks.settings["windowStates.main"]).toBe(legacy);
     expect(mocks.storeSet).not.toHaveBeenCalled();
   });
+});
+
+it("macOS 全屏隐藏等待退出全屏事件，避免留下黑色空间", async () => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
+  Object.defineProperty(process, "platform", { value: "darwin" });
+  try {
+    const service = await import("./main");
+    service.createMainWindow();
+    mocks.main.isFullScreen = () => true;
+    mocks.main.setFullScreen = vi.fn();
+    mocks.main.hide = vi.fn();
+    service.hideMainWindow();
+    expect(mocks.main.setFullScreen).toHaveBeenCalledWith(false);
+    expect(mocks.main.hide).not.toHaveBeenCalled();
+    mocks.main.emit("leave-full-screen");
+    expect(mocks.main.hide).toHaveBeenCalledOnce();
+  } finally {
+    Object.defineProperty(process, "platform", platform);
+  }
 });

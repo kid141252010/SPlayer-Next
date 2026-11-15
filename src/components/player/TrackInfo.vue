@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import type { Artist } from "@shared/types/player";
-import { useStatusStore } from "@/stores/status";
 import { useMediaStore } from "@/stores/media";
-import { useSettingsStore } from "@/stores/settings";
-import { navigateToArtist } from "@/utils/navigate";
-import { fetchSongArtists } from "@/apis/song/applemusic";
+import { usePlayerResources } from "@/components/player/usePlayerResources";
 import { getValidArtists } from "@shared/utils/track";
 import { isDolbyAtmosQuality } from "@/utils/quality";
 import { setPlayerExpanded } from "@/services/playerTransition";
@@ -17,10 +13,7 @@ withDefaults(
   { compact: false },
 );
 
-const status = useStatusStore();
 const media = useMediaStore();
-const settings = useSettingsStore();
-const { isPlaying } = storeToRefs(status);
 
 /** 是否为杜比全景声 */
 const isDolbyAtmos = computed(() => {
@@ -31,62 +24,7 @@ const isDolbyAtmos = computed(() => {
 /** 当前歌曲中可展示的歌手 */
 const artists = computed(() => getValidArtists(media.track?.artists));
 
-/** 主歌词行 */
-const mainLines = computed(() => media.parsedLyric.filter((l) => !l.isBG));
-
-/** 当前播放栏歌词 */
-const currentBarLyric = computed(() => {
-  if (
-    !settings.player.showLyricInBar ||
-    !isPlaying.value ||
-    media.lyricIndex < 0 ||
-    !mainLines.value.length
-  )
-    return null;
-  const currentMs = media.parsedLyric[media.lyricIndex]?.startTime ?? 0;
-  const line = mainLines.value.findLast((l) => l.startTime <= currentMs) ?? mainLines.value[0];
-  const text = line.words.map((w) => w.word).join("");
-  return {
-    key: `${line.startTime}:${text}`,
-    text: line.translatedLyric ? `${text}（${line.translatedLyric}）` : text,
-  };
-});
-
-/** 歌手是否可跳转：非本地需有真实 id（或 AM 具备歌曲 id） */
-const isArtistLinkable = (artist: Artist): boolean => {
-  if (!artist.name) return false;
-  const track = media.track;
-  if (track?.source === "applemusic") return !!artist.id || !!track.id;
-  if (track?.source && track.source !== "local") return !!artist.id;
-  return true;
-};
-
-const goArtist = async (artist: Artist): Promise<void> => {
-  if (!isArtistLinkable(artist)) return;
-  const track = media.track;
-  if (track?.source === "applemusic" && !artist.id && track.id) {
-    try {
-      const artists = await fetchSongArtists(track.id);
-      const target = artists.find((a) => a.name === artist.name) || artists[0];
-      if (target?.id) {
-        artist.id = target.id;
-        navigateToArtist(target.name || artist.name, {
-          source: track.source,
-          artistId: target.id,
-          serverId: track.serverId,
-        });
-        return;
-      }
-    } catch (err) {
-      console.warn("[TrackInfo] resolve song artist failed:", err);
-    }
-  }
-  navigateToArtist(artist.name, {
-    source: media.track?.source,
-    artistId: artist.id,
-    serverId: media.track?.serverId,
-  });
-};
+const { artistTarget, isArtistLinkable, goToResource } = usePlayerResources(toRef(media, "track"));
 </script>
 
 <template>
@@ -144,17 +82,8 @@ const goArtist = async (artist: Artist): Promise<void> => {
           </span>
           <slot name="title-trailing" />
         </div>
-        <Transition name="slide-up" mode="out-in">
-          <div v-if="currentBarLyric" :key="currentBarLyric.key" class="min-w-0">
-            <SMarquee
-              class="text-on-surface-variant"
-              :class="compact ? 'text-xs leading-tight mt-0.5' : 'text-sm mt-1'"
-            >
-              {{ currentBarLyric.text }}
-            </SMarquee>
-          </div>
+        <PlayerBarLyric :compact="compact">
           <div
-            v-else
             key="artist"
             class="text-on-surface-variant truncate"
             :class="compact ? 'text-xs leading-tight mt-0.5' : 'text-sm mt-1'"
@@ -167,7 +96,7 @@ const goArtist = async (artist: Artist): Promise<void> => {
                       ? 'cursor-pointer transition-opacity hover:opacity-70'
                       : ''
                   "
-                  @click.stop="goArtist(artist)"
+                  @click.stop="goToResource(artistTarget(artist))"
                 >
                   {{ artist.name }}
                 </span>
@@ -176,7 +105,7 @@ const goArtist = async (artist: Artist): Promise<void> => {
             </template>
             <span v-else class="opacity-50">{{ $t("playlist.unknownArtist") }}</span>
           </div>
-        </Transition>
+        </PlayerBarLyric>
       </div>
     </Transition>
   </div>

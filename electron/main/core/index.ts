@@ -19,11 +19,17 @@ import { init as initSongCache } from "@main/services/songCache";
 import { init as initDownload } from "@main/services/downloadManager";
 import { pluginRegistry } from "@main/plugins/registry";
 import { init as initPlaybackBridge } from "@main/plugins/playbackBridge";
-import { registerCacheScheme, handleCacheProtocol } from "@main/utils/protocol";
+import {
+  registerCacheScheme,
+  handleCacheProtocol,
+  handleCacheProtocolOnPartition,
+  MAIN_PARTITION,
+} from "@main/utils/protocol";
 import { startServer } from "@main/server";
 import { startMcpServer } from "@main/services/mcp/http";
 import { initUpdater } from "@main/services/updater";
 import { coreLog, initLogger } from "@main/utils/logger";
+import { initNetworkProxy } from "@main/utils/proxy";
 import { isAppQuitting } from "@main/utils/lifecycle";
 import { initAppLifecycle } from "./lifecycle";
 import {
@@ -100,6 +106,8 @@ export const initApp = (): void => {
     event.preventDefault();
     captureAudioFiles([path]);
   });
+  // 应用代理设置
+  initNetworkProxy();
   // 注册缓存协议方案
   registerCacheScheme();
   // 其他初始化
@@ -109,6 +117,7 @@ export const initApp = (): void => {
     syncProxyEnv();
     // 注册 cache:// 协议处理
     handleCacheProtocol();
+    handleCacheProtocolOnPartition(MAIN_PARTITION);
     app.on("browser-window-created", (_, window) => {
       optimizer.watchWindowShortcuts(window);
     });
@@ -159,6 +168,7 @@ export const initApp = (): void => {
     setTimeout(logProcessMemory, MEMORY_LOG_FIRST_DELAY_MS);
     setInterval(logProcessMemory, MEMORY_LOG_INTERVAL_MS);
     app.on("activate", () => {
+      if (isAppQuitting()) return;
       if (isMac) {
         if (getMainWindow()) focusMainWindow();
         else createMainWindow();

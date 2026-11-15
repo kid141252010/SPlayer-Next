@@ -108,3 +108,4 @@ export const updaterLog = log.scope("updater");
 export const cloudLog = log.scope("cloud");
 export const recognitionLog = log.scope("recognition");
 export const amLog = log.scope("appleMusic");
+export const motionCoverLog = log.scope("motionCover");

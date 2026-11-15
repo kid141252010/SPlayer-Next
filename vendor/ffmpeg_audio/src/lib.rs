@@ -5,26 +5,50 @@ pub mod log;
 pub mod resample;
 
 #[cfg(feature = "http")]
-pub use core::http::{HttpAudioSource, HttpCancelHandle};
+pub use core::http::{
+    HttpAudioSource,
+    HttpCancelHandle,
+    HttpProxy,
+};
 pub use core::{
     format::AudioSample,
-    frame::{AudioFrame, RawAudioData},
+    frame::{
+        AudioFrame,
+        RawAudioData,
+    },
     info::SourceAudioInfo,
-    time::TimeBase,
 };
 use std::{
     collections::HashMap,
-    io::{Read, Seek},
+    io::{
+        Read,
+        Seek,
+    },
     time::Duration,
 };
 
-pub use decode::{ScanMode, SeekMode};
-pub use error::{AudioError, FfErrorExt, Result};
+pub use decode::{
+    ScanMode,
+    SeekMode,
+};
+pub use error::{
+    AudioError,
+    FfErrorExt,
+    Result,
+};
 pub use ffmpeg_audio_sys as sys;
-pub use resample::{ResampleOptions, Resampler};
+pub use resample::{
+    ResampleOptions,
+    Resampler,
+};
 
 use crate::{
-    decode::{DecodeEngine, Decoder, Demuxer, io::IoContext},
+    decode::{
+        DecodeEngine,
+        Decoder,
+        Demuxer,
+        io::IoContext,
+    },
     log::init_ffmpeg_logging,
 };
 
@@ -93,12 +117,16 @@ impl AudioReader {
     ///
     /// # Arguments
     /// * `target` - The target duration to seek to.
-    /// * `mode` - The strategy ([`SeekMode`]) to employ for resolving the exact position.
+    /// * `mode` - The strategy ([`SeekMode`]) to employ for resolving the exact position. Read the
+    ///   timestamp of the next frame to learn where the seek actually landed.
     pub fn seek(&mut self, target: Duration, mode: SeekMode) -> Result<()> {
         self.engine.seek(target, mode)
     }
 
-    /// Scans the entire audio stream to calculate its exact duration.
+    /// Scans the entire audio stream to calculate its exact duration: the time right after the
+    /// last sample.
+    ///
+    /// See [`ResampledReader::scan_exact_duration`] for details.
     pub fn scan_exact_duration(&mut self, mode: ScanMode) -> Result<Option<Duration>> {
         self.engine.scan_duration(mode)
     }
@@ -170,9 +198,14 @@ impl AudioReader {
         self.engine.demuxer().metadata()
     }
 
+    /// Returns the duration declared by the container.
+    ///
+    /// This is a quick estimate that may differ slightly from the exact duration (some formats
+    /// only provide an estimate derived from the bitrate). Use
+    /// [`scan_exact_duration`](Self::scan_exact_duration) for the exact value.
     #[must_use]
     pub fn duration(&self) -> Option<Duration> {
-        self.engine.demuxer().duration()
+        self.engine.declared_duration()
     }
 
     #[must_use]
@@ -269,7 +302,8 @@ impl ResampledReader {
         Ok(())
     }
 
-    /// Scans the entire audio stream to calculate its exact duration.
+    /// Scans the entire audio stream to calculate its exact duration: the time right after the
+    /// last sample.
     ///
     /// Unlike the quick estimate provided by [`AudioReader::duration`], this method
     /// processes the stream to find the true end timestamp. This is useful for
@@ -281,13 +315,18 @@ impl ResampledReader {
     /// method **before** you start pulling frames in your main processing loop.
     /// Calling it mid-playback may cause glitches due to the flushing.
     ///
+    /// Afterwards, reading continues exactly where it stood: the same frames follow, and
+    /// [`AudioReader::stream_position`] reports the same position until the next frame. Where the
+    /// container cannot reach that position (for example the very start of some Matroska files),
+    /// reading continues at the nearest reachable frame after it.
+    ///
     /// # Parameters
-    /// - `fast_mode`:
-    ///   - `true` (Packet-level scan): Rapidly reads raw packets from the demuxer without
-    ///     decompressing them. Extremely fast, but relies on the container's timestamps.
-    ///   - `false` (Frame-level scan): Fully decodes the audio into raw frames (equivalent to
-    ///     `ffmpeg -f null -`). This is the most accurate method, but consumes significantly more
-    ///     CPU and time.
+    /// - `mode`:
+    ///   - [`ScanMode::Packet`]: Rapidly reads raw packets from the demuxer without decompressing
+    ///     them. Extremely fast, but relies on the container's timestamps.
+    ///   - [`ScanMode::Frame`]: Fully decodes the audio into raw frames (equivalent to `ffmpeg -f
+    ///     null -`). This is the most accurate method, but consumes significantly more CPU and
+    ///     time.
     pub fn scan_exact_duration(&mut self, mode: ScanMode) -> Result<Option<Duration>> {
         let duration = self.reader.scan_exact_duration(mode)?;
         self.resampler.flush()?;

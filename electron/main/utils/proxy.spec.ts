@@ -2,19 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   config: { protocol: "off", host: "127.0.0.1", port: 7890 },
-  load: vi.fn(),
   fetch: vi.fn(),
   direct: vi.fn(),
   http: vi.fn(),
   socks: vi.fn(),
   close: vi.fn(),
+  setGlobal: vi.fn(),
 }));
 vi.mock("@main/store", () => ({ store: { get: () => mocks.config } }));
 vi.mock("@main/utils/logger", () => ({ systemLog: { info: vi.fn(), warn: vi.fn() } }));
 vi.mock("undici", () => {
-  mocks.load();
   return {
     fetch: mocks.fetch,
+    setGlobalDispatcher: mocks.setGlobal,
     Agent: class {
       constructor(options: unknown) {
         mocks.direct(options);
@@ -35,7 +35,8 @@ vi.mock("undici", () => {
   };
 });
 
-describe("延迟加载网络库", () => {
+// resetModules 后动态导入真实模块，隔离每个用例的连接池与全局代理状态。
+describe("代理连接池复用与切换", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
@@ -44,10 +45,9 @@ describe("延迟加载网络库", () => {
     mocks.close.mockResolvedValue(undefined);
   });
 
-  it("读取代理配置不加载网络库，在途请求共用直连连接池", async () => {
+  it("未配置代理时在途请求共用直连连接池", async () => {
     const proxy = await import("./proxy");
     expect(proxy.getNetworkProxyUrl()).toBeNull();
-    expect(mocks.load).not.toHaveBeenCalled();
     let complete!: (response: Response) => void;
     mocks.fetch.mockReturnValueOnce(
       new Promise<Response>((resolve) => {
@@ -75,5 +75,37 @@ describe("延迟加载网络库", () => {
     expect(mocks.socks).toHaveBeenCalledWith("socks5://127.0.0.1:7890");
     expect(mocks.close).toHaveBeenCalledOnce();
     expect(mocks.fetch.mock.calls[0][1]).toMatchObject({ method: "POST", signal });
+  });
+
+  it.each([
+    "http://127.0.0.1:1234/audio",
+    "https://music.apple.com/audio",
+    "https://audio-ssl.itunes.apple.com/audio",
+  ])("已配置代理时 %s 仍使用独立直连连接池", async (directUrl) => {
+    const proxy = await import("./proxy");
+    mocks.config.protocol = "http";
+    await proxy.fetchWithProxy("https://example.test/audio");
+    await proxy.fetchWithProxy(directUrl);
+    expect(mocks.http).toHaveBeenCalledExactlyOnceWith("http://127.0.0.1:7890");
+    expect(mocks.direct).toHaveBeenCalledOnce();
+    expect(mocks.fetch.mock.calls[1][1].dispatcher).not.toBe(
+      mocks.fetch.mock.calls[0][1].dispatcher,
+    );
+  });
+
+  it("全局 fetch 跟随代理开关，关闭状态不改动全局连接池", async () => {
+    const proxy = await import("./proxy");
+    await proxy.applyGlobalFetchProxy();
+    expect(mocks.setGlobal).not.toHaveBeenCalled();
+    mocks.config.protocol = "http";
+    await proxy.applyGlobalFetchProxy();
+    expect(mocks.http).toHaveBeenCalledWith("http://127.0.0.1:7890");
+    await proxy.fetchWithProxy("https://example.test");
+    expect(mocks.fetch.mock.calls[0][1].dispatcher).toBe(mocks.setGlobal.mock.calls[0][0]);
+    mocks.config.protocol = "off";
+    await proxy.applyGlobalFetchProxy();
+    expect(mocks.setGlobal).toHaveBeenCalledTimes(2);
+    expect(mocks.direct).toHaveBeenCalledWith(undefined);
+    expect(mocks.close).toHaveBeenCalledOnce();
   });
 });

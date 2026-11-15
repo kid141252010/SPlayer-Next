@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "./native/automix-worker",
   "./native/audio-engine",
   "./native/audio-capture",
   "./native/media-ctrl",
@@ -23,7 +24,7 @@ tokio = { version = "1" }
 windows = "0.62"
 windows-core = "0.62.2"
 
-[patch.crates-io]
+[patch."https://github.com/SPlayer-Dev/ffmpeg-audio"]
 ffmpeg_audio = { path = "vendor/ffmpeg_audio" }
 
 [workspace.lints.clippy]

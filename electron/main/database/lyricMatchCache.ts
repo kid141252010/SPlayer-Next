@@ -29,13 +29,17 @@ export interface MatchedRecord {
   extra?: LyricMatchExtra;
 }
 
-/** 用 title + 全部艺术家 + 时长桶 算 track 指纹 */
-export const buildFingerprint = (track: Track): string => {
+/** 用 title + 全部艺术家 + 时长桶 算歌曲身份，不随匹配规则版本变化 */
+export const buildTrackIdentity = (track: Track): string => {
   const title = normalize(track.title);
   const artist = normalizeTrackArtists(track).join("");
   const bucket = track.duration ? Math.round(track.duration / DURATION_BUCKET_MS) : 0;
-  return `${FINGERPRINT_VERSION}|${title}|${artist}|${bucket}`;
+  return `${title}|${artist}|${bucket}`;
 };
+
+/** 带规则版本的 track 指纹 */
+export const buildFingerprint = (track: Track): string =>
+  `${FINGERPRINT_VERSION}|${buildTrackIdentity(track)}`;
 
 /** 解析 extra JSON */
 const parseExtra = (raw: string | null): LyricMatchExtra | undefined => {
@@ -81,6 +85,13 @@ export const setMatchedId = (
          matched_at = excluded.matched_at`,
     )
     .run(fingerprint, platform, platformId, extraJson, Date.now());
+};
+
+/** 删除单条映射，用于内容验证不通过的匹配 */
+export const deleteMatchedId = (fingerprint: string, platform: Platform): void => {
+  getDb()
+    .prepare("DELETE FROM lyric_match_cache WHERE fingerprint = ? AND platform = ?")
+    .run(fingerprint, platform);
 };
 
 /** 清空全部映射缓存 */

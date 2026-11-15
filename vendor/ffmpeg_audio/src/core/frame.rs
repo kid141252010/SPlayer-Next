@@ -8,7 +8,10 @@ use crate::{
     AudioError,
     AudioSample,
     Result,
-    TimeBase,
+    core::timeline::{
+        FramePlacement,
+        FrameTiming,
+    },
     sys,
 };
 
@@ -26,15 +29,27 @@ pub enum RawAudioData<'a, T> {
     Planar(Vec<&'a [T]>),
 }
 
+/// Reads the timing FFmpeg reported for a decoded frame.
+///
+/// # Safety
+/// `frame` must point to a valid FFmpeg `AVFrame`.
+pub(crate) unsafe fn frame_timing(frame: *const sys::AVFrame) -> FrameTiming {
+    unsafe {
+        FrameTiming {
+            pts: (*frame).pts,
+            samples: (*frame).nb_samples.max(0) as usize,
+            sample_rate: (*frame).sample_rate,
+        }
+    }
+}
+
 /// A safe, zero-copy wrapper around FFmpeg's raw `AVFrame`.
 ///
 /// This wrapper is useful for 1-to-N zero-copy dispatching to multiple downstream
 /// `Resampler` instances simultaneously.
 pub struct AudioFrame<'a> {
     ptr: NonNull<sys::AVFrame>,
-    time_base: TimeBase,
-    timeline_origin_pts: i64,
-    sample_offset: usize,
+    placement: FramePlacement,
     _marker: PhantomData<&'a mut ()>,
 }
 
@@ -43,28 +58,14 @@ impl<'a> AudioFrame<'a> {
     ///
     /// # Safety
     /// This method is for internal crate use. The caller ensures that the provided
-    /// `ptr` is a valid FFmpeg `AVFrame` and that its memory remains valid for the
-    /// duration of the lifetime.
-    pub(crate) const fn new(ptr: *const sys::AVFrame, time_base: TimeBase) -> Self {
+    /// `ptr` is a valid FFmpeg `AVFrame` whose memory remains valid for the
+    /// duration of the lifetime, and that `placement` was computed from this frame.
+    pub(crate) const fn new(ptr: *const sys::AVFrame, placement: FramePlacement) -> Self {
         Self {
             ptr: NonNull::new(ptr.cast_mut()).expect("FFmpeg returned a null AVFrame pointer"),
-            time_base,
-            timeline_origin_pts: 0,
-            sample_offset: 0,
+            placement,
             _marker: PhantomData,
         }
-    }
-
-    /// Injects a sample offset for sample-accurate seeking.
-    pub(crate) const fn with_offset(mut self, offset: usize) -> Self {
-        self.sample_offset = offset;
-        self
-    }
-
-    /// Defines the stream timestamp that corresponds to the public timeline origin.
-    pub(crate) const fn with_timeline_origin(mut self, origin_pts: i64) -> Self {
-        self.timeline_origin_pts = origin_pts;
-        self
     }
 
     /// Extracts the underlying raw FFmpeg `AVFrame` pointer.
@@ -81,13 +82,12 @@ impl<'a> AudioFrame<'a> {
     /// this will return `924`.
     #[must_use]
     pub const fn samples(&self) -> usize {
-        let raw_samples = unsafe { (*self.ptr.as_ptr()).nb_samples as usize };
-        raw_samples.saturating_sub(self.sample_offset)
+        self.placement.samples()
     }
 
     /// Returns the offset applied to the beginning of the frame's payload.
     pub(crate) const fn offset(&self) -> usize {
-        self.sample_offset
+        self.placement.offset()
     }
 
     /// Returns the actual sample format of this specific frame.
@@ -105,86 +105,30 @@ impl<'a> AudioFrame<'a> {
         unsafe { (*self.ptr.as_ptr()).sample_rate }
     }
 
-    /// 在原始 PTS 与采样率的有理数域计算裁剪量，避免经微秒舍入后多丢一个样本。
-    pub(crate) fn sample_offset_to(&self, target: Duration) -> Option<usize> {
-        let raw_pts = unsafe { (*self.ptr.as_ptr()).pts };
-        let rate = self.frame_sample_rate();
-        if raw_pts == sys::AV_NOPTS_VALUE || rate <= 0 {
-            return None;
-        }
-        let relative_pts = raw_pts.saturating_sub(self.timeline_origin_pts);
-        let start_sample = unsafe {
-            sys::av_rescale_q(
-                relative_pts,
-                self.time_base.as_rational(),
-                sys::AVRational { num: 1, den: rate },
-            )
-        }
-        .saturating_add(self.sample_offset as i64);
-        let target_sample = target
-            .as_nanos()
-            .saturating_mul(rate as u128)
-            .div_ceil(1_000_000_000)
-            .min(i64::MAX as u128) as i64;
-        usize::try_from(target_sample.saturating_sub(start_sample).max(0)).ok()
-    }
-
-    /// Returns the exact physical duration of this frame in microseconds.
-    pub(crate) fn duration_micros(&self) -> i64 {
-        let sample_rate = i64::from(self.frame_sample_rate());
-        if sample_rate > 0 {
-            (self.samples() as i64 * 1_000_000) / sample_rate
-        } else {
-            0
-        }
-    }
-
-    /// Returns the physical end time of this frame in microseconds.
-    ///
-    /// Returns None if the frame lacks a valid start PTS.
-    pub(crate) fn end_micros(&self) -> Option<i64> {
-        self.pts_micros()
-            .map(|start| start.saturating_add(self.duration_micros()))
-    }
-
-    /// Returns the PTS in microseconds relative to the stream timeline origin, if available.
-    pub(crate) fn pts_micros(&self) -> Option<i64> {
-        let raw_pts = unsafe { (*self.ptr.as_ptr()).pts };
-        if raw_pts == sys::AV_NOPTS_VALUE {
-            return None;
-        }
-        let relative_pts = raw_pts.saturating_sub(self.timeline_origin_pts);
-
-        self.time_base.calc_micros(relative_pts).map(|mut micros| {
-            let sample_rate = self.frame_sample_rate();
-
-            if self.sample_offset > 0 && sample_rate > 0 {
-                let offset_micros =
-                    (self.sample_offset as i64 * 1_000_000) / i64::from(sample_rate);
-                micros = micros.saturating_add(offset_micros);
-            }
-            micros
-        })
-    }
-
-    /// Returns the precise playback duration of this audio frame.
+    /// Returns the precise playback duration of this audio frame, rounded down to whole
+    /// nanoseconds.
     #[must_use]
-    pub fn duration(&self) -> Duration {
-        Duration::from_micros(self.duration_micros().cast_unsigned())
+    pub const fn duration(&self) -> Duration {
+        self.placement.duration()
     }
 
-    /// Returns the Presentation Timestamp (PTS) of this frame relative to the stream timeline
-    /// origin, if available.
+    /// Returns the position of this frame's first sample on the public timeline, rounded down to
+    /// whole nanoseconds.
     ///
-    /// The timestamp is automatically adjusted forward by the internal sample offset.
+    /// Samples trimmed from the beginning of the frame (preroll, or samples before a seek
+    /// target) are already accounted for.
     ///
     /// # Returns
     /// - `Some(Duration)` representing the exact playback time of the frame.
     /// - `None` if the underlying frame lacks a valid PTS (`AV_NOPTS_VALUE`).
     #[must_use]
-    pub fn pts(&self) -> Option<Duration> {
-        self.pts_micros()
-            .map(|micros| Duration::from_micros(micros.max(0).cast_unsigned()))
+    pub const fn pts(&self) -> Option<Duration> {
+        self.placement.pts()
+    }
+
+    /// Returns the public time right after this frame's last sample, if the frame has a PTS.
+    pub(crate) const fn end(&self) -> Option<Duration> {
+        self.placement.end()
     }
 
     /// Zero-copy extraction of raw PCM audio data directly from the underlying FFmpeg AVFrame.
@@ -236,86 +180,5 @@ impl<'a> AudioFrame<'a> {
             }
             Ok(RawAudioData::Planar(planes))
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{
-        mem,
-        time::Duration,
-    };
-
-    use ffmpeg_audio_sys::MICROSECONDS_Q;
-
-    use super::*;
-
-    #[test]
-    fn pts_is_relative_to_the_timeline_origin() {
-        let mut raw_frame = unsafe { mem::zeroed::<sys::AVFrame>() };
-        raw_frame.pts = 10_000_000;
-        raw_frame.nb_samples = 1_024;
-        raw_frame.sample_rate = 48_000;
-
-        let time_base = TimeBase::try_new(MICROSECONDS_Q).unwrap();
-        let frame = AudioFrame::new(&raw const raw_frame, time_base)
-            .with_timeline_origin(10_000_000)
-            .with_offset(48);
-
-        assert_eq!(frame.pts_micros(), Some(1_000));
-        assert_eq!(frame.pts(), Some(Duration::from_micros(1_000)));
-
-        raw_frame.pts = sys::AV_NOPTS_VALUE;
-        let no_pts_frame =
-            AudioFrame::new(&raw const raw_frame, time_base).with_timeline_origin(-1);
-        assert_eq!(no_pts_frame.pts_micros(), None);
-        assert_eq!(no_pts_frame.pts(), None);
-    }
-
-    #[test]
-    fn test_frame_time_boundary_calculations() {
-        let mut raw_frame = unsafe { mem::zeroed::<sys::AVFrame>() };
-        raw_frame.pts = 10_000;
-        raw_frame.nb_samples = 480;
-        raw_frame.sample_rate = 48_000;
-
-        let time_base = TimeBase::try_new(MICROSECONDS_Q).unwrap();
-        let frame = AudioFrame::new(&raw const raw_frame, time_base).with_timeline_origin(0);
-
-        assert_eq!(frame.duration_micros(), 10_000);
-        assert_eq!(frame.end_micros(), Some(20_000));
-    }
-
-    #[test]
-    fn seek_offset_preserves_exact_44100_hz_sample_boundaries() {
-        let mut raw_frame = unsafe { mem::zeroed::<sys::AVFrame>() };
-        raw_frame.sample_rate = 44_100;
-        raw_frame.pts = 176_128;
-        let time_base = TimeBase::try_new(sys::AVRational { num: 1, den: 44_100 }).unwrap();
-        let frame = AudioFrame::new(&raw const raw_frame, time_base);
-        assert_eq!(frame.sample_offset_to(Duration::from_secs(4)), Some(272));
-
-        raw_frame.pts = 0;
-        let frame = AudioFrame::new(&raw const raw_frame, time_base);
-        assert_eq!(frame.sample_offset_to(Duration::from_millis(25)), Some(1_103));
-
-        raw_frame.pts = -272;
-        let frame = AudioFrame::new(&raw const raw_frame, time_base).with_offset(272);
-        assert_eq!(frame.sample_offset_to(Duration::ZERO), Some(0));
-    }
-
-    #[test]
-    fn test_frame_fallback_on_invalid_sample_rate() {
-        let mut raw_frame = unsafe { mem::zeroed::<sys::AVFrame>() };
-        raw_frame.nb_samples = 1024;
-        raw_frame.pts = 1000;
-        raw_frame.sample_rate = 0;
-
-        let time_base = TimeBase::try_new(MICROSECONDS_Q).unwrap();
-        let frame = AudioFrame::new(&raw const raw_frame, time_base);
-
-        assert_eq!(frame.duration_micros(), 0);
-        assert_eq!(frame.end_micros(), Some(1000));
-        assert_eq!(frame.sample_offset_to(Duration::from_secs(5)), None);
     }
 }

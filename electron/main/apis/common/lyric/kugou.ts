@@ -11,7 +11,7 @@
 
 import { callKugou } from "@main/apis/kugou";
 import type { KGSong } from "@shared/types/platform/kugou";
-import { getCachedLyric, setCachedLyric } from "@main/database/lyricCache";
+import { withLyricCache } from "@main/database/lyricCache";
 import { buildFingerprint, getMatchedId, setMatchedId } from "@main/database/lyricMatchCache";
 import { coreLog } from "@main/utils/logger";
 import type { LyricMatchResult } from "@shared/types/lyrics";
@@ -55,47 +55,64 @@ const fetchLyric = async (args: {
   /** 毫秒 */
   durationMs?: number;
 }): Promise<LyricMatchResult | null> => {
-  const cached = getCachedLyric("kugou", args.hash);
-  if (cached) return cached;
-  try {
-    const body = await callKugou<LyricResponse>("lyric", {
-      hash: args.hash,
-      name: args.name ?? "",
-      duration: args.durationMs ? Math.round(args.durationMs / 1000) : 0,
-    });
-    if (body.code !== 200) {
-      coreLog.warn(
-        `[lyric:kugou] fetchLyric(${args.hash}) code=${body.code}: ${body.message ?? "no message"}`,
-      );
+  return withLyricCache("kugou", args.hash, async () => {
+    try {
+      const body = await callKugou<LyricResponse>("lyric", {
+        hash: args.hash,
+        name: args.name ?? "",
+        duration: args.durationMs ? Math.round(args.durationMs / 1000) : 0,
+      });
+      if (body.code !== 200) {
+        coreLog.warn(
+          `[lyric:kugou] fetchLyric(${args.hash}) code=${body.code}: ${body.message ?? "no message"}`,
+        );
+        return null;
+      }
+
+      const main = pickFormatted(body.krc, body.lrc);
+      if (!main) return null;
+
+      const trans = body.trans?.trim();
+      const roma = body.roma?.trim();
+
+      return {
+        platform: "kugou",
+        format: main.format,
+        content: main.content,
+        translation: trans || undefined,
+        translationFormat: trans ? "lrc" : undefined,
+        romaji: roma || undefined,
+        romajiFormat: roma ? "lrc" : undefined,
+      };
+    } catch (err) {
+      coreLog.warn(`[lyric:kugou] fetchLyric(${args.hash}) failed:`, err);
       return null;
     }
-
-    const main = pickFormatted(body.krc, body.lrc);
-    if (!main) return null;
-
-    const trans = body.trans?.trim();
-    const roma = body.roma?.trim();
-
-    const result: LyricMatchResult = {
-      platform: "kugou",
-      format: main.format,
-      content: main.content,
-      translation: trans || undefined,
-      translationFormat: trans ? "lrc" : undefined,
-      romaji: roma || undefined,
-      romajiFormat: roma ? "lrc" : undefined,
-    };
-    setCachedLyric("kugou", args.hash, result);
-    return result;
-  } catch (err) {
-    coreLog.warn(`[lyric:kugou] fetchLyric(${args.hash}) failed:`, err);
-    return null;
-  }
+  });
 };
 
-/** 按 Kugou hash 直取（只有 hash 时用；精度受限） */
-export const getByPlatformId = (hash: string): Promise<LyricMatchResult | null> =>
-  fetchLyric({ hash });
+/** 按 Kugou hash 直取，没有 track 时精度受限 */
+export const getByPlatformId = (hash: string, track?: Track): Promise<LyricMatchResult | null> =>
+  fetchLyric({ hash, name: track?.title, durationMs: track?.duration });
+
+/**
+ * 搜索歌词候选
+ * @param keyword - 搜索关键词
+ * @returns 归一化后的候选列表
+ */
+export const searchCandidates = async (
+  keyword: string,
+): Promise<LyricCandidate<{ hash: string }>[]> => {
+  const body = await callKugou<SearchResponse>("search", { keywords: keyword, limit: 25 });
+  if (body.code !== 200) throw new Error(`search code=${body.code}`);
+  return (body.songs ?? []).map((song) => ({
+    name: song.name,
+    artist: song.artist,
+    album: song.album,
+    duration: song.duration,
+    extra: { hash: song.hash },
+  }));
+};
 
 /** 按 Track 元数据模糊搜索：search → 挑最佳 → 单次请求歌词 */
 export const getByQuery = async (track: Track): Promise<LyricMatchResult | null> => {
@@ -112,19 +129,9 @@ export const getByQuery = async (track: Track): Promise<LyricMatchResult | null>
   const keyword = buildLyricSearchKeyword(track);
   if (!keyword) return null;
 
-  const candidates: LyricCandidate<{ hash: string }>[] = [];
+  let candidates: LyricCandidate<{ hash: string }>[];
   try {
-    const body = await callKugou<SearchResponse>("search", { keywords: keyword, limit: 25 });
-    if (body.code !== 200) return null;
-    for (const song of body.songs ?? []) {
-      candidates.push({
-        name: song.name,
-        artist: song.artist,
-        album: song.album,
-        duration: song.duration,
-        extra: { hash: song.hash },
-      });
-    }
+    candidates = await searchCandidates(keyword);
   } catch (err) {
     coreLog.warn(`[lyric:kugou] search("${keyword}") failed:`, err);
     return null;

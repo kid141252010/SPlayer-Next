@@ -89,7 +89,13 @@ const onQualityChange = (value: string | number | boolean): void => {
       </span>
     </template>
   </SPopselect>
-  <STooltip v-else-if="media.track" :content="dolbyAtmosTooltip" :side-offset="16" side="top">
+  <STooltip
+    v-else-if="media.track"
+    :content="dolbyAtmosTooltip"
+    :side-offset="16"
+    side="top"
+    :cover="cover"
+  >
     <span
       :class="[
         chipBase,
