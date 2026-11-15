@@ -1,6 +1,7 @@
 import type { PluginsConfig, PluginQuality } from "./plugin";
 import type { HotkeyConfig } from "./hotkey";
 import type { DownloadLyricFormat, DownloadFolderScheme } from "./download";
+import type { JocSettings } from "./joc";
 
 /** 支持的语言代码 */
 export type LocaleCode = "zh-CN" | "en-US";
@@ -55,6 +56,8 @@ export interface PlayerSettings {
   volume: number;
   /** 音量均衡（响度归一化） */
   loudnessNormalization: boolean;
+  /** 杜比全景声对象渲染 */
+  joc: JocSettings;
   /** 音频输出模式：共享（默认）/ WASAPI 独占（仅 Windows） */
   audioOutputMode: AudioOutputMode;
   /** 播放页展开且正在播放时保持屏幕常亮 */

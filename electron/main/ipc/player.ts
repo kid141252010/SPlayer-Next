@@ -55,6 +55,7 @@ import type {
 import type { MediaEvent } from "@splayer/media-ctrl";
 import { JsPlayerEvent } from "@splayer/audio-engine";
 import type { JsMusicMetadata } from "@splayer/audio-engine";
+import type { JocControls } from "@shared/types/joc";
 
 type AudioEngineModule = typeof import("@splayer/audio-engine");
 
@@ -172,6 +173,12 @@ const handleSourceError = async (
 const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"]>): void => {
   inst.onEvent((event: JsPlayerEvent) => {
     switch (event.type) {
+      case "jocStateChanged":
+        sendToMain("player:event", {
+          type: "jocStateChanged",
+          data: { active: event.jocActive === true },
+        });
+        break;
       case "stateChanged": {
         const state = (event.state ?? "idle") as PlayerState;
         updatePowerBlocker(state);
@@ -825,6 +832,29 @@ export const registerPlayerIpc = (): void => {
         isNativeDeviceError(error) ? ErrorCode.DEVICE_INIT_FAILED : ErrorCode.UNKNOWN,
         error,
       );
+    }
+  });
+
+  ipcMain.handle("player:setJocControls", (_event, controls: JocControls) => {
+    try {
+      getPlayer().setJocControls(controls);
+      return { success: true };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+  ipcMain.handle("player:getJocScene", () => {
+    try {
+      return { success: true, data: getPlayer().getJocScene() };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+  ipcMain.handle("player:getJocStatus", () => {
+    try {
+      return { success: true, data: getPlayer().getJocStatus() };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
     }
   });
 

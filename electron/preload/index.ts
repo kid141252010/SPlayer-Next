@@ -1,4 +1,6 @@
 import os from "os";
+import type { JocControls } from "@shared/types/joc";
+import type { PlayerEvent } from "@shared/types/player";
 import type { PlaybackQueueSnapshot } from "@shared/types/music";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { electronAPI } from "@electron-toolkit/preload";
@@ -147,6 +149,17 @@ const api = {
     // 启用/禁用音量均衡
     setNormalizationEnabled: (enabled: boolean) =>
       ipcRenderer.invoke("player:setNormalizationEnabled", enabled),
+    /**
+     * 更新对象渲染交互参数
+     * @param controls - 姿态、站位和对象增益
+     * @returns 原生调用结果
+     */
+    setJocControls: (controls: JocControls) =>
+      ipcRenderer.invoke("player:setJocControls", controls),
+    /** 获取最近的 64 浮点场景，未生效时为空 */
+    getJocScene: () => ipcRenderer.invoke("player:getJocScene"),
+    /** 获取对象渲染状态及统计 */
+    getJocStatus: () => ipcRenderer.invoke("player:getJocStatus"),
     // 启用/禁用 10 频段均衡器
     setEqualizerEnabled: (enabled: boolean) =>
       ipcRenderer.invoke("player:setEqualizerEnabled", enabled),
@@ -195,8 +208,15 @@ const api = {
      */
     respondQueue: (requestId: string, snapshot: PlaybackQueueSnapshot) =>
       ipcRenderer.send(`player:queue-response:${requestId}`, snapshot),
-    // 订阅主进程推送的播放事件
-    onEvent: (callback: (event: unknown) => void) => subscribe("player:event", callback),
+    /**
+     * 订阅播放事件，先清理热更新遗留监听
+     * @param callback - 播放事件回调
+     * @returns 取消订阅函数
+     */
+    onEvent: (callback: (event: PlayerEvent) => void) => {
+      ipcRenderer.removeAllListeners("player:event");
+      return subscribe("player:event", callback);
+    },
   },
   system: {
     installType: getInstallType(),
