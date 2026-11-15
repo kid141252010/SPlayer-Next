@@ -401,7 +401,6 @@ const loadTrack = async (
     }
     // 已完成的交接只属于原曲，替换候选必须重新加载真实音源。
     transitionResult = undefined;
-    transitionSource = undefined;
   }
   // 消费预载结果
   const preloaded = transitionResult ? null : consumePreloadedTrack(track);

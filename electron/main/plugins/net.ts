@@ -43,7 +43,7 @@ export const fetchScript = async (url: string): Promise<string> => {
   }
   if (!resp.body) return "";
   const reader = resp.body.getReader();
-  const buffer = Buffer.allocUnsafe(INSTALL_URL_MAX_SIZE);
+  const chunks: Uint8Array[] = [];
   let size = 0;
   try {
     while (true) {
@@ -54,9 +54,9 @@ export const fetchScript = async (url: string): Promise<string> => {
         await reader.cancel().catch(() => {});
         throw new Error("PLUGIN_INSTALL_URL_TOO_LARGE");
       }
-      buffer.set(value, size - value.byteLength);
+      chunks.push(value);
     }
-    return new TextDecoder("utf-8").decode(buffer.subarray(0, size));
+    return new TextDecoder("utf-8").decode(Buffer.concat(chunks, size));
   } finally {
     reader.releaseLock();
   }

@@ -179,10 +179,7 @@ impl InnerPlayer {
 
     /// 设备接管必须同时拒绝在途提交和队列，不能等待 seek 的异步锁。
     pub(crate) fn supersede_async_seeks(&mut self) {
-        if self
-            .pending_seek
-            .is_some_and(|token| self.is_load_token_current(token))
-        {
+        if self.pending_seek.is_some() {
             self.load_token.fetch_add(1, Ordering::AcqRel);
         }
         self.reset_seek_requests();
@@ -190,11 +187,7 @@ impl InnerPlayer {
 
     /// 无 decoder 的普通 load 不接收 seek；只有同代次的在途 seek 可以继续排队。
     pub(crate) fn seek_request_epoch(&self) -> Option<u64> {
-        (self.decoder_thread.is_some()
-            || self
-                .pending_seek
-                .is_some_and(|token| self.is_load_token_current(token)))
-        .then_some(self.seek_epoch)
+        (self.decoder_thread.is_some() || self.pending_seek.is_some()).then_some(self.seek_epoch)
     }
 
     pub(crate) fn is_seek_epoch_current(&self, epoch: u64) -> bool {
