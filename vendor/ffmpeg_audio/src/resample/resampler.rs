@@ -126,6 +126,58 @@ pub struct Resampler {
 unsafe impl Send for Resampler {}
 
 impl Resampler {
+    /// 为交错 f32 输入建立重采样器
+    /// @param rate - 输入采样率
+    /// @param channels - 输入声道数
+    /// @param options - 输出格式
+    /// @returns 重采样器
+    pub fn from_interleaved_f32(
+        rate: i32,
+        channels: i32,
+        options: ResampleOptions,
+    ) -> Result<Self> {
+        let layout = ChannelLayout::from_default(channels);
+        unsafe {
+            Self::new(
+                layout.as_layout(),
+                sys::AVSampleFormat_AV_SAMPLE_FMT_FLT,
+                rate,
+                options,
+            )
+        }
+    }
+
+    /// 转换交错 f32 数据，空输入用于排出延迟样本
+    /// @param samples - 输入样本，长度须为输入声道数的整数倍
+    /// @returns 是否产生输出
+    pub fn process_interleaved_f32(&mut self, samples: &[f32]) -> Result<bool> {
+        if samples.is_empty() {
+            return self.process::<f32>(None);
+        }
+        if samples.len() % self.in_channels != 0 {
+            return Err(AudioError::InvalidParameter(
+                "交错样本长度与声道数不匹配".into(),
+            ));
+        }
+        let mut raw: sys::AVFrame = unsafe { mem::zeroed() };
+        raw.format = sys::AVSampleFormat_AV_SAMPLE_FMT_FLT;
+        raw.sample_rate = self.in_sample_rate;
+        raw.nb_samples = (samples.len() / self.in_channels) as i32;
+        raw.data[0] = samples.as_ptr().cast_mut().cast();
+        raw.extended_data = raw.data.as_mut_ptr();
+        unsafe { sys::av_channel_layout_default(&mut raw.ch_layout, self.in_channels as i32) };
+        let frame = AudioFrame::new(
+            &raw,
+            crate::TimeBase::try_new(sys::AVRational {
+                num: 1,
+                den: self.in_sample_rate,
+            })?,
+        );
+        let result = self.process::<f32>(Some(&frame));
+        unsafe { sys::av_channel_layout_uninit(&mut raw.ch_layout) };
+        result
+    }
+
     /// Creates a resampler from a valid FFmpeg input layout.
     ///
     /// # Safety

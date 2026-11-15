@@ -28,6 +28,7 @@ pub use transition::{LoadedPlayback, SeekTake};
 
 /// 内部播放器，管理音频输出、解码和状态
 pub struct InnerPlayer {
+    pub(crate) joc: Arc<Mutex<crate::joc::Settings>>,
     pub(crate) preload: preload::PreloadSlot,
     transitioning: Arc<AtomicBool>,
     transition_dsp: Option<crossfade::TransitionDsp>,
@@ -146,6 +147,7 @@ impl InnerPlayer {
         debug!("InnerPlayer 已创建");
 
         Ok(Self {
+            joc: Arc::new(Mutex::new(crate::joc::Settings::default())),
             preload: preload::PreloadSlot::default(),
             transitioning: Arc::new(AtomicBool::new(false)),
             transition_dsp: None,
@@ -216,6 +218,7 @@ impl InnerPlayer {
         self.stop_position_timer();
         self.stop_fft_timer();
         self.cancel_fade();
+        self.joc.lock().callback = Some(Arc::clone(&cb));
         self.event_callback = Some(cb);
     }
 
@@ -423,6 +426,7 @@ impl InnerPlayer {
         self.shared = None;
         self.cover_raw = None;
         self.seek_base = 0.0;
+        self.joc.lock().set_active(false);
     }
 
     /// 设置音量（0.0 ~ 1.0）

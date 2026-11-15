@@ -63,6 +63,8 @@ pub struct JsFftData {
 #[napi(object)]
 #[derive(Default)]
 pub struct JsPlayerEvent {
+    /// 对象渲染是否生效，仅 jocStateChanged 提供
+    pub joc_active: Option<bool>,
     /// 事件类型："stateChanged" | "ended" | "sourceError" | "position" | "transitionChanged" | "fftData" | "outputStalled" | "outputFailed" | "outputFallback"
     #[napi(js_name = "type")]
     pub event_type: String,

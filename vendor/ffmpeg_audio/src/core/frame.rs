@@ -35,22 +35,22 @@ pub struct AudioFrame<'a> {
     time_base: TimeBase,
     timeline_origin_pts: i64,
     sample_offset: usize,
+    packets: Vec<Vec<u8>>,
     _marker: PhantomData<&'a mut ()>,
 }
 
 impl<'a> AudioFrame<'a> {
-    /// Creates a new `AudioFrame` wrapper.
-    ///
-    /// # Safety
-    /// This method is for internal crate use. The caller ensures that the provided
-    /// `ptr` is a valid FFmpeg `AVFrame` and that its memory remains valid for the
-    /// duration of the lifetime.
+    /// 包装有效的 FFmpeg 音频帧，调用方须保证帧在借用期间有效
+    /// @param ptr - 音频帧指针
+    /// @param time_base - 源时间基
+    /// @returns 零复制帧视图
     pub(crate) const fn new(ptr: *const sys::AVFrame, time_base: TimeBase) -> Self {
         Self {
             ptr: NonNull::new(ptr.cast_mut()).expect("FFmpeg returned a null AVFrame pointer"),
             time_base,
             timeline_origin_pts: 0,
             sample_offset: 0,
+            packets: Vec::new(),
             _marker: PhantomData,
         }
     }
@@ -59,6 +59,38 @@ impl<'a> AudioFrame<'a> {
     pub(crate) const fn with_offset(mut self, offset: usize) -> Self {
         self.sample_offset = offset;
         self
+    }
+
+    /// 关联自上一输出帧以来送入解码器的原始包
+    /// @param packets - 按解码顺序排列的包
+    pub(crate) fn with_packets(mut self, packets: Vec<Vec<u8>>) -> Self {
+        self.packets = packets;
+        self
+    }
+
+    /// 取出本帧关联的原始包，避免复制载荷
+    /// @returns 原始包列表
+    pub fn take_packets(&mut self) -> Vec<Vec<u8>> {
+        std::mem::take(&mut self.packets)
+    }
+
+    /// 获取未裁剪的完整 PCM 视图与逻辑起点，供有状态对象渲染使用
+    /// @returns 完整帧及原本跳过的每声道样本数
+    pub fn full_frame(&self) -> (AudioFrame<'_>, usize) {
+        (
+            AudioFrame::new(self.ptr.as_ptr(), self.time_base)
+                .with_timeline_origin(self.timeline_origin_pts),
+            self.sample_offset,
+        )
+    }
+
+    /// 创建跳过指定前缀的零复制视图
+    /// @param samples - 相对当前视图跳过的每声道样本数
+    /// @returns 裁剪后的帧
+    pub fn skip_samples(&self, samples: usize) -> AudioFrame<'_> {
+        AudioFrame::new(self.ptr.as_ptr(), self.time_base)
+            .with_timeline_origin(self.timeline_origin_pts)
+            .with_offset(self.sample_offset + samples.min(self.samples()))
     }
 
     /// Defines the stream timestamp that corresponds to the public timeline origin.
@@ -95,18 +127,22 @@ impl<'a> AudioFrame<'a> {
         unsafe { (*self.ptr.as_ptr()).format }
     }
 
-    /// Returns a reference to the actual channel layout of this specific frame.
-    pub(crate) fn channel_layout(&self) -> &sys::AVChannelLayout {
+    /// 获取当前帧的源声道布局
+    /// @returns FFmpeg 声道布局引用
+    pub fn channel_layout(&self) -> &sys::AVChannelLayout {
         unsafe { &(*self.ptr.as_ptr()).ch_layout }
     }
 
-    /// Returns the actual sample rate of this specific frame.
-    pub(crate) fn frame_sample_rate(&self) -> i32 {
+    /// 获取当前帧的源采样率
+    /// @returns 每秒样本数
+    pub fn frame_sample_rate(&self) -> i32 {
         unsafe { (*self.ptr.as_ptr()).sample_rate }
     }
 
-    /// 在原始 PTS 与采样率的有理数域计算裁剪量，避免经微秒舍入后多丢一个样本。
-    pub(crate) fn sample_offset_to(&self, target: Duration) -> Option<usize> {
+    /// 在有理数域计算裁剪量，避免微秒舍入导致样本漂移
+    /// @param target - 目标播放时间
+    /// @returns 相对当前视图的每声道裁剪量
+    pub fn sample_offset_to(&self, target: Duration) -> Option<usize> {
         let raw_pts = unsafe { (*self.ptr.as_ptr()).pts };
         let rate = self.frame_sample_rate();
         if raw_pts == sys::AV_NOPTS_VALUE || rate <= 0 {
@@ -241,10 +277,7 @@ impl<'a> AudioFrame<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        mem,
-        time::Duration,
-    };
+    use std::{mem, time::Duration};
 
     use ffmpeg_audio_sys::MICROSECONDS_Q;
 
@@ -291,13 +324,20 @@ mod tests {
         let mut raw_frame = unsafe { mem::zeroed::<sys::AVFrame>() };
         raw_frame.sample_rate = 44_100;
         raw_frame.pts = 176_128;
-        let time_base = TimeBase::try_new(sys::AVRational { num: 1, den: 44_100 }).unwrap();
+        let time_base = TimeBase::try_new(sys::AVRational {
+            num: 1,
+            den: 44_100,
+        })
+        .unwrap();
         let frame = AudioFrame::new(&raw const raw_frame, time_base);
         assert_eq!(frame.sample_offset_to(Duration::from_secs(4)), Some(272));
 
         raw_frame.pts = 0;
         let frame = AudioFrame::new(&raw const raw_frame, time_base);
-        assert_eq!(frame.sample_offset_to(Duration::from_millis(25)), Some(1_103));
+        assert_eq!(
+            frame.sample_offset_to(Duration::from_millis(25)),
+            Some(1_103)
+        );
 
         raw_frame.pts = -272;
         let frame = AudioFrame::new(&raw const raw_frame, time_base).with_offset(272);

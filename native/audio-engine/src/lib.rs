@@ -5,6 +5,7 @@ mod bindings;
 mod decoder;
 mod dsp;
 mod error;
+mod joc;
 mod logger;
 mod metadata;
 mod output;
