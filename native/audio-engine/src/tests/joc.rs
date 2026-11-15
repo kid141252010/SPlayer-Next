@@ -8,86 +8,134 @@ use crate::decoder::buffer::{PopResult, Shared};
 use crate::decoder::{prepare_decode, resume_decode, start_prepared_decode, DecoderData};
 use crate::dsp::{equalizer::Equalizer, tempo::StretchProcessor};
 use crate::joc::Settings;
+use crate::output::playback::PlaybackHandle;
+use crate::output::AudioOutput;
 use crate::player::preload::PreparedPlayback;
-use crate::player::{InnerPlayer, PlayerEvent};
+use crate::player::{InnerPlayer, LoadedPlayback, PlayerEvent};
 
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/");
 
-/// JOC 双耳播放切入预载 WAV 时清理场景和统计，并推送未生效事件
+/// 只有当前代次提交预载 WAV 时清理 JOC 状态，过期提交不影响新曲目
 #[test]
+#[ignore = "需要可用的隔离音频输出设备"]
 fn preloaded_non_eac3_clears_previous_joc_state() {
-    let player = InnerPlayer::new().unwrap();
-    let settings = Arc::clone(&player.joc);
-    let events = Arc::new(Mutex::new(Vec::new()));
-    {
-        let events = Arc::clone(&events);
-        let mut settings = settings.lock();
-        settings.mode = "binaural".into();
-        settings.hrtf = Some((
-            "D2".into(),
-            Arc::new(include_bytes!("../../../../resources/joc/joc-hrtf-D2.jochrtf").to_vec()),
-        ));
-        settings.callback = Some(Arc::new(move |event| {
-            if let PlayerEvent::JocStateChanged { active } = event {
-                events.lock().push(active);
-            }
-        }));
-    }
-    let mut prepared =
-        prepare_decode(&format!("{ROOT}joc.mp4"), None, HttpCancelHandle::new()).unwrap();
-    prepared.set_joc_settings(Arc::clone(&settings));
-    let shared = Shared::new(48_000, 2);
-    let equalizer = Arc::new(Mutex::new(Equalizer::new(48_000, 2)));
-    let tempo = Arc::new(Mutex::new(StretchProcessor::new(2, 48_000)));
-    let (_, worker, _) = start_prepared_decode(
-        prepared,
-        Arc::clone(&shared),
-        Arc::clone(&equalizer),
-        Arc::clone(&tempo),
-    )
-    .unwrap();
-    collect(shared, worker);
-    assert!(settings.lock().active);
-    assert!(settings.lock().scene.is_some());
-    assert!(settings.lock().info.frames_out > 0);
-    assert_eq!(*events.lock(), [true]);
+    for superseded in [false, true] {
+        let mut player = InnerPlayer::new().unwrap();
+        let settings = Arc::clone(&player.joc);
+        let events = Arc::new(Mutex::new(Vec::new()));
+        {
+            let events = Arc::clone(&events);
+            let mut settings = settings.lock();
+            settings.mode = "binaural".into();
+            settings.hrtf = Some((
+                "D2".into(),
+                Arc::new(include_bytes!("../../../../resources/joc/joc-hrtf-D2.jochrtf").to_vec()),
+            ));
+            settings.callback = Some(Arc::new(move |event| {
+                if let PlayerEvent::JocStateChanged { active } = event {
+                    events.lock().push(active);
+                }
+            }));
+        }
+        let mut prepared =
+            prepare_decode(&format!("{ROOT}joc.mp4"), None, HttpCancelHandle::new()).unwrap();
+        prepared.set_joc_settings(Arc::clone(&settings));
+        let shared = Shared::new(48_000, 2);
+        let equalizer = Arc::new(Mutex::new(Equalizer::new(48_000, 2)));
+        let tempo = Arc::new(Mutex::new(StretchProcessor::new(2, 48_000)));
+        let (_, worker, _) = start_prepared_decode(
+            prepared,
+            Arc::clone(&shared),
+            Arc::clone(&equalizer),
+            Arc::clone(&tempo),
+        )
+        .unwrap();
+        collect(shared, worker);
+        assert!(settings.lock().active);
+        assert!(settings.lock().scene.is_some());
+        assert!(settings.lock().info.frames_out > 0);
+        assert_eq!(*events.lock(), [true]);
 
-    let path = super::fixtures::tone_file(48_000, "joc-preloaded-bypass");
-    let mut prepared =
-        prepare_decode(path.to_str().unwrap(), None, HttpCancelHandle::new()).unwrap();
-    prepared.set_joc_settings(Arc::clone(&settings));
-    let shared = Shared::new(48_000, 2);
-    shared.set_preloading(true);
-    let (metadata, worker, cancel) = start_prepared_decode(
-        prepared,
-        Arc::clone(&shared),
-        Arc::clone(&equalizer),
-        Arc::clone(&tempo),
-    )
-    .unwrap();
-    assert_ne!(metadata.codec, "eac3");
-    let (decoder, _) = collect(Arc::clone(&shared), worker);
-    assert!(settings.lock().active, "预载不应改变当前曲目的状态");
-    let ready = PreparedPlayback {
-        id: "joc-preloaded-bypass".into(),
-        source: path.to_str().unwrap().into(),
-        config: player.preload_config(),
-        start_position: 0.0,
-        metadata,
-        shared,
-        decoder: Some(std::thread::spawn(move || decoder)),
-        cancel,
-        equalizer,
-        tempo,
-    };
-    ready.activate(&settings);
-    assert!(!settings.lock().active);
-    assert!(settings.lock().scene.is_none());
-    assert_eq!(settings.lock().info.frames_out, 0);
-    assert_eq!(*events.lock(), [true, false]);
-    assert!(!ready.shared.is_preloading());
-    drop(ready);
-    std::fs::remove_file(path).unwrap();
+        let (_, token) = player.take_for_async_load(HttpCancelHandle::new());
+
+        let path = super::fixtures::tone_file(48_000, "joc-preloaded-bypass");
+        let mut prepared =
+            prepare_decode(path.to_str().unwrap(), None, HttpCancelHandle::new()).unwrap();
+        prepared.set_joc_settings(Arc::clone(&settings));
+        let shared = Shared::new(48_000, 2);
+        shared.set_preloading(true);
+        let (metadata, worker, cancel) = start_prepared_decode(
+            prepared,
+            Arc::clone(&shared),
+            Arc::clone(&equalizer),
+            Arc::clone(&tempo),
+        )
+        .unwrap();
+        assert_ne!(metadata.codec, "eac3");
+        let (decoder, _) = collect(Arc::clone(&shared), worker);
+        assert!(settings.lock().active, "预载不应改变当前曲目的状态");
+        let mut ready = PreparedPlayback {
+            id: "joc-preloaded-bypass".into(),
+            source: path.to_str().unwrap().into(),
+            config: player.preload_config(),
+            start_position: 0.0,
+            metadata,
+            shared,
+            decoder: Some(std::thread::spawn(move || decoder)),
+            cancel,
+            equalizer,
+            tempo,
+        };
+        let output =
+            AudioOutput::new(None, Some(48_000), Some(16), 1, Arc::new(|| {}), None).unwrap();
+        let (output, shared, playback) = PlaybackHandle::prepare_with_buffer(
+            output,
+            player.fft_handle(),
+            Some(Arc::clone(&ready.shared)),
+        )
+        .unwrap();
+        assert!(Arc::ptr_eq(&shared, &ready.shared), "必须走预载复用路径");
+        assert!(shared.is_preloading(), "开流阶段不得提前提升预载");
+        if superseded {
+            let (_, current_token) = player.take_for_async_load(HttpCancelHandle::new());
+            assert_ne!(current_token, token);
+            let mut settings = settings.lock();
+            settings.scene = Some([0.25; 64]);
+            settings.info.frames_out = 77;
+        }
+        let previous_scene = settings.lock().scene;
+        let previous_frames = settings.lock().info.frames_out;
+        let loaded = LoadedPlayback {
+            start_position: ready.start_position,
+            metadata: ready.metadata.clone(),
+            decode_handle: ready.decoder.take().unwrap(),
+            shared: Arc::clone(&shared),
+            output,
+            playback,
+            cancel: ready.cancel.take(),
+        };
+        let result = player
+            .commit_loaded(token, &ready.source, false, loaded)
+            .unwrap();
+        if superseded {
+            assert!(result.is_none());
+            assert!(settings.lock().active);
+            assert_eq!(settings.lock().scene, previous_scene);
+            assert_eq!(settings.lock().info.frames_out, previous_frames);
+            assert_eq!(*events.lock(), [true]);
+            assert!(shared.is_preloading());
+        } else {
+            assert!(result.is_some());
+            assert!(!settings.lock().active);
+            assert!(settings.lock().scene.is_none());
+            assert_eq!(settings.lock().info.frames_out, 0);
+            assert_eq!(*events.lock(), [true, false]);
+            assert!(!shared.is_preloading());
+        }
+        player.stop();
+        drop(ready);
+        std::fs::remove_file(path).unwrap();
+    }
 }
 
 /// 消费完整解码链并核对源计数与变速前样本一致
