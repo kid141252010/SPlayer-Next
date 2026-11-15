@@ -4,10 +4,10 @@ const mocks = vi.hoisted(() => {
   const instances: MockPlayer[] = [];
   class MockPlayer {
     setCoverCacheDir = vi.fn();
+    setJocMode = vi.fn().mockResolvedValue(undefined);
     prepareNext = vi.fn().mockResolvedValue(true);
     cancelPrepared = vi.fn();
     stop = vi.fn();
-
     constructor() {
       instances.push(this);
     }
