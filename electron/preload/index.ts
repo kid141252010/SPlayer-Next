@@ -86,12 +86,11 @@ const api = {
     /** 取消本次下载 */
     cancelDownload: (): Promise<void> => ipcRenderer.invoke("automix:cancelDownload"),
     /**
-     * 订阅组件状态并清理 HMR 遗留监听器
+     * 订阅组件状态
      * @param callback - 安装和下载状态回调
      * @returns 解绑函数
      */
     onStatus: (callback: (status: AutoMixComponentStatus) => void): (() => void) => {
-      ipcRenderer.removeAllListeners("automix:componentStatus");
       return subscribe("automix:componentStatus", callback);
     },
   },
@@ -100,6 +99,7 @@ const api = {
     set: (keyPath: string, value: unknown) => ipcRenderer.invoke("config:set", keyPath, value),
     getAll: () => ipcRenderer.invoke("config:getAll"),
     reset: () => ipcRenderer.invoke("config:reset"),
+    clearAllData: (): Promise<void> => ipcRenderer.invoke("config:clearAllData"),
     replaceAll: (config: unknown) => ipcRenderer.invoke("config:replaceAll", config),
     exportToFile: (
       payload: unknown,
@@ -258,12 +258,11 @@ const api = {
     respondQueue: (requestId: string, snapshot: PlaybackQueueSnapshot) =>
       ipcRenderer.send(`player:queue-response:${requestId}`, snapshot),
     /**
-     * 订阅播放事件，先清理热更新遗留监听
+     * 订阅播放事件
      * @param callback - 播放事件回调
      * @returns 取消订阅函数
      */
     onEvent: (callback: (event: PlayerEvent) => void) => {
-      ipcRenderer.removeAllListeners("player:event");
       return subscribe("player:event", callback);
     },
   },
@@ -644,7 +643,6 @@ const api = {
     onState: (callback: (task: unknown) => void) => subscribe("download:state", callback),
     // 订阅解析请求
     onResolve: (callback: (payload: unknown) => void) => {
-      ipcRenderer.removeAllListeners("download:resolve");
       return subscribe("download:resolve", callback);
     },
   },
@@ -743,7 +741,6 @@ const api = {
      * @returns 取消订阅函数
      */
     onFavoriteChanged: (callback: (change: StreamingFavoriteChange) => void) => {
-      ipcRenderer.removeAllListeners("streaming:favoriteChanged");
       return subscribe<StreamingFavoriteChange>("streaming:favoriteChanged", callback);
     },
     /**
@@ -752,7 +749,6 @@ const api = {
      * @returns 取消订阅函数
      */
     onSyncState: (callback: (state: StreamingSyncState) => void) => {
-      ipcRenderer.removeAllListeners("streaming:syncState");
       return subscribe<StreamingSyncState>("streaming:syncState", callback);
     },
     /** 读取不包含凭据的服务器视图 */
@@ -813,7 +809,6 @@ const api = {
      * @returns 取消订阅函数
      */
     onLibraryUpdated: (callback: (serverId: string) => void) => {
-      ipcRenderer.removeAllListeners("streaming:libraryUpdated");
       return subscribe<string>("streaming:libraryUpdated", callback);
     },
     search: (serverId: string, query: string) =>
@@ -857,7 +852,6 @@ const api = {
      * @returns 取消订阅函数
      */
     onEvent: (callback: (event: RecognitionEvent) => void) => {
-      ipcRenderer.removeAllListeners("recognition:event");
       return subscribe<RecognitionEvent>("recognition:event", callback);
     },
   },
@@ -881,7 +875,6 @@ const api = {
     getStatus: () => ipcRenderer.invoke("externalApi:getStatus"),
     // 订阅外部 API 服务状态变化
     onStatus: (callback: (status: ExternalApiStatus) => void) => {
-      ipcRenderer.removeAllListeners("externalApi:status");
       return subscribe<ExternalApiStatus>("externalApi:status", callback);
     },
   },
@@ -899,7 +892,6 @@ const api = {
       ipcRenderer.invoke("mcp:injectAgentConfig", agentId, params),
     // 订阅 MCP 服务状态变化
     onStatus: (callback: (status: McpStatus) => void) => {
-      ipcRenderer.removeAllListeners("mcp:status");
       return subscribe<McpStatus>("mcp:status", callback);
     },
   },

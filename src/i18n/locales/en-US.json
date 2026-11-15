@@ -2171,7 +2171,7 @@
       "description": "Wipe all playlists, sign-in state and caches, then reset settings",
       "button": "Clear",
       "confirmTitle": "Clear all data?",
-      "confirmDesc": "All playlists, sign-in state and caches will be wiped and settings reset. This cannot be undone.",
+      "confirmDesc": "Sign out of all accounts and clear app settings, playlists, playback history, and caches. Music files and downloaded songs are preserved. The app will restart automatically. This cannot be undone.",
       "done": "All data has been cleared"
     },
     "pluginImport": {
@@ -2568,6 +2568,7 @@
     "TAG_READ_FAILED": "Failed to read tags",
     "TAG_WRITE_FAILED": "Failed to write tags",
     "MAX_CONSECUTIVE_FAILURES": "Too many consecutive playback failures",
+    "ALL_TRACKS_FILTERED": "No tracks passed the keyword filter; playback stopped",
     "UNKNOWN": "Operation failed"
   },
   "tagEditor": {

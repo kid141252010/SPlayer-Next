@@ -17,6 +17,14 @@ MCP has its own switch, port, and lifecycle and does not depend on this API.
 - **Successful controls:** `{ "ok": true }`
 - **Invalid input:** HTTP `400` with `{ "error": "<reason>" }`
 
+## Browser origin restrictions
+
+- HTTP requests and WebSocket upgrades validate `Host` and `Origin` before reaching playback handlers. Untrusted requests receive `403` without executing controls.
+- By default, `Host` must be `localhost`, `127.0.0.1`, or `[::1]`, with an optional port. Arbitrary domain names are rejected even if they resolve to loopback, preventing DNS rebinding.
+- curl, scripts, and native clients without an `Origin` header remain supported without a key. Browser origins must use `http://` or `https://` on one of the loopback hosts above; different ports are allowed. Remote websites, `Origin: null`, and `file://` pages are rejected.
+- Explicitly enabling LAN access additionally permits **the server machine's IPv4 interface addresses and hostname at startup** as request hosts and browser origins. Native LAN clients can connect through these addresses; arbitrary domains and pages hosted on other machines remain blocked.
+- These checks are not authentication and do not automatically enable CORS access to HTTP responses. Use LAN mode only on trusted networks, and do not expose the API publicly through a proxy.
+
 ## Endpoints
 
 | Method | Path               | Description                               |

@@ -73,12 +73,14 @@ Disabling one plugin does not restart the host or other plugins. If the host cra
 
 The host injects `splayer`, `Buffer`, `URL`, `URLSearchParams`, `TextEncoder`, `TextDecoder`, `btoa`, `atob`, promises, microtasks, timers, and `console`. Node module imports, `require`, DOM, and Electron APIs are not provided.
 
-| Limit                              | Value                   |
-| ---------------------------------- | ----------------------- |
-| Host startup / plugin load timeout | 10 seconds each         |
-| Top-level synchronous execution    | 10 seconds              |
-| Default / maximum request timeout  | 15 / 60 seconds         |
-| Remote script import size          | 9,000,000 bytes maximum |
+| Limit                              | Value                                                              |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| Host startup / plugin load timeout | 10 seconds each                                                    |
+| Top-level synchronous execution    | 10 seconds                                                         |
+| Default / maximum request timeout  | 15 / 60 seconds                                                    |
+| Download and final source size     | 9,000,000 bytes each (UTF-8 source, including decompressed output) |
+
+Remote imports and updates limit the actual downloaded bytes. Local imports, update checks, and installation also enforce the final source limit, including `gz_` decompression. Oversized scripts are rejected before metadata parsing or source persistence.
 
 Register capabilities and handlers during initialization. Keep network requests and other slow work asynchronous.
 
@@ -122,13 +124,13 @@ Declare `@name`, `@id`, and `@version` explicitly. Keep `@id` stable across rele
 
 Declare required permissions in the header, for example `@grant network control`. Declared permissions are enabled by default; users can turn them off in plugin details. `network` is included by default.
 
-| Permission | Methods                                                         |
-| ---------- | --------------------------------------------------------------- |
-| `network`  | `request`, `music.searchOnline`                                 |
-| `control`  | Player commands and queries; `player.on` requires no permission |
-| `ui`       | Track menus, `notify`                                           |
-| `library`  | `music.searchLibrary`                                           |
-| `api`      | `api.call`, using the application's current account session     |
+| Permission | Methods                                                                          |
+| ---------- | -------------------------------------------------------------------------------- |
+| `network`  | `request`, `music.searchOnline`, `appleMusic.getStreamUrl`, `appleMusic.prewarm` |
+| `control`  | Player commands and queries; `player.on` requires no permission                  |
+| `ui`       | Track menus, `notify`                                                            |
+| `library`  | `music.searchLibrary`                                                            |
+| `api`      | `api.call`, using the application's current account session                      |
 
 ## Data storage
 

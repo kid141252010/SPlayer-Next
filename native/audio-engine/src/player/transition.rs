@@ -81,6 +81,25 @@ impl InnerPlayer {
     /// 调用方负责在工作线程 join 这些 handle，主线程持锁阶段不阻塞
     /// 返回旧线程集合与本次 load 的 token（token 用于校验本次 load 是否已被取代）
     pub fn take_for_async_load(&mut self, handle: HttpCancelHandle) -> (OldThreads, u64) {
+        self.reset_seek_requests();
+        self.take_for_async_load_inner(handle)
+    }
+
+    /// seek 回退沿用原队列，且在同一把锁内确认原任务仍拥有音源。
+    pub(crate) fn take_for_seek_recovery(
+        &mut self,
+        expected_token: u64,
+        handle: HttpCancelHandle,
+    ) -> Option<(OldThreads, u64)> {
+        if !self.is_load_token_current(expected_token) {
+            return None;
+        }
+        let taken = self.take_for_async_load_inner(handle);
+        self.pending_seek = Some(taken.1);
+        Some(taken)
+    }
+
+    fn take_for_async_load_inner(&mut self, handle: HttpCancelHandle) -> (OldThreads, u64) {
         self.transitioning.store(false, Ordering::Release);
         self.transition_dsp = None;
         // 自增 token：本次 load 的标识；任何并发的更早 commit_loaded 比较时会发现不匹配
@@ -149,6 +168,42 @@ impl InnerPlayer {
     pub fn clear_pending_load(&mut self, token: u64) {
         if self.is_load_token_current(token) {
             self.pending_load_handle = None;
+            self.finish_async_seek(token);
+        }
+    }
+
+    pub(super) fn reset_seek_requests(&mut self) {
+        self.seek_epoch = self.seek_epoch.wrapping_add(1);
+        self.pending_seek = None;
+    }
+
+    /// 设备接管必须同时拒绝在途提交和队列，不能等待 seek 的异步锁。
+    pub(crate) fn supersede_async_seeks(&mut self) {
+        if self
+            .pending_seek
+            .is_some_and(|token| self.is_load_token_current(token))
+        {
+            self.load_token.fetch_add(1, Ordering::AcqRel);
+        }
+        self.reset_seek_requests();
+    }
+
+    /// 无 decoder 的普通 load 不接收 seek；只有同代次的在途 seek 可以继续排队。
+    pub(crate) fn seek_request_epoch(&self) -> Option<u64> {
+        (self.decoder_thread.is_some()
+            || self
+                .pending_seek
+                .is_some_and(|token| self.is_load_token_current(token)))
+        .then_some(self.seek_epoch)
+    }
+
+    pub(crate) fn is_seek_epoch_current(&self, epoch: u64) -> bool {
+        self.seek_epoch == epoch
+    }
+
+    pub(crate) fn finish_async_seek(&mut self, token: u64) {
+        if self.pending_seek == Some(token) {
+            self.pending_seek = None;
         }
     }
 
@@ -165,6 +220,7 @@ impl InnerPlayer {
         // 与 load 共用同一 token 序列：commit_seeked 时比对，防止 seek 期间发生的
         // load/stop 完成后被本次 seek 的 commit 覆盖（旧曲复活 + 新解码线程泄漏）
         let token = self.load_token.fetch_add(1, Ordering::AcqRel) + 1;
+        self.pending_seek = Some(token);
 
         if let Some(flag) = self.fade_cancel.take() {
             flag.store(true, Ordering::Relaxed);
@@ -216,10 +272,8 @@ impl InnerPlayer {
         })
     }
 
-    /// seek 三段式的最后一段：主线程持锁，attach 新 sink + 新解码线程
-    ///
-    /// `output` 为输出重建（`reinit_output`）时新建的输出，seek 本身传 `None` 沿用现有输出
-    /// 返回 false 表示本次 seek 已被更新的 load/seek/stop 取代，结果被丢弃
+    /// seek 三段式的最后一段：主线程持锁，attach 新播放链与解码线程。
+    /// 返回 false 表示本次 seek 已被新的播放操作取代，结果被丢弃。
     pub fn commit_seeked(
         &mut self,
         token: u64,
@@ -301,6 +355,7 @@ impl InnerPlayer {
             return Ok(None);
         }
 
+        self.finish_async_seek(token);
         shared.set_normalization_enabled(self.normalization_enabled);
         if let Err(error) = playback.activate(self.target_volume, !auto_play) {
             if let Some(handle) = cancel {

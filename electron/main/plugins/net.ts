@@ -38,13 +38,28 @@ export const fetchScript = async (url: string): Promise<string> => {
   // Content-Length 预检（仅提示，不强信任）
   const lenHeader = resp.headers.get("content-length");
   if (lenHeader && Number(lenHeader) > INSTALL_URL_MAX_SIZE) {
+    await resp.body?.cancel().catch(() => {});
     throw new Error("PLUGIN_INSTALL_URL_TOO_LARGE");
   }
-  const buf = await resp.arrayBuffer();
-  if (buf.byteLength > INSTALL_URL_MAX_SIZE) {
-    throw new Error("PLUGIN_INSTALL_URL_TOO_LARGE");
+  if (!resp.body) return "";
+  const reader = resp.body.getReader();
+  const buffer = Buffer.allocUnsafe(INSTALL_URL_MAX_SIZE);
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > INSTALL_URL_MAX_SIZE) {
+        await reader.cancel().catch(() => {});
+        throw new Error("PLUGIN_INSTALL_URL_TOO_LARGE");
+      }
+      buffer.set(value, size - value.byteLength);
+    }
+    return new TextDecoder("utf-8").decode(buffer.subarray(0, size));
+  } finally {
+    reader.releaseLock();
   }
-  return new TextDecoder("utf-8").decode(buf);
 };
 
 /**

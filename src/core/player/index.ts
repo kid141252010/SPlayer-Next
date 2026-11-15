@@ -359,16 +359,50 @@ const loadTrack = async (
   transitionSource?: ResolvedTrackSource,
 ): Promise<void> => {
   if (!track) return;
-  // 跳过指定关键词歌曲
+  const myToken = invalidatePlaybackOperation();
   const settings = useSettingsStore();
   if (
     settings.preset.skipKeywordsSongs &&
     shouldSkipKeywordTrack(track, settings.preset.skipTrackKeywords)
   ) {
-    await nextTrack(autoPlay);
-    return;
+    const status = useStatusStore();
+    track = null;
+    if (status.fmMode) {
+      // FM 没有有限队列，包含首个候选最多检查五首。
+      for (let checked = 1; checked < MAX_CONSECUTIVE_FAILURES; checked++) {
+        const candidate = await fm.next();
+        if (myToken !== trackToken) return;
+        if (!candidate) break;
+        if (!shouldSkipKeywordTrack(candidate, settings.preset.skipTrackKeywords)) {
+          track = candidate;
+          context = undefined;
+          break;
+        }
+      }
+    } else {
+      // 只遍历当前队列一圈，不递归切歌，也不为被过滤的项反复洗牌。
+      const tracks = queue.queue.value;
+      const startIndex = status.playIndex;
+      for (let offset = 1; offset <= tracks.length; offset++) {
+        const index = (startIndex + offset) % tracks.length;
+        const candidate = tracks[index];
+        if (candidate && !shouldSkipKeywordTrack(candidate, settings.preset.skipTrackKeywords)) {
+          status.playIndex = index;
+          track = candidate;
+          context = status.currentPlaybackContext;
+          break;
+        }
+      }
+    }
+    if (!track) {
+      toast.error(i18n.global.t("errors.ALL_TRACKS_FILTERED"));
+      await stop();
+      return;
+    }
+    // 已完成的交接只属于原曲，替换候选必须重新加载真实音源。
+    transitionResult = undefined;
+    transitionSource = undefined;
   }
-  const myToken = ++trackToken;
   // 消费预载结果
   const preloaded = transitionResult ? null : consumePreloadedTrack(track);
   // 乐观更新
@@ -530,16 +564,14 @@ export const recoverFromSourceFailure = async (): Promise<void> => {
   }
 };
 
-/** 是否正在执行冷启动恢复上次播放 */
-let isRestoringLastTrack = false;
-/** 冷启动恢复期间用户是否请求了播放 */
-let pendingPlayAfterRestore = false;
+/** 当前冷启动恢复拥有的操作代次与最终播放意图 */
+let lastTrackRestore: { token: number; shouldPlay: boolean } | null = null;
 
 /** 恢复播放 */
 export const play = async (): Promise<void> => {
   const status = useStatusStore();
-  if (isRestoringLastTrack) {
-    pendingPlayAfterRestore = true;
+  if (lastTrackRestore?.token === trackToken) {
+    lastTrackRestore.shouldPlay = true;
     return;
   }
   if ((status.state === "stopped" || status.state === "idle") && status.currentTrack) {
@@ -585,8 +617,8 @@ export const restartCurrentTrack = async (): Promise<void> => {
 /** 切换播放/暂停 */
 export const togglePlay = (): void => {
   const status = useStatusStore();
-  if (isRestoringLastTrack) {
-    pendingPlayAfterRestore = !pendingPlayAfterRestore;
+  if (lastTrackRestore?.token === trackToken) {
+    lastTrackRestore.shouldPlay = !lastTrackRestore.shouldPlay;
     return;
   }
   if (status.isPlaying) {
@@ -599,6 +631,7 @@ export const togglePlay = (): void => {
 /** 暂停播放 */
 export const pause = async (): Promise<void> => {
   pauseToken++;
+  if (lastTrackRestore?.token === trackToken) lastTrackRestore.shouldPlay = false;
   const status = useStatusStore();
   const prev = status.state;
   status.state = "paused";
@@ -676,13 +709,22 @@ export const seek = async (posMs: number, restartRound = false): Promise<void> =
   // 设置 seek 目标，屏蔽旧 position 推送
   seekTarget = posMs;
 
-  const result = await (restartRound
-    ? window.api.player.seek(posMs, true)
-    : window.api.player.seek(posMs));
-  if (token !== trackToken) return;
-  if (result.success) {
-    status.position = posMs;
-    playback.setCurrentTime(posMs);
+  let applied = false;
+  try {
+    const result = await (restartRound
+      ? window.api.player.seek(posMs, true)
+      : window.api.player.seek(posMs));
+    if (token !== trackToken) return;
+    if (result.success) {
+      applied = true;
+      status.position = posMs;
+      playback.setCurrentTime(posMs);
+    }
+  } finally {
+    if (!applied && token === trackToken) {
+      seekTarget = null;
+      playback.setSeeking(false);
+    }
   }
 };
 
@@ -852,15 +894,21 @@ const resumeAfterTagWrite = async (
   wasPlaying: boolean,
 ): Promise<void> => {
   if (!track.path) return;
-  const myToken = ++trackToken;
+  let myToken = invalidatePlaybackOperation();
+  const myPauseToken = pauseToken;
   invalidateNextTrackPreload();
   useMediaStore().setTrack(track);
   lyricLoader.beginLoad();
   const result = await load(track.path, false, track);
   if (myToken !== trackToken || !result.ok) return;
-  if (resumeMs > 0) await seek(resumeMs);
-  if (wasPlaying) await play();
-  scheduleNextTrackPreload();
+  if (resumeMs > 0) {
+    const seeking = seek(resumeMs);
+    myToken = trackToken;
+    await seeking;
+    if (myToken !== trackToken) return;
+  }
+  if (wasPlaying && myPauseToken === pauseToken) await play();
+  if (myToken === trackToken) scheduleNextTrackPreload();
 };
 
 /**
@@ -879,18 +927,29 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
 
   let resumeMs = 0;
   let wasPlaying = false;
+  let resumeToken = trackToken;
+  const resumePauseToken = pauseToken;
   if (touchesCurrent) {
     resumeMs = Math.round(playback.getCurrentTime());
     wasPlaying = status.isPlaying;
     // Windows 下引擎持有文件句柄，必须先停止才能写入
-    await stop();
+    const stopping = stop();
+    resumeToken = trackToken;
+    await stopping;
   }
 
   const result = await window.api.library.writeTags(edits);
   if (!result.success || !result.data) {
     if (result.error) handleError(result.error);
     // 写入失败也要恢复被停掉的当前曲
-    if (touchesCurrent && current) await resumeAfterTagWrite(current, resumeMs, wasPlaying);
+    if (
+      touchesCurrent &&
+      current &&
+      resumeToken === trackToken &&
+      resumePauseToken === pauseToken
+    ) {
+      await resumeAfterTagWrite(current, resumeMs, wasPlaying);
+    }
     return null;
   }
 
@@ -902,7 +961,7 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
     queue.updateQueueTracks(updated);
   }
 
-  if (touchesCurrent && current) {
+  if (touchesCurrent && current && resumeToken === trackToken && resumePauseToken === pauseToken) {
     const newTrack = updated.find((track) => track.path === currentPath) ?? current;
     await resumeAfterTagWrite(newTrack, resumeMs, wasPlaying);
   }
@@ -1259,6 +1318,27 @@ export const purgeDeletedTracks = async (ids: readonly string[]): Promise<void> 
 };
 
 /**
+ * 移除服务器的队列项，保留未删除当前曲的索引，当前项最后交给正常切歌流程
+ * @param serverId - 被删除或身份失效的服务器 ID
+ */
+export const purgeServerTracks = async (serverId: string): Promise<void> => {
+  const status = useStatusStore();
+  const currentIndex = status.playIndex;
+  const current = queue.getTrack(currentIndex);
+  const removesCurrent = current?.source === "streaming" && current.serverId === serverId;
+  // 非当前项同步裁剪，避免自动切到同一批次里稍后还要删除的歌曲。
+  for (let index = queue.queueLength.value - 1; index >= 0; index--) {
+    const track = queue.getTrack(index);
+    if (index === currentIndex || track?.source !== "streaming" || track.serverId !== serverId) {
+      continue;
+    }
+    queue.removeFromQueue(index);
+    if (index < status.playIndex) status.playIndex--;
+  }
+  if (removesCurrent) await removeFromQueue(status.playIndex);
+};
+
+/**
  * 插入歌曲到队列指定位置，自动调整 playIndex
  * 队列中已有同 ID 歌曲时移动到目标位置
  * @param item - 要插入的歌曲
@@ -1501,8 +1581,11 @@ export const restoreLastTrack = async (): Promise<void> => {
     status.state = "idle";
     return;
   }
-  isRestoringLastTrack = true;
-  pendingPlayAfterRestore = false;
+  const restore = {
+    token: invalidatePlaybackOperation(),
+    shouldPlay: settings.system.player.autoPlay,
+  };
+  lastTrackRestore = restore;
   const lastPosition = status.position;
   media.setTrack(lastTrack);
   media.setPlaybackContext(status.currentPlaybackContext);
@@ -1511,20 +1594,22 @@ export const restoreLastTrack = async (): Promise<void> => {
     const loaded = await loadTrackSourceWithFallback(
       lastTrack,
       status.currentPlaybackContext,
-      settings.system.player.autoPlay,
-      () => true,
+      false,
+      () => restore.token === trackToken,
     );
+    if (restore.token !== trackToken) return;
     if (loaded.status === "loaded" && loaded.result.ok) {
       if (settings.system.player.rememberLastTrack && lastPosition > 0) {
-        await seek(lastPosition);
+        const seeking = seek(lastPosition);
+        restore.token = trackToken;
+        await seeking;
+        if (restore.token !== trackToken) return;
       }
       if (loaded.resolved.cacheRequest) {
         cacheScheduler.schedule(lastTrack.id, loaded.resolved.cacheRequest);
       }
-      if (pendingPlayAfterRestore) {
-        pendingPlayAfterRestore = false;
-        await play();
-      }
+      lastTrackRestore = null;
+      if (restore.shouldPlay) await play();
     } else {
       status.state = "idle";
       // 恢复失败时保留记忆位置，防止被 resetForLoad 置 0 抹去
@@ -1534,8 +1619,7 @@ export const restoreLastTrack = async (): Promise<void> => {
       }
     }
   } finally {
-    isRestoringLastTrack = false;
-    pendingPlayAfterRestore = false;
+    if (lastTrackRestore === restore) lastTrackRestore = null;
   }
 };
 

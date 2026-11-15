@@ -15,7 +15,7 @@ impl AudioPlayer {
         #[napi(ts_arg_type = "boolean")] auto_play: Option<bool>,
         prepared_id: Option<String>,
     ) -> Result<JsMusicMetadata> {
-        self.load_internal(source, auto_play, prepared_id, false)
+        self.load_internal(source, auto_play, prepared_id, false, None)
             .await
     }
 
@@ -25,8 +25,26 @@ impl AudioPlayer {
         source: String,
         auto_play: bool,
     ) -> Result<JsMusicMetadata> {
-        self.load_internal(source, Some(auto_play), None, true)
+        self.load_internal(source, Some(auto_play), None, true, None)
             .await
+    }
+
+    /// seek 的回退与原代次原子绑定，不抢占新 load，也不丢弃同音源的后续 seek。
+    pub(super) async fn load_for_seek_recovery(
+        &self,
+        source: String,
+        auto_play: bool,
+        expected_token: u64,
+        position: f64,
+    ) -> Result<JsMusicMetadata> {
+        self.load_internal(
+            source,
+            Some(auto_play),
+            None,
+            true,
+            Some((expected_token, position)),
+        )
+        .await
     }
 
     async fn load_internal(
@@ -35,6 +53,7 @@ impl AudioPlayer {
         auto_play: Option<bool>,
         prepared_id: Option<String>,
         notify_source_error: bool,
+        expected_seek: Option<(u64, f64)>,
     ) -> Result<JsMusicMetadata> {
         let auto_play = auto_play.unwrap_or(true);
         let joc_settings = Arc::clone(&self.inner.lock().joc);
@@ -59,7 +78,13 @@ impl AudioPlayer {
         ) = {
             let mut player = self.inner.lock();
             let prepared_playback = player.take_prepared(prepared_id.as_deref(), &source);
-            let (old_threads, token) = player.take_for_async_load(handle.clone());
+            let (old_threads, token) = if let Some((expected_token, _)) = expected_seek {
+                player
+                    .take_for_seek_recovery(expected_token, handle.clone())
+                    .ok_or_else(|| Error::from_reason(LOAD_SUPERSEDED_REASON))?
+            } else {
+                player.take_for_async_load(handle.clone())
+            };
             let output_generation = player.reserve_output_generation();
             let failure_callback = player.make_failure_callback(output_generation);
             let fallback_callback = player.make_fallback_callback(output_generation);
@@ -85,8 +110,16 @@ impl AudioPlayer {
         let source_for_decoder = source.clone();
 
         let inner = Arc::clone(&self.inner);
+        #[cfg(test)]
+        let headless_output = self.test_headless_output;
+        #[cfg(test)]
+        let worker_gate = self.load_worker_gate.lock().take();
         // 解码器及未提交结果均在阻塞线程释放，避免销毁 HTTP 运行时引发崩溃。
         tokio::task::spawn_blocking(move || {
+            #[cfg(test)]
+            if let Some(gate) = worker_gate {
+                gate.wait();
+            }
             let result = (|| {
                 if let Some(h) = old_threads.join_aux() {
                     let _ = h.join();
@@ -113,14 +146,25 @@ impl AudioPlayer {
                     let prepared = prepared.as_ref().unwrap();
                     (prepared.original_sample_rate(), prepared.bits_per_sample())
                 };
-                let output = output::AudioOutput::new(
-                    device_id.as_deref(),
-                    Some(rate),
-                    Some(bits),
-                    output_generation,
-                    failure_callback,
-                    exclusive_mode.then_some(&fallback_callback),
-                )?;
+                let create_output = || {
+                    output::AudioOutput::new(
+                        device_id.as_deref(),
+                        Some(rate),
+                        Some(bits),
+                        output_generation,
+                        failure_callback,
+                        exclusive_mode.then_some(&fallback_callback),
+                    )
+                };
+                #[cfg(test)]
+                let output = if headless_output {
+                    Ok(output::AudioOutput::headless(rate, 2))
+                } else {
+                    create_output()
+                };
+                #[cfg(not(test))]
+                let output = create_output();
+                let output = output?;
                 let buffer = prepared_playback
                     .as_ref()
                     .map(|ready| Arc::clone(&ready.shared));
@@ -159,6 +203,9 @@ impl AudioPlayer {
                     .set_output_format(output.sample_rate(), output.channels());
                 tempo.lock().reset();
                 let mut prepared = prepared.unwrap();
+                if let Some((_, position)) = expected_seek {
+                    prepared.seek_start(position)?;
+                }
                 prepared.set_joc_settings(joc_settings);
                 let (metadata, decode_handle, cancel) = decoder::start_prepared_decode(
                     prepared,
@@ -175,7 +222,7 @@ impl AudioPlayer {
                     cancel,
                     equalizer,
                     tempo,
-                    None,
+                    expected_seek.map(|(_, position)| position),
                 ))
             })();
 

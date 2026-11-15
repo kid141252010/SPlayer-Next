@@ -41,6 +41,14 @@ fn state_to_str(state: PlayerState) -> &'static str {
 #[napi]
 pub struct AudioPlayer {
     inner: Arc<Mutex<InnerPlayer>>,
+    /// 只串行化 seek；load、stop 和设备恢复仍可立即抢占。
+    seek_serial: tokio::sync::Mutex<()>,
+    #[cfg(test)]
+    seek_worker_gate: Mutex<Option<seek::tests::WorkerGate>>,
+    #[cfg(test)]
+    load_worker_gate: Mutex<Option<seek::tests::WorkerGate>>,
+    #[cfg(test)]
+    test_headless_output: bool,
     device_watcher: Mutex<Option<device_watcher::DeviceWatcher>>,
 }
 
@@ -66,6 +74,13 @@ impl AudioPlayer {
         info!("AudioPlayer 实例已创建");
         Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
+            seek_serial: tokio::sync::Mutex::new(()),
+            #[cfg(test)]
+            seek_worker_gate: Mutex::new(None),
+            #[cfg(test)]
+            load_worker_gate: Mutex::new(None),
+            #[cfg(test)]
+            test_headless_output: false,
             device_watcher: Mutex::new(None),
         })
     }
