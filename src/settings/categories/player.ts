@@ -7,11 +7,47 @@ import { getActiveDeviceId } from "@/core/player";
 import { setDeviceVolume } from "@/services/deviceVolume";
 import { useStatusStore } from "@/stores/status";
 import AutoMixComponents from "@/components/settings/custom/AutoMixComponents.vue";
+import { JOC_HRTFS } from "@shared/types/joc";
 
 const playerCategory: SettingCategory = {
   id: "player",
   icon: IconLucidePlay,
   sections: [
+    {
+      id: "joc",
+      tag: { text: "Beta" },
+      items: [
+        {
+          key: "jocMode",
+          type: "select",
+          binding: { store: "settings", path: "system.player.joc.mode" },
+          defaultValue: "off",
+          options: [
+            { value: "off", labelKey: "settings.jocMode.off" },
+            { value: "speaker", labelKey: "settings.jocMode.speaker" },
+            { value: "binaural", labelKey: "settings.jocMode.binaural" },
+          ],
+        },
+        {
+          key: "jocHrtf",
+          type: "select",
+          binding: { store: "settings", path: "system.player.joc.hrtf" },
+          defaultValue: "D2",
+          options: JOC_HRTFS.map((hrtf) => ({ value: hrtf, label: hrtf })),
+          visible: () => useSettingsStore().system.player.joc.mode === "binaural",
+        },
+        {
+          key: "jocGain",
+          type: "slider",
+          binding: { store: "settings", path: "system.player.joc.gainDb" },
+          defaultValue: 0,
+          min: -12,
+          max: 6,
+          step: 1,
+          marks: { [-12]: "-12 dB", 0: "0 dB", 6: "+6 dB" },
+        },
+      ],
+    },
     {
       id: "playControl",
       items: [

@@ -90,6 +90,26 @@ impl Shared {
         self.stems.lock().clone()
     }
 
+    /// 根据对象渲染状态限制解码超前量，预载容量仍优先
+    /// @param active - 是否正在对象渲染
+    pub fn set_joc_active(&self, active: bool) {
+        self.decoded_capacity.store(
+            if active || self.preloading.load(Ordering::Acquire) {
+                2
+            } else {
+                FRAME_BUFFER_CAPACITY
+            },
+            Ordering::Relaxed,
+        );
+        self.decoded_condvar.notify_all();
+    }
+
+    /// 是否为尚未提交的备用解码链
+    /// @returns 是否正在预载
+    pub fn is_preloading(&self) -> bool {
+        self.preloading.load(Ordering::Acquire)
+    }
+
     /// 为单个解码会话创建固定格式的有限缓冲
     /// @param sample_rate - 输出采样率
     /// @param channels - 输出声道数

@@ -20,6 +20,7 @@ export const defaultSystemConfig: SystemConfig = {
     outputDevice: null,
     volume: 1,
     loudnessNormalization: false,
+    joc: { mode: "off", hrtf: "D2", gainDb: 0 },
     audioOutputMode: "shared",
     keepScreenAwake: false,
     equalizer: {

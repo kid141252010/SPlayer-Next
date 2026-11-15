@@ -313,6 +313,7 @@ declare module 'vue' {
     SMenu: typeof import('./src/components/ui/SMenu.vue')['default']
     SNumberInput: typeof import('./src/components/ui/SNumberInput.vue')['default']
     SongList: typeof import('./src/components/list/SongList.vue')['default']
+    SpatialScene: typeof import('./src/components/player/SpatialScene/SpatialScene.vue')['default']
     SpeedDialog: typeof import('./src/components/modals/SpeedDialog.vue')['default']
     SPerformanceMonitor: typeof import('./src/components/SPerformanceMonitor.vue')['default']
     SPopover: typeof import('./src/components/ui/SPopover.vue')['default']

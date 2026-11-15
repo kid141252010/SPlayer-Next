@@ -16,6 +16,8 @@ export const useStatusStore = defineStore(
   () => {
     /** 播放状态 */
     const state = ref<PlayerState>("idle");
+    /** 当前曲目是否实际使用对象渲染，不持久化 */
+    const jocActive = ref(false);
     /** 播放位置 */
     const position = ref(0);
     /** 播放时长 */
@@ -142,6 +144,7 @@ export const useStatusStore = defineStore(
 
     return {
       state,
+      jocActive,
       position,
       duration,
       volume,

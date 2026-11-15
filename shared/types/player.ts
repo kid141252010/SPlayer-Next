@@ -1,5 +1,6 @@
 import type { PlaybackQueueSnapshot } from "./music";
 import type { LyricFormat } from "lyric-kit";
+import type { JocControls, JocStatus } from "./joc";
 
 import type { Platform } from "./platform";
 import type { MusicSearchCandidate } from "./plugin";
@@ -253,6 +254,7 @@ export type TransitionPreference = "conservative" | "standard" | "eager";
 export type MotionCoverSource = "off" | "ncm" | "am" | "amFirst";
 
 export type PlayerEvent =
+  | { type: "jocStateChanged"; data: { active: boolean } }
   | { type: "status"; data: PlayerStatus }
   | { type: "position"; data: { position: number; duration: number } }
   | { type: "transitionReady"; data: { id: string; position: number; endPosition?: number } }
@@ -408,6 +410,16 @@ export interface PlayerApi {
   reinit: () => Promise<IpcResponse>;
   /** 设置音量均衡 */
   setNormalizationEnabled: (enabled: boolean) => Promise<IpcResponse>;
+  /**
+   * 更新对象渲染交互参数
+   * @param controls - 姿态、站位和对象增益
+   * @returns 原生调用结果
+   */
+  setJocControls: (controls: JocControls) => Promise<IpcResponse>;
+  /** 获取最近的 64 浮点场景，未生效时为空 */
+  getJocScene: () => Promise<IpcResponse<Float32Array | null>>;
+  /** 获取对象渲染生效状态及统计 */
+  getJocStatus: () => Promise<IpcResponse<JocStatus>>;
   /** 启用/禁用 10 频段均衡器 */
   setEqualizerEnabled: (enabled: boolean) => Promise<IpcResponse>;
   /** 更新均衡器各频段增益（dB 数组，长度 10） */

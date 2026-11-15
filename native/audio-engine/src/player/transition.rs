@@ -309,6 +309,15 @@ impl InnerPlayer {
             shared.stop();
             return Err(error);
         }
+        if shared.is_preloading() {
+            {
+                let mut settings = self.joc.lock();
+                settings.set_active(false);
+                settings.info = joc_core::stream::StreamInfo::default();
+                settings.scene = None;
+            }
+            shared.set_preloading(false);
+        }
         self.pending_load_handle = cancel;
         self.output = Some(output);
 

@@ -123,40 +123,58 @@ impl Timeline {
     /// Returns `None` when no sample of the frame lies at or after `not_before`. Frames without a
     /// raw timestamp cannot be located, so they are kept whole.
     pub fn place(&self, frame: FrameTiming, not_before: Duration) -> Option<FramePlacement> {
-        if frame.pts == sys::AV_NOPTS_VALUE {
-            return Some(FramePlacement {
-                raw_pts: None,
-                pts: None,
-                end: None,
-                duration: samples_to_duration(frame.samples, frame.sample_rate),
-                offset: 0,
-                samples: frame.samples,
-            });
-        }
-
-        let start = self.relative_ticks(frame.pts);
-        let first = self.first_sample_at_or_after(start, frame.sample_rate, nanos(not_before));
-        let offset = usize::try_from(first)
+        let start = (frame.pts != sys::AV_NOPTS_VALUE).then(|| self.relative_ticks(frame.pts));
+        let offset = match start {
+            Some(start) => usize::try_from(self.first_sample_at_or_after(
+                start,
+                frame.sample_rate,
+                nanos(not_before),
+            ))
             .ok()
-            .filter(|&offset| offset < frame.samples)?;
-        let samples = frame.samples - offset;
+            .filter(|&offset| offset < frame.samples)?,
+            None => 0,
+        };
+        Some(self.frame_placement(&frame, start, offset))
+    }
 
-        Some(FramePlacement {
-            raw_pts: Some(frame.pts),
-            pts: Some(duration_from_nanos(self.floor_nanos(
-                start,
-                offset,
-                frame.sample_rate,
-            ))),
-            end: Some(duration_from_nanos(self.floor_nanos(
-                start,
-                frame.samples,
-                frame.sample_rate,
-            ))),
+    /// 按原始帧偏移创建视图，保留 JOC 有状态渲染需要的完整 PCM。
+    pub(crate) fn placement_at_offset(&self, frame: FrameTiming, offset: usize) -> FramePlacement {
+        let start = (frame.pts != sys::AV_NOPTS_VALUE).then(|| self.relative_ticks(frame.pts));
+        self.frame_placement(&frame, start, offset.min(frame.samples))
+    }
+
+    /// 返回目标时间对应的原始帧偏移，不经过已舍入的公开时间。
+    pub(crate) fn sample_offset_to(&self, frame: FrameTiming, target: Duration) -> Option<usize> {
+        if frame.pts == sys::AV_NOPTS_VALUE || frame.sample_rate <= 0 {
+            return None;
+        }
+        usize::try_from(self.first_sample_at_or_after(
+            self.relative_ticks(frame.pts),
+            frame.sample_rate,
+            nanos(target),
+        ))
+        .ok()
+    }
+
+    fn frame_placement(
+        &self,
+        frame: &FrameTiming,
+        start: Option<i128>,
+        offset: usize,
+    ) -> FramePlacement {
+        let samples = frame.samples - offset;
+        FramePlacement {
+            raw_pts: (frame.pts != sys::AV_NOPTS_VALUE).then_some(frame.pts),
+            pts: start.map(|start| {
+                duration_from_nanos(self.floor_nanos(start, offset, frame.sample_rate))
+            }),
+            end: start.map(|start| {
+                duration_from_nanos(self.floor_nanos(start, frame.samples, frame.sample_rate))
+            }),
             duration: samples_to_duration(samples, frame.sample_rate),
             offset,
             samples,
-        })
+        }
     }
 
     /// Returns the public end time of a demuxed packet, or `None` when the packet carries no

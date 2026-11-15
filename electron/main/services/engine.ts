@@ -1,5 +1,6 @@
 import { loadNativeModule } from "@main/utils/nativeLoader";
-import { getCoverCacheDir, isDev } from "@main/utils/config";
+import { getCoverCacheDir, getJocHrtfPath, isDev } from "@main/utils/config";
+import { store } from "@main/store";
 import { playerLog, nativeLogsDir } from "@main/utils/logger";
 import { getNetworkProxyUrl } from "@main/utils/proxy";
 
@@ -55,6 +56,7 @@ export const getPlayer = (): PlayerInstance => {
     const mod = getEngine();
     playerInstance = new mod.AudioPlayer();
     playerInstance.setCoverCacheDir(getCoverCacheDir());
+    syncJocSettings();
     for (const cb of onCreatedCallbacks) {
       cb(playerInstance);
     }
@@ -88,6 +90,15 @@ export const setNormalizationEnabled = (enabled: boolean): void => {
   if (playerInstance) {
     playerInstance.setNormalizationEnabled(enabled);
   }
+};
+
+/** 同步持久化的对象渲染模式、HRTF 和增益到已创建的播放器 */
+export const syncJocSettings = (): void => {
+  if (!playerInstance) return;
+  const { mode, hrtf, gainDb } = store.get("player.joc");
+  playerInstance
+    .setJocMode({ mode, gainDb, hrtfPath: mode === "binaural" ? getJocHrtfPath(hrtf) : undefined })
+    .catch((error) => playerLog.warn("应用 JOC 对象渲染配置失败:", error));
 };
 
 /** 同步均衡器开关到播放器 */

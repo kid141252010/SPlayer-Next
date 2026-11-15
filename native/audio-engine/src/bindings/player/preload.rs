@@ -36,6 +36,7 @@ impl Task for PrepareNextTask {
                 return Ok(None);
             }
             prepared.seek_start(self.start_position)?;
+            prepared.set_joc_settings(Arc::clone(&self.inner.lock().joc));
             let config = &self.config;
             let shared = Shared::new(config.sample_rate, config.channels);
             shared.set_preloading(true);

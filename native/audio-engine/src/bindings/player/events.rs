@@ -10,6 +10,11 @@ impl AudioPlayer {
         // 用闭包包裹 tsfn，在内部做 PlayerEvent → JsPlayerEvent 转换
         let emitter: player::EventEmitter = Arc::new(move |event: PlayerEvent| {
             let js_event = match event {
+                PlayerEvent::JocStateChanged { active } => JsPlayerEvent {
+                    event_type: "jocStateChanged".into(),
+                    joc_active: Some(active),
+                    ..Default::default()
+                },
                 PlayerEvent::StateChanged { state } => JsPlayerEvent {
                     event_type: "stateChanged".into(),
                     state: Some(state_to_str(state).into()),

@@ -8,13 +8,14 @@ import playerCategory from "./player";
 const mocks = vi.hoisted(() => ({
   enabled: false as boolean | string,
   cache: { enabled: false, cacheStreaming: false },
+  joc: { mode: "off" },
   player: { preloadNextTrack: false, transitionMode: "none" },
   confirm: vi.fn(),
   setSystem: vi.fn(),
 }));
 vi.mock("@/stores/settings", () => ({
   useSettingsStore: () => ({
-    system: { cache: { songCache: mocks.cache } },
+    system: { cache: { songCache: mocks.cache }, player: { joc: mocks.joc } },
     player: mocks.player,
     setSystem: mocks.setSystem,
   }),
@@ -42,6 +43,23 @@ const item = playerCategory
 const transitionItem = playerCategory
   .sections!.flatMap((section) => section.items)
   .find((item) => item.key === "transitionMode")!;
+
+describe("对象渲染设置", () => {
+  it("使用持久化系统配置，双耳模式才显示完整 HRTF 列表", () => {
+    const section = playerCategory.sections!.find((section) => section.id === "joc")!;
+    expect(section.tag?.text).toBe("Beta");
+    const [mode, hrtf, gain] = section.items;
+    expect(mode!.binding?.path).toBe("system.player.joc.mode");
+    expect(mode!.defaultValue).toBe("off");
+    expect(hrtf!.defaultValue).toBe("D2");
+    expect(hrtf!.options).toHaveLength(20);
+    for (const value of ["off", "speaker", "binaural"]) {
+      mocks.joc.mode = value;
+      expect(hrtf!.visible!()).toBe(value === "binaural");
+    }
+    expect([gain!.defaultValue, gain!.min, gain!.max]).toEqual([0, -12, 6]);
+  });
+});
 /** 创建点击后回传指定值的按钮桩组件 */
 const createButtonStub = (value: boolean | string) =>
   defineComponent({

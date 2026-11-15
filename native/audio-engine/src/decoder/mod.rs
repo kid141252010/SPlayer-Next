@@ -54,6 +54,8 @@ const AVERROR_EIO: i32 = sys::averror(libc::EIO);
 ///  - 播放重采样器输出设备采样率、设备声道数的交错 f32
 ///  - FFT 重采样器输出 48kHz 的 stereo f32
 pub struct DecoderData {
+    joc: Option<crate::joc::Renderer>,
+    discard_until: Option<Duration>,
     reader: AudioReader,
     player_resampler: Resampler,
     fft_resampler: Resampler,
@@ -63,6 +65,7 @@ pub struct DecoderData {
 
 /// 已打开且完成元数据读取的音源，等待按实际输出流采样率创建重采样器
 pub struct PreparedDecoder {
+    joc_settings: Arc<Mutex<crate::joc::Settings>>,
     reader: AudioReader,
     metadata: AudioMetadata,
     replay_gain_db: Option<f32>,
@@ -70,6 +73,12 @@ pub struct PreparedDecoder {
 }
 
 impl PreparedDecoder {
+    /// 绑定播放器的跨曲目对象渲染参数
+    /// @param settings - 共享控制状态
+    pub fn set_joc_settings(&mut self, settings: Arc<Mutex<crate::joc::Settings>>) {
+        self.joc_settings = settings;
+    }
+
     /// CUE 预载从子曲目起点准备，避免切入时丢弃已经准备的 PCM
     pub fn seek_start(&mut self, position_secs: f64) -> Result<()> {
         if position_secs > 0.0 {
@@ -172,6 +181,7 @@ pub fn prepare_decode(
     };
 
     Ok(PreparedDecoder {
+        joc_settings: Arc::new(Mutex::new(crate::joc::Settings::default())),
         reader,
         metadata,
         replay_gain_db,
@@ -191,12 +201,29 @@ pub fn start_prepared_decode(
     Option<HttpCancelHandle>,
 )> {
     let PreparedDecoder {
-        reader,
+        mut reader,
+        joc_settings,
         mut metadata,
         replay_gain_db,
         cancel_handle,
     } = prepared;
     let target_rate = shared.sample_rate();
+    if !shared.is_preloading() {
+        let mut settings = joc_settings.lock();
+        settings.set_active(false);
+        settings.info = joc_core::stream::StreamInfo::default();
+        settings.scene = None;
+    }
+    let joc = if metadata.codec == "eac3" {
+        reader.set_packet_passthrough(true);
+        Some(crate::joc::Renderer::new(
+            joc_settings,
+            target_rate,
+            shared.channels(),
+        )?)
+    } else {
+        None
+    };
     let (player_resampler, fft_resampler) =
         build_resamplers(&reader, target_rate, shared.channels())?;
     metadata.sample_rate = target_rate;
@@ -209,6 +236,8 @@ pub fn start_prepared_decode(
     }
 
     let data = DecoderData {
+        joc,
+        discard_until: None,
         reader,
         player_resampler,
         fft_resampler,
@@ -217,6 +246,7 @@ pub fn start_prepared_decode(
 
     let handle = thread::Builder::new()
         .name("audio-decoder".to_string())
+        .stack_size(64 * 1024 * 1024)
         .spawn(move || {
             priority::boost_current_audio_thread("audio-decoder");
             let mut data = data;
@@ -244,7 +274,6 @@ pub fn start_prepared_decode(
     Ok((metadata, handle, cancel_handle))
 }
 
-
 /// 用已有的 DecoderData 继续解码（seek 后复用）
 pub fn resume_decode(
     data: DecoderData,
@@ -257,6 +286,7 @@ pub fn resume_decode(
     }
     thread::Builder::new()
         .name("audio-decoder".to_string())
+        .stack_size(64 * 1024 * 1024)
         .spawn(move || {
             priority::boost_current_audio_thread("audio-decoder");
             let mut data = data;

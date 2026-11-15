@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     setLyric: vi.fn(),
   };
   const status = {
+    jocActive: false,
     state: "playing" as PlayerState,
     playIndex: 0,
     fmMode: false,
@@ -184,6 +185,13 @@ const sendStatus = async (state: PlayerState): Promise<void> => {
 };
 
 describe("单曲失败自动跳曲", () => {
+  it("跟随 JOC 生效与关闭事件更新状态", async () => {
+    const { handleEvent } = await import("./events");
+    await handleEvent({ type: "jocStateChanged", data: { active: true } });
+    expect(mocks.status.jocActive).toBe(true);
+    await handleEvent({ type: "jocStateChanged", data: { active: false } });
+    expect(mocks.status.jocActive).toBe(false);
+  });
   it("自然单曲重播明确通知主进程开启新轮次，睡眠定时停止时不重播", async () => {
     mocks.media.track = mocks.tracks[0]!;
     mocks.status.repeatMode = "one";

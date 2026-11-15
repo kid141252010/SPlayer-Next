@@ -82,6 +82,10 @@ HTTP 延迟 seek、取消句柄与应用显式代理策略共同生效，读取�
 `ffmpeg_audio_sys 0.2.0` 仍取同一锁定 git tag，保留上游自带 FFmpeg 构建方式；许可证位于
 `vendor/ffmpeg_audio/COPYING`。升级依赖时先核对上游等价开流配置，再移除本地补丁。
 
+JOC 原始包旁路仅在启用时保存载荷，沿用 0.4 的 `Timeline` / `ReadCursor`，不恢复旧时间基实现。
+完整 PCM 视图与裁剪视图共享同一时间线；seek 和时长扫描恢复读取时清理过期包，避免重放或错位。
+`src/tests/joc.rs` 覆盖包旁路、对象渲染及 seek，另校验扫描时长前后下一帧的 PTS 与原始包一致。
+
 `src/decoder/tests/reader.rs` 覆盖首次开流不扫描后半首、完整 PCM 一致、索引未预建时的双向
 seek，以及尾部真实字节。44.1 kHz 双声道非周期音源另行校验逐样本精确 seek，避免周期正弦波
 掩盖错位。合成样本 `fragmented-alac.m4a` 是 48 秒、8 kHz、440 Hz 单声道正弦波，

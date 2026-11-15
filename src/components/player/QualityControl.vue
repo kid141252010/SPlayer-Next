@@ -3,6 +3,9 @@ import type { SSelectOption } from "@/components/ui/SSelect.vue";
 import type { QualityLevel } from "@/utils/quality";
 import { useMediaStore } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
+import { useStatusStore } from "@/stores/status";
+import { useSpatialStore } from "@/stores/spatial";
+import type { JocMode } from "@shared/types/joc";
 import { getQualityLabel, isDolbyAtmosQuality } from "@/utils/quality";
 import * as player from "@/core/player";
 import { isPlatform } from "@shared/types/platform";
@@ -12,6 +15,15 @@ withDefaults(defineProps<{ cover?: boolean }>(), { cover: false });
 const { t } = useI18n();
 const media = useMediaStore();
 const settings = useSettingsStore();
+const status = useStatusStore();
+const spatial = useSpatialStore();
+const qualityOpen = ref(false);
+
+/** 从质量面板进入唯一的全局空间场景，释放面板焦点 */
+function openScene(): void {
+  qualityOpen.value = false;
+  spatial.open = true;
+}
 
 /** 是否支持切换在线音质 */
 const canSwitchQuality = computed(() => isPlatform(media.track?.source) && !media.track?.cloud);
@@ -23,6 +35,13 @@ const qualityLabel = computed(() => getQualityLabel(quality.value));
 /** 是否为杜比全景声 */
 const isDolbyAtmos = computed(() => isDolbyAtmosQuality(quality.value));
 const displayQualityLabel = computed(() => {
+  if (isDolbyAtmos.value && status.jocActive && settings.system.player.joc.mode !== "off") {
+    return t(
+      settings.system.player.joc.mode === "binaural"
+        ? "settings.jocMode.activeBinaural"
+        : "settings.jocMode.activeSpeaker",
+    );
+  }
   if (isDolbyAtmos.value) return "Atmos";
   return qualityLabel.value;
 });
@@ -40,6 +59,22 @@ const qualityOptions = computed<SSelectOption[]>(() => [
   { value: "hi-res", label: t("settings.songLevel.hi-res") },
 ]);
 
+/** 对象渲染模式与设置页使用同一份持久化配置 */
+const jocOptions = computed<SSelectOption[]>(() => [
+  { value: "off", label: t("settings.jocMode.off") },
+  { value: "speaker", label: t("settings.jocMode.speaker") },
+  { value: "binaural", label: t("settings.jocMode.binaural") },
+]);
+
+/**
+ * 写入对象渲染模式，由主进程配置链路更新原生引擎
+ * @param mode - 选中的对象渲染模式
+ * @returns 配置写入完成
+ */
+const onJocModeChange = async (mode: string | number | boolean): Promise<void> => {
+  await settings.setSystem("player.joc.mode", mode as JocMode);
+};
+
 const chipBase =
   "inline-flex min-w-9 shrink-0 items-center justify-center px-2 py-1 leading-none rounded-md border border-solid text-xs";
 
@@ -51,8 +86,57 @@ const onQualityChange = (value: string | number | boolean): void => {
 </script>
 
 <template>
+  <SPopover
+    v-if="isDolbyAtmos && media.track"
+    v-model:open="qualityOpen"
+    side="top"
+    :side-offset="8"
+    :cover="cover"
+    content-class="w-72 p-3"
+  >
+    <template #trigger>
+      <button
+        type="button"
+        :class="[
+          chipBase,
+          'cursor-pointer',
+          cover
+            ? 'border-cover/30 text-cover/80'
+            : 'border-on-surface-variant/30 text-on-surface-variant',
+        ]"
+      >
+        {{ displayQualityLabel }}
+      </button>
+    </template>
+    <div class="space-y-3">
+      <div class="text-sm font-medium">{{ t("settings.section.joc") }}</div>
+      <p class="text-xs opacity-70">{{ t("settings.jocMode.description") }}</p>
+      <SSelect
+        :model-value="settings.system.player.joc.mode"
+        :options="jocOptions"
+        :aria-label="t('settings.jocMode.label')"
+        @update:model-value="onJocModeChange"
+      />
+      <button
+        v-if="status.jocActive && settings.system.player.joc.mode === 'binaural'"
+        type="button"
+        class="w-full rounded-lg px-3 py-2 text-sm bg-on-surface/8"
+        @click="openScene"
+      >
+        {{ t("scene.open") }}
+      </button>
+      <template v-if="canSwitchQuality">
+        <div class="text-sm">{{ t("settings.songLevel.switchTitle") }}</div>
+        <SSelect
+          :model-value="settings.player.songLevel"
+          :options="qualityOptions"
+          @update:model-value="onQualityChange"
+        />
+      </template>
+    </div>
+  </SPopover>
   <SPopselect
-    v-if="canSwitchQuality && media.track"
+    v-else-if="canSwitchQuality && media.track"
     :model-value="settings.player.songLevel"
     :options="qualityOptions"
     side="top"

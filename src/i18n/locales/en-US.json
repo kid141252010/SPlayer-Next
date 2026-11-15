@@ -1,4 +1,48 @@
 {
+  "scene": {
+    "title": "Spatial scene",
+    "close": "Close",
+    "viewOrbit": "Orbit",
+    "viewFirst": "First person",
+    "focus": "Focus",
+    "focusTip": "Objects you face get louder and the rest quieter, like listening for one part in a crowd",
+    "height": "Height",
+    "heightTip": "Exaggerates the objects' elevation: height cues are weak with a generic HRTF",
+    "tour": "Tour",
+    "tourTip": "The head slowly turns a full circle and the mix revolves around you",
+    "walk": "Walk",
+    "walkTip": "Dragging walks around the room instead (or W A S D): objects get louder as you approach and the reflections change",
+    "look": "Mouse look",
+    "lookTip": "Like an FPS: the mouse is captured and just moving it turns your head, no dragging; Esc releases it",
+    "stick": "Glow stick",
+    "stickTip": "Hold glow sticks in both hands in first person: click to wave them forward (hold to keep waving in mouse look); they pulse with the bass and take the colour of the object under the crosshair",
+    "lockPrompt": "Click the scene to start mouse look",
+    "lockHint": "Esc releases the mouse · click to solo the object under the crosshair, right-click to mute · W A S D to walk · wheel to zoom",
+    "lockHintStick": "Esc releases the mouse · left-click to wave, hold to keep waving · right-click to solo the object under the crosshair · W A S D to walk · wheel to zoom",
+    "reset": "Reset",
+    "restore": "Restore all",
+    "hint": "Drag to turn your head · right-drag to orbit · wheel to zoom · click an orb to solo, Alt+click to mute · W A S D to walk · double-click to reset",
+    "waiting": "Waiting for Dolby Atmos (JOC) binaural playback…",
+    "object": "Object {n}",
+    "lfe": "LFE",
+    "solo": "Solo",
+    "mute": "Mute",
+    "front": "Front",
+    "back": "Back",
+    "left": "Left",
+    "right": "Right",
+    "pose": "{turn} {yaw}° · {tilt} {pitch}°",
+    "turnLeft": "Turned left",
+    "turnRight": "Turned right",
+    "tiltUp": "looking up",
+    "tiltDown": "looking down",
+    "position": "Position {x}, {y} m",
+    "notice": "JOC objects are spatial groups rebuilt parametrically from the 5.1 core, not stems: soloing still lets other parts bleed through.",
+    "open": "Spatial scene",
+    "error": "Unable to read the spatial scene. Close and reopen to retry",
+    "mixer": "Object mixer",
+    "view": "Scene view"
+  },
   "update": {
     "dialogTitle": "New Version Available",
     "later": "Later",
@@ -783,6 +827,7 @@
       "about": "About"
     },
     "section": {
+      "joc": "Dolby Atmos Object Rendering",
       "platformLogin": "Platform Login",
       "platformConfig": "Platform Config",
       "network": "Network & Proxy",
@@ -937,6 +982,23 @@
     "fadeDuration": {
       "label": "Fade Duration",
       "description": "Fade in/out duration (ms)"
+    },
+    "jocMode": {
+      "label": "Object rendering mode",
+      "description": "Applies only to E-AC-3 (Dolby Atmos) with JOC metadata; other audio keeps its existing playback path",
+      "off": "Off",
+      "speaker": "Speaker 2.0",
+      "binaural": "Binaural",
+      "activeBinaural": "Atmos · Binaural",
+      "activeSpeaker": "Atmos · 2.0"
+    },
+    "jocHrtf": {
+      "label": "HRTF",
+      "description": "Head-related transfer function for binaural rendering, D2 by default"
+    },
+    "jocGain": {
+      "label": "Output gain (dB)",
+      "description": "Adjust object rendering output level from -12 to +6 dB"
     },
     "loudnessNormalization": {
       "label": "Loudness Normalization",

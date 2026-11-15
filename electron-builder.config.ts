@@ -65,6 +65,11 @@ const config: Configuration = {
   asarUnpack: ["public/**"],
   extraResources: [
     {
+      from: "resources/joc",
+      to: "joc",
+      filter: ["*.jochrtf", "JOC-NOTICE.md"],
+    },
+    {
       from: "native/audio-engine",
       to: "native",
       filter: ["audio-engine.node"],

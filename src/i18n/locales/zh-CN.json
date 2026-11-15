@@ -1,4 +1,48 @@
 {
+  "scene": {
+    "title": "空间场景",
+    "close": "关闭",
+    "viewOrbit": "俯瞰",
+    "viewFirst": "第一人称",
+    "focus": "聚焦",
+    "focusTip": "面朝的对象更响，其余压低：像在人群里专心听一个声部",
+    "height": "高度",
+    "heightTip": "放大对象的仰角：通用 HRTF 的高度感偏弱，夸张一些更容易听出头顶的声音",
+    "tour": "巡游",
+    "tourTip": "头部缓缓转一圈，声场绕着你走",
+    "walk": "漫步",
+    "walkTip": "拖动改为在房间里走动（也可以用 W A S D）：走近对象它会变大，墙面反射跟着变",
+    "look": "鼠标视角",
+    "lookTip": "像 FPS 一样：锁定鼠标后直接移动鼠标转头，不用按住拖动；Esc 释放鼠标",
+    "stick": "应援棒",
+    "stickTip": "第一人称里双手举着应援棒：点击往前挥一下（鼠标视角里按住连挥），随低频发光，颜色跟着准星对准的对象",
+    "lockPrompt": "点击画面进入鼠标视角",
+    "lockHint": "Esc 释放鼠标 · 点击独奏准星对准的对象，右键静音 · W A S D 走动 · 滚轮缩放",
+    "lockHintStick": "Esc 释放鼠标 · 左键挥应援棒，按住连挥 · 右键独奏准星对准的对象 · W A S D 走动 · 滚轮缩放",
+    "reset": "回正",
+    "restore": "全部恢复",
+    "hint": "拖动转头 · 右键拖动转视角 · 滚轮缩放 · 点光球独奏，Alt+点击静音 · W A S D 走动 · 双击回正",
+    "waiting": "等待 Dolby Atmos（JOC）双耳播放…",
+    "object": "对象 {n}",
+    "lfe": "LFE",
+    "solo": "独奏",
+    "mute": "静音",
+    "front": "前",
+    "back": "后",
+    "left": "左",
+    "right": "右",
+    "pose": "{turn} {yaw}° · {tilt} {pitch}°",
+    "turnLeft": "向左",
+    "turnRight": "向右",
+    "tiltUp": "抬头",
+    "tiltDown": "低头",
+    "position": "站位 {x}, {y} m",
+    "notice": "JOC 对象是从 5.1 核心按参数重建的空间分组，不是分轨：独奏时仍会听到其他声部的残留。",
+    "open": "空间场景",
+    "error": "空间场景读取失败，请关闭后重试",
+    "mixer": "对象混音",
+    "view": "场景视角"
+  },
   "update": {
     "dialogTitle": "发现新版本",
     "later": "稍后",
@@ -783,6 +827,7 @@
       "about": "关于软件"
     },
     "section": {
+      "joc": "杜比全景声对象渲染",
       "platformLogin": "平台登录",
       "platformConfig": "平台配置",
       "network": "网络代理",
@@ -937,6 +982,23 @@
     "fadeDuration": {
       "label": "渐变时长",
       "description": "渐入渐出的持续时长（毫秒）"
+    },
+    "jocMode": {
+      "label": "对象渲染模式",
+      "description": "仅对带 JOC 元数据的 E-AC-3（Dolby Atmos）生效，其他音频保持原有播放路径",
+      "off": "关",
+      "speaker": "Speaker 2.0",
+      "binaural": "双耳",
+      "activeBinaural": "Atmos · 双耳",
+      "activeSpeaker": "Atmos · 2.0"
+    },
+    "jocHrtf": {
+      "label": "HRTF",
+      "description": "双耳渲染使用的头相关传输函数，默认 D2"
+    },
+    "jocGain": {
+      "label": "输出增益（dB）",
+      "description": "调整对象渲染的输出电平，范围 -12 至 +6 dB"
     },
     "loudnessNormalization": {
       "label": "音量均衡",

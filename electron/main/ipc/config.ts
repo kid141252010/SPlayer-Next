@@ -16,6 +16,7 @@ import {
   setPreampGain,
   setExclusiveMode,
   syncEngineProxy,
+  syncJocSettings,
 } from "@main/services/engine";
 import { applyGlobalFetchProxy, applySessionsProxy } from "@main/utils/proxy";
 import {
@@ -69,6 +70,12 @@ const applyConfigChange = (keyPath: string, value: unknown): void => {
       break;
     case "player.loudnessNormalization":
       setNormalizationEnabled(value as boolean);
+      break;
+    case "player.joc":
+    case "player.joc.mode":
+    case "player.joc.hrtf":
+    case "player.joc.gainDb":
+      syncJocSettings();
       break;
     case "player.equalizer.enabled":
       setEqualizerEnabled(value as boolean);
@@ -170,6 +177,7 @@ export const registerConfigIpc = (): void => {
   ipcMain.handle("config:reset", () => {
     if (getUpdateState().phase === "installing") throw new Error("安装启动中，无法重置配置");
     store.clear();
+    syncJocSettings();
     syncUpdateChannel();
     refreshPowerBlocker();
   });
@@ -178,6 +186,7 @@ export const registerConfigIpc = (): void => {
   ipcMain.handle("config:replaceAll", (_event, payload: unknown) => {
     if (getUpdateState().phase === "installing") throw new Error("安装启动中，无法替换配置");
     store.replaceAll(payload);
+    syncJocSettings();
     syncUpdateChannel();
     refreshPowerBlocker();
   });

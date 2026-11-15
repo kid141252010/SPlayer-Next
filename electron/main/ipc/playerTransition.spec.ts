@@ -22,6 +22,9 @@ const mocks = vi.hoisted(() => ({
   invalidate: vi.fn(),
   cachedFiles: new Set<string>(),
   broadcast: vi.fn(),
+  jocControls: vi.fn(),
+  jocScene: vi.fn(),
+  jocStatus: vi.fn(),
   recreatePlayer: () => {},
 }));
 vi.mock("electron", () => ({
@@ -46,6 +49,9 @@ vi.mock("@main/services/engine", () => {
     getCoverRaw: () => null,
     getStatus: () => ({ state: "playing" }),
     getSourceGeneration: () => mocks.generation,
+    setJocControls: mocks.jocControls,
+    getJocScene: mocks.jocScene,
+    getJocStatus: mocks.jocStatus,
     onEvent: (callback: typeof mocks.nativeEvent) => {
       mocks.nativeEvent = callback;
     },
@@ -138,6 +144,29 @@ const options = { meta: { id: "next", title: "Next", source: "local", artists: [
 const invoke = (name: string, ...args: unknown[]) => mocks.handlers.get(name)!(null, ...args);
 
 describe("交接响应的主进程竞态保护", () => {
+  it("窗口不存在时仍转发 JOC 低频状态", () => {
+    mocks.nativeEvent({ type: "jocStateChanged", jocActive: true });
+    expect(mocks.broadcast).toHaveBeenCalledWith("player:event", {
+      type: "jocStateChanged",
+      data: { active: true },
+    });
+  });
+  it("JOC IPC 保留类型数组和空场景，错误走标准响应", async () => {
+    const scene = new Float32Array(64);
+    mocks.jocScene.mockReturnValueOnce(scene).mockReturnValueOnce(null);
+    expect(await invoke("player:getJocScene")).toEqual({ success: true, data: scene });
+    expect(await invoke("player:getJocScene")).toEqual({ success: true, data: null });
+    const status = { active: false, mode: "off", peak: 0, overUnity: 0, missingJocFrames: 0 };
+    mocks.jocStatus.mockReturnValueOnce(status);
+    expect(await invoke("player:getJocStatus")).toEqual({ success: true, data: status });
+    const controls = { yaw: 0, pitch: 0, roll: 0, x: 0, y: 0, z: 0, focus: 0, height: 0 };
+    expect(await invoke("player:setJocControls", controls)).toEqual({ success: true });
+    expect(mocks.jocControls).toHaveBeenCalledWith(controls);
+    mocks.jocControls.mockImplementationOnce(() => {
+      throw new Error("无效参数");
+    });
+    expect(await invoke("player:setJocControls", {})).toMatchObject({ success: false });
+  });
   it("单曲重播先开启两种统计轮次，普通跳转不重置轮次", async () => {
     expect(await invoke("player:seek", 0, true)).toEqual({ success: true });
     expect(mocks.scrobbleRestart).toHaveBeenCalledOnce();

@@ -5,6 +5,8 @@ use crate::decoder::buffer::Shared;
 /// 播放器推送给 JS 侧的事件类型
 #[derive(Clone, Debug)]
 pub enum PlayerEvent {
+    /// 对象渲染生效状态变化
+    JocStateChanged { active: bool },
     /// 状态变化
     StateChanged { state: PlayerState },
     /// 播放结束

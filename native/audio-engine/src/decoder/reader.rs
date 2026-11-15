@@ -3,21 +3,38 @@ use super::*;
 use ffmpeg_audio::AudioReaderOptions;
 
 impl DecoderData {
-    /// 在已有 reader 上 seek，失败时调用方应回退到完整 load
-    ///
-    /// seek 后两个重采样器要 flush 掉残留样本，否则播放/FFT会带上上一段尾巴
+    /// 定位并清空重采样历史，JOC 模式先预滚再裁去目标前输出
+    /// @param position_secs - 目标秒数
+    /// @returns 是否成功复用当前解码器
     pub fn seek(&mut self, position_secs: f64) -> bool {
         if let Some(handle) = &self.cancel_handle {
             handle.reset();
         }
-        let target = Duration::from_secs_f64(position_secs);
-        if self.reader.seek(target, SeekMode::Accurate).is_err()
+        let preroll = self
+            .joc
+            .as_ref()
+            .is_some_and(|joc| joc.settings.lock().mode != "off");
+        let target = Duration::from_secs_f64(if preroll {
+            (position_secs - 64.0 * 1536.0 / 48_000.0).max(0.0)
+        } else {
+            position_secs
+        });
+        let mode = if preroll {
+            SeekMode::Coarse
+        } else {
+            SeekMode::Accurate
+        };
+        if self.reader.seek(target, mode).is_err()
             && self.reader.seek(target, SeekMode::Coarse).is_err()
         {
             return false;
         }
         let _ = self.player_resampler.flush();
         let _ = self.fft_resampler.flush();
+        if let Some(joc) = &mut self.joc {
+            joc.reset();
+        }
+        self.discard_until = preroll.then(|| Duration::from_secs_f64(position_secs));
         true
     }
 
@@ -27,8 +44,18 @@ impl DecoderData {
     }
 
     /// 输出设备格式变化后重建播放重采样器；FFT 分支仍保持固定双声道分析格式
+    /// @param sample_rate - 新设备采样率
+    /// @param channels - 新设备声道数
+    /// @returns 重建结果
     pub fn reconfigure_player_output(&mut self, sample_rate: u32, channels: u16) -> Result<()> {
         self.player_resampler = build_player_resampler(&self.reader, sample_rate, channels)?;
+        if let Some(joc) = &self.joc {
+            self.joc = Some(crate::joc::Renderer::new(
+                Arc::clone(&joc.settings),
+                sample_rate,
+                channels,
+            )?);
+        }
         Ok(())
     }
 }
@@ -225,6 +252,8 @@ pub(super) fn run_decoding_loop(data: &mut DecoderData, shared: &Shared) {
 
     // 用于日志诊断：记录是否曾成功解码过帧
     let mut had_success = false;
+    let mut joc_active = false;
+    let mut logged_no_joc = false;
 
     loop {
         // 背压：缓冲区满时阻塞等待消费
@@ -233,15 +262,62 @@ pub(super) fn run_decoding_loop(data: &mut DecoderData, shared: &Shared) {
         }
 
         match data.reader.receive_frame() {
-            Ok(Some(frame)) => {
+            Ok(Some(mut frame)) => {
+                let packets = frame.take_packets();
+                let (full, offset) = frame.full_frame();
+                let skip = data
+                    .discard_until
+                    .and_then(|target| full.sample_offset_to(target))
+                    .unwrap_or(offset)
+                    .max(offset)
+                    .min(full.samples());
+                let mut player_samples = shared.take_player_buffer();
+                joc_active = if let Some(joc) = &mut data.joc {
+                    match joc.process(
+                        &full,
+                        &packets,
+                        skip,
+                        !shared.is_preloading(),
+                        &mut player_samples,
+                    ) {
+                        Ok(active) => {
+                            if !active && !logged_no_joc && joc.settings.lock().mode != "off" {
+                                debug!("E-AC-3 未启用 JOC 渲染，保留原有下混");
+                                logged_no_joc = true;
+                            }
+                            active
+                        }
+                        Err(error) => {
+                            tracing::warn!(%error, "JOC 渲染失败，回退原有下混");
+                            joc.fail();
+                            false
+                        }
+                    }
+                } else {
+                    false
+                };
+                shared.set_joc_active(joc_active);
+                if !shared.is_preloading() {
+                    if let Some(joc) = &data.joc {
+                        joc.settings.lock().set_active(joc_active);
+                    }
+                }
+                if skip == full.samples() {
+                    shared.recycle_player_buffer(player_samples);
+                    continue;
+                }
+                data.discard_until = None;
+                let frame = full.skip_samples(skip);
                 // 1-to-N: 同一帧顺序喂两个重采样器
                 if data.player_resampler.process::<f32>(Some(&frame)).is_err() {
                     debug!("player resampler 处理失败，结束解码");
                     shared.mark_decode_failed();
                     return;
                 }
-                let mut player_samples = shared.take_player_buffer();
-                player_samples.extend_from_slice(data.player_resampler.output_as::<f32>());
+                if !joc_active {
+                    player_samples.clear();
+                    player_samples.extend_from_slice(data.player_resampler.output_as::<f32>());
+                }
 
                 if data.fft_resampler.process::<f32>(Some(&frame)).is_err() {
                     debug!("fft resampler 处理失败，结束解码");
@@ -289,7 +365,15 @@ pub(super) fn run_decoding_loop(data: &mut DecoderData, shared: &Shared) {
                 let _ = data.player_resampler.process::<f32>(None);
                 let _ = data.fft_resampler.process::<f32>(None);
                 let mut player_samples = shared.take_player_buffer();
-                player_samples.extend_from_slice(data.player_resampler.output_as::<f32>());
+                if joc_active {
+                    if let Some(joc) = &mut data.joc {
+                        if let Err(error) = joc.finish(&mut player_samples) {
+                            debug!(%error, "JOC 输出重采样器排空失败");
+                        }
+                    }
+                } else {
+                    player_samples.extend_from_slice(data.player_resampler.output_as::<f32>());
+                }
                 let mut fft_samples = shared.take_fft_buffer();
                 fft_samples.extend_from_slice(data.fft_resampler.output_as::<f32>());
                 if !player_samples.is_empty() || !fft_samples.is_empty() {

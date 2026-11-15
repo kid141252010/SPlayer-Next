@@ -67,9 +67,18 @@ pub struct DecodeEngine {
 
     /// Where reading stands.
     cursor: ReadCursor,
+    packet_passthrough: bool,
+    pending_packets: Vec<Vec<u8>>,
 }
 
 impl DecodeEngine {
+    /// 开关原始包旁路，关闭时释放未消费载荷
+    /// @param enabled - 是否保留送入解码器的包
+    pub fn set_packet_passthrough(&mut self, enabled: bool) {
+        self.packet_passthrough = enabled;
+        self.pending_packets.clear();
+    }
+
     /// Constructs a new `DecodeEngine` reading from the given source.
     ///
     /// # Returns
@@ -94,6 +103,8 @@ impl DecodeEngine {
             decoder,
             timeline,
             cursor: ReadCursor::default(),
+            packet_passthrough: false,
+            pending_packets: Vec::new(),
         })
     }
 
@@ -118,10 +129,10 @@ impl DecodeEngine {
 
         self.cursor.record_delivery(placement);
 
-        Ok(Some(AudioFrame::new(
-            self.decoder.current_frame(),
-            placement,
-        )))
+        Ok(Some(
+            AudioFrame::new(self.decoder.current_frame(), placement, &self.timeline)
+                .with_packets(std::mem::take(&mut self.pending_packets)),
+        ))
     }
 
     /// Decodes until the decoder holds a frame with samples at or after `not_before`, and
@@ -139,6 +150,7 @@ impl DecodeEngine {
                     if let Some(placement) = self.timeline.place(timing, not_before) {
                         return Ok(Some(placement));
                     }
+                    self.pending_packets.clear();
 
                     #[cfg(feature = "tracing")]
                     if not_before.is_zero() {
@@ -148,8 +160,19 @@ impl DecodeEngine {
                 Err(AudioError::Eagain) => {
                     if let Some(packet) = self.demuxer.read_packet()? {
                         self.decoder.send_packet(packet)?;
+                        if self.packet_passthrough {
+                            // send_packet 已接受该包，解封装器下一次读取前复制载荷
+                            let packet = unsafe { &*packet };
+                            if packet.size > 0 {
+                                let bytes = unsafe {
+                                    std::slice::from_raw_parts(packet.data, packet.size as usize)
+                                };
+                                self.pending_packets.push(bytes.to_vec());
+                            }
+                        }
                     } else {
                         if self.decoder.is_flushing() {
+                            self.pending_packets.clear();
                             self.cursor.record_exhaustion();
                             return Ok(None);
                         }
@@ -158,6 +181,7 @@ impl DecodeEngine {
                     }
                 }
                 Ok(None) => {
+                    self.pending_packets.clear();
                     self.cursor.record_exhaustion();
                     return Ok(None);
                 }
@@ -178,6 +202,7 @@ impl DecodeEngine {
     pub fn seek(&mut self, target: Duration, mode: SeekMode) -> Result<()> {
         self.demuxer.seek_to(self.timeline.seek_pts(target))?;
         self.decoder.flush();
+        self.pending_packets.clear();
         self.cursor.record_coarse_seek(target);
 
         if mode == SeekMode::Accurate
@@ -207,6 +232,7 @@ impl DecodeEngine {
     fn seek_after(&mut self, raw_pts: i64, next: Duration) -> Result<()> {
         self.demuxer.seek_to(raw_pts)?;
         self.decoder.flush();
+        self.pending_packets.clear();
         self.cursor.record_coarse_seek(next);
 
         while let Some(placement) = self.decode_next(Duration::ZERO)? {
@@ -215,6 +241,7 @@ impl DecodeEngine {
                     .record_pending(Resume::After { raw_pts, next }, placement);
                 break;
             }
+            self.pending_packets.clear();
         }
 
         Ok(())
