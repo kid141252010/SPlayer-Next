@@ -988,9 +988,7 @@
       "description": "仅对带 JOC 元数据的 E-AC-3（Dolby Atmos）生效，其他音频保持原有播放路径",
       "off": "关",
       "speaker": "Speaker 2.0",
-      "binaural": "双耳",
-      "activeBinaural": "Atmos · 双耳",
-      "activeSpeaker": "Atmos · 2.0"
+      "binaural": "双耳"
     },
     "jocHrtf": {
       "label": "HRTF",

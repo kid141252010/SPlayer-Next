@@ -68,20 +68,20 @@ export const getQualityLevel = (quality: AudioQuality | undefined): QualityLevel
 };
 
 /**
- * 取音质等级短码文案
+ * 取音质标签；杜比音源优先于基于码率的等级文案
  * @param quality - 音质信息；缺少信息时使用默认 LQ
- * @returns 短码文案（LQ / SQ / HQ / Lossless / Hi-Res）
+ * @returns 音质标签（Dolby Atmos / LQ / SQ / HQ / Lossless / Hi-Res）
  */
 export const getQualityLabel = (quality: AudioQuality | undefined): string =>
-  QUALITY_LABELS[getQualityLevel(quality)];
+  isDolbyAtmosQuality(quality) ? "Dolby Atmos" : QUALITY_LABELS[getQualityLevel(quality)];
 
 /**
- * 取音质等级完整文案
+ * 取音质完整文案；杜比音源不按码率显示为 High Quality
  * @param quality - 音质信息；缺少信息时使用默认 Low Quality
- * @returns 完整文案（Low Quality / Standard Quality / High Quality / Lossless / Hi-Res）
+ * @returns 音质完整文案
  */
 export const getQualityFullLabel = (quality: AudioQuality | undefined): string =>
-  QUALITY_FULL_LABELS[getQualityLevel(quality)];
+  isDolbyAtmosQuality(quality) ? "Dolby Atmos" : QUALITY_FULL_LABELS[getQualityLevel(quality)];
 
 /** 是否为无损级别（hi-res 或 lossless） */
 export const isLosslessQuality = (quality: AudioQuality | undefined): boolean => {
