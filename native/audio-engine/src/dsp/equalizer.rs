@@ -55,6 +55,11 @@ impl BiquadFilter {
 
     /// 设置为 peaking 滤波器，gain_db = 0 时退化为直通
     fn set_peaking(&mut self, freq: f32, sample_rate: f32, q: f32, gain_db: f32) {
+        // 超出输出频率范围的频段保留用户增益，但不能代入 RBJ（会产生不稳定极点）。
+        if freq >= sample_rate * 0.5 {
+            *self = Self::passthrough();
+            return;
+        }
         if gain_db.abs() < 1e-3 {
             self.b0 = 1.0;
             self.b1 = 0.0;

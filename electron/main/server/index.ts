@@ -3,20 +3,29 @@
  */
 
 import type { Server } from "node:http";
+import type { Socket } from "node:net";
 import os from "node:os";
-import { Hono } from "hono";
-import { serve, upgradeWebSocket } from "@hono/node-server";
+import { serve } from "@hono/node-server";
 import { WebSocketServer } from "ws";
 import { store } from "@main/store";
 import { serverLog } from "@main/utils/logger";
 import { broadcast } from "@main/utils/broadcast";
 import type { ExternalApiStatus } from "@shared/types/settings";
-import { externalControlGate, wsGate } from "./gate";
-import { buildRoutes } from "./routes";
-import { wsHandlers } from "./ws";
+import { buildServerApp } from "./app";
 
-let runningServer: Server | null = null;
-let runningWss: WebSocketServer | null = null;
+interface ServerInstance {
+  server: Server;
+  wss: WebSocketServer;
+  sockets: Set<Socket>;
+  ready: Promise<void>;
+  started: Promise<ExternalApiStatus>;
+  cancelled: boolean;
+  closing: Promise<void> | null;
+}
+
+let instance: ServerInstance | null = null;
+let stopping: Promise<void> | null = null;
+let startEpoch = 0;
 let runningPort: number | null = null;
 let runningHost: string | null = null;
 let runningAllowLan = false;
@@ -42,7 +51,7 @@ const getLanAddress = (): string | null => {
 };
 
 export const getServerStatus = (): ExternalApiStatus => ({
-  listening: runningServer !== null,
+  listening: runningPort !== null,
   allowLan: runningAllowLan,
   host: runningHost,
   port: runningPort,
@@ -52,104 +61,125 @@ export const getServerStatus = (): ExternalApiStatus => ({
 /** 向渲染进程同步外部 API 服务状态 */
 const publishStatus = (): void => broadcast("externalApi:status", getServerStatus());
 
-/** 启动外部 API 服务 */
-export const startServer = (): Promise<ExternalApiStatus> => {
-  return new Promise((resolve) => {
-    if (runningServer) {
-      resolve(getServerStatus());
-      return;
-    }
-    // 功能关闭时不监听端口
-    if (!store.get("externalApi.enabled")) {
-      resolve(getServerStatus());
-      return;
-    }
-
-    const port = store.get("externalApi.port");
-    // 默认仅本机可访问；服务自身无鉴权，开放局域网需用户显式开启
-    const hostname = store.get("externalApi.allowLan") ? "0.0.0.0" : "127.0.0.1";
-
-    const app = new Hono();
-    app.use("/api/*", externalControlGate);
-    app.route("/api", buildRoutes());
-    app.get(
-      "/ws",
-      externalControlGate,
-      wsGate,
-      upgradeWebSocket(() => wsHandlers),
-    );
-    app.get("/", (c) => c.text("SPlayer Next external API"));
-
-    const wss = new WebSocketServer({ noServer: true });
-    let settled = false;
-
-    const server = serve({
-      fetch: app.fetch,
-      port,
-      hostname,
-      websocket: { server: wss },
-    }) as Server;
-
-    // error / listening 互斥：先到先 settle
-    server.once("error", (err: NodeJS.ErrnoException) => {
-      if (settled) return;
-      settled = true;
-      const error = { code: err.code ?? "UNKNOWN", message: err.message };
-      serverLog.error(`外部 API 监听 ${port} 失败 (${error.code}): ${error.message}`);
-      wss.close();
-      try {
-        server.close();
-      } catch {
-        // server.close 在 listen 失败的情况下可能抛 ERR_SERVER_NOT_RUNNING，忽略
+/** 等待绑定完成后关闭，避免 listen 尚在排队时 close 漏停端口。 */
+const closeInstance = (target: ServerInstance): Promise<void> => {
+  if (target.closing) return target.closing;
+  target.closing = target.ready.then(async () => {
+    const wsClosed = Promise.withResolvers<void>();
+    const httpClosed = Promise.withResolvers<void>();
+    for (const client of target.wss.clients) client.terminate();
+    target.wss.close(() => wsClosed.resolve());
+    target.server.close((error) => {
+      if (error && (error as NodeJS.ErrnoException).code !== "ERR_SERVER_NOT_RUNNING") {
+        serverLog.warn("外部 API 关闭异常:", error);
       }
-      runningServer = null;
-      runningWss = null;
-      runningPort = null;
-      runningHost = null;
-      runningAllowLan = false;
-      lastError = error;
-      publishStatus();
-      resolve(getServerStatus());
+      httpClosed.resolve();
     });
-
-    server.once("listening", () => {
-      if (settled) return;
-      settled = true;
-      runningServer = server;
-      runningWss = wss;
-      runningPort = port;
-      runningAllowLan = hostname === "0.0.0.0";
-      runningHost = runningAllowLan ? (getLanAddress() ?? "0.0.0.0") : hostname;
-      lastError = null;
-      publishStatus();
-      serverLog.info(`外部 API 已启动: http://${hostname}:${port}`);
-      resolve(getServerStatus());
-    });
+    // 同时回收 HTTP 请求及尚未完成升级的连接，不能只关闭已注册的 WS。
+    for (const socket of target.sockets) socket.destroy();
+    await Promise.all([wsClosed.promise, httpClosed.promise]);
   });
+  return target.closing;
 };
 
-/** 停止外部 API 服务 */
+/** 启动外部 API 服务；并发调用共用同一次绑定。 */
+export const startServer = (): Promise<ExternalApiStatus> => {
+  if (stopping) {
+    const epoch = startEpoch;
+    return stopping.then(() => (epoch === startEpoch ? startServer() : getServerStatus()));
+  }
+  if (instance) return instance.started;
+  if (!store.get("externalApi.enabled")) return Promise.resolve(getServerStatus());
+
+  const port = store.get("externalApi.port");
+  // 默认仅本机可访问；服务自身无鉴权，开放局域网需用户显式开启。
+  const allowLan = store.get("externalApi.allowLan");
+  const hostname = allowLan ? "0.0.0.0" : "127.0.0.1";
+  const app = buildServerApp(allowLan);
+  const wss = new WebSocketServer({ noServer: true });
+  const ready = Promise.withResolvers<void>();
+  const started = Promise.withResolvers<ExternalApiStatus>();
+  const server = serve({
+    fetch: app.fetch,
+    port,
+    hostname,
+    websocket: { server: wss },
+  }) as Server;
+  const target: ServerInstance = {
+    server,
+    wss,
+    sockets: new Set(),
+    ready: ready.promise,
+    started: started.promise,
+    cancelled: false,
+    closing: null,
+  };
+  instance = target;
+  server.on("connection", (socket) => {
+    if (target.cancelled) {
+      socket.destroy();
+      return;
+    }
+    target.sockets.add(socket);
+    socket.once("close", () => target.sockets.delete(socket));
+  });
+
+  let settled = false;
+  const finishCancelled = (): void => {
+    void closeInstance(target).then(() => {
+      if (instance === target) instance = null;
+      started.resolve(getServerStatus());
+    });
+  };
+  server.once("error", (error: NodeJS.ErrnoException) => {
+    if (settled) return;
+    settled = true;
+    ready.resolve();
+    if (instance === target && !target.cancelled) {
+      lastError = { code: error.code ?? "UNKNOWN", message: error.message };
+      serverLog.error(`外部 API 监听 ${port} 失败 (${lastError.code}): ${lastError.message}`);
+      publishStatus();
+    }
+    finishCancelled();
+  });
+  server.once("listening", () => {
+    if (settled) return;
+    settled = true;
+    ready.resolve();
+    if (target.cancelled || instance !== target) {
+      finishCancelled();
+      return;
+    }
+    const address = server.address();
+    runningPort = typeof address === "object" && address ? address.port : port;
+    runningAllowLan = allowLan;
+    runningHost = allowLan ? (getLanAddress() ?? "0.0.0.0") : hostname;
+    lastError = null;
+    publishStatus();
+    serverLog.info(`外部 API 已启动: http://${hostname}:${runningPort}`);
+    started.resolve(getServerStatus());
+  });
+  return started.promise;
+};
+
+/** 停止外部 API 服务；停止完成后，旧启动不能重新发布或遗留监听。 */
 export const stopServer = (): Promise<void> => {
-  if (!runningServer) return Promise.resolve();
-  const server = runningServer;
-  const wss = runningWss;
-  runningServer = null;
-  runningWss = null;
+  startEpoch++;
+  if (stopping) return stopping;
+  const target = instance;
+  if (!target) return Promise.resolve();
+  target.cancelled = true;
   runningPort = null;
   runningHost = null;
   runningAllowLan = false;
   publishStatus();
-  const serverClosed = new Promise<void>((resolve) => {
-    // 活跃 WebSocket 不会被 server.close 关闭，先断开以免退出任务一直等待。
-    for (const client of wss?.clients ?? []) client.terminate();
-    wss?.close();
-    server.close((err) => {
-      if (err) serverLog.warn("外部 API 关闭异常:", err);
-      else serverLog.info("外部 API 已关闭");
-      resolve();
-    });
+  const stopped = closeInstance(target).then(() => {
+    if (instance === target) instance = null;
+    if (stopping === stopped) stopping = null;
+    serverLog.info("外部 API 已关闭");
   });
-  return serverClosed;
+  stopping = stopped;
+  return stopped;
 };
 
 /** 配置变更后重启服务 */

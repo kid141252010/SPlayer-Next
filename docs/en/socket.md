@@ -15,6 +15,10 @@ Enable **Settings → External API**, then enable WebSocket separately. It has t
 const ws = new WebSocket("ws://127.0.0.1:14558/ws");
 ```
 
+Run browser examples from a supported local `http://` or `https://` page, such as `http://localhost:5173`, not from a remote website or a `file://` page. The server validates `Host` and `Origin` **before the WebSocket upgrade**. Rejected requests receive `403` without establishing a connection or subscribing to playback events.
+
+Native WebSocket clients without `Origin` remain supported. With LAN access enabled, clients may use the server machine's IPv4 interface addresses or hostname captured at startup; browser pages must also originate from those addresses or loopback. See [Browser origin restrictions](/en/api#browser-origin-restrictions) for the full rules. This is not authentication, and WebSocket protection does not rely on CORS.
+
 ## Server to client
 
 Every message has a `kind` field:

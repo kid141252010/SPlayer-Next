@@ -18,6 +18,9 @@ Performance-sensitive features are implemented in **Rust**, compiled with [NAPI-
 - Produces realtime FFT data for visualizations and lyric motion.
 - Extracts cover thumbnails while decoding.
 - Streams remote audio through `ffmpeg_audio::HttpAudioSource`. `HttpCancelHandle` supports immediate cancellation and seek reset, while `reqwest` and `rustls` handle TLS without system FFmpeg dependencies.
+- JOC reconstruction keeps parameter bands, interpolation points, slopes, and time offsets per object, so objects with different parameters in the same frame do not overwrite one another.
+- Consecutive seeks are serialized across asynchronous decoder handovers, so the latest valid target is applied. A new load, stop, or device rebuild cancels older requests without leaving progress frozen.
+- EQ bands at or above the output Nyquist frequency are bypassed with their filter history cleared. The configured gain is preserved and becomes effective again at a sufficient output sample rate.
 
 ### media-ctrl
 

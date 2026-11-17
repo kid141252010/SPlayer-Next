@@ -2169,7 +2169,7 @@
       "description": "清空全部歌单、登录状态、缓存并重置设置",
       "button": "清除",
       "confirmTitle": "清除全部数据？",
-      "confirmDesc": "将清空全部歌单、登录状态、缓存并重置设置，操作不可恢复",
+      "confirmDesc": "注销所有账号，清除应用设置、歌单、播放记录和缓存，保留音乐文件与已下载歌曲，完成后自动重启。操作不可恢复",
       "done": "全部数据已清除"
     },
     "pluginImport": {
@@ -2566,6 +2566,7 @@
     "TAG_READ_FAILED": "读取标签失败",
     "TAG_WRITE_FAILED": "写入标签失败",
     "MAX_CONSECUTIVE_FAILURES": "连续播放失败次数过多",
+    "ALL_TRACKS_FILTERED": "没有找到未被关键词过滤的歌曲，已停止播放",
     "UNKNOWN": "操作失败"
   },
   "tagEditor": {

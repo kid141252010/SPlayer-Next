@@ -35,6 +35,7 @@ impl AudioPlayer {
             on_fallback,
         ) = {
             let mut player = self.inner.lock();
+            player.supersede_async_seeks();
             let position = player.position();
             let is_playing = player.state() == PlayerState::Playing;
             let device_id = player.selected_device().map(String::from);
@@ -74,19 +75,32 @@ impl AudioPlayer {
             } = take;
 
             let inner = Arc::clone(&self.inner);
-            let outcome: ReinitOutcome = tokio::task::spawn_blocking(move || {
+            #[cfg(test)]
+            let headless_output = self.test_headless_output;
+            let outcome = tokio::task::spawn_blocking(move || {
                 let decoder_data = old_threads.join_aux().and_then(|h| h.join().ok());
                 drop(old_output);
 
                 // 优先按音源原始采样率协商新设备；设备不支持时回退到新设备默认格式
-                let output = match output::AudioOutput::new(
-                    device_id.as_deref(),
-                    Some(original_sample_rate),
-                    Some(original_bits),
-                    output_generation,
-                    on_failure,
-                    exclusive_mode.then_some(&on_fallback),
-                ) {
+                let create_output = || {
+                    output::AudioOutput::new(
+                        device_id.as_deref(),
+                        Some(original_sample_rate),
+                        Some(original_bits),
+                        output_generation,
+                        on_failure,
+                        exclusive_mode.then_some(&on_fallback),
+                    )
+                };
+                #[cfg(test)]
+                let output = if headless_output {
+                    Ok(output::AudioOutput::headless(original_sample_rate, 2))
+                } else {
+                    create_output()
+                };
+                #[cfg(not(test))]
+                let output = create_output();
+                let output = match output {
                     Ok(output) => output,
                     Err(error) => return ReinitOutcome::OutputFailed { error },
                 };
@@ -150,7 +164,9 @@ impl AudioPlayer {
                 )
             })
             .await
-            .map_err(|e| Error::from_reason(format!("reinit task join error: {e}")))?;
+            .map_err(|e| Error::from_reason(format!("reinit task join error: {e}")));
+            self.inner.lock().finish_async_seek(token);
+            let outcome = outcome?;
 
             match outcome {
                 ReinitOutcome::Committed(result) => {

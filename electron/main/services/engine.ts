@@ -1,5 +1,5 @@
 import { loadNativeModule } from "@main/utils/nativeLoader";
-import { getCoverCacheDir, getJocHrtfPath, isDev } from "@main/utils/config";
+import { getCoverCacheDir, getJocHrtfPath, isDev, isWin } from "@main/utils/config";
 import { store } from "@main/store";
 import { playerLog, nativeLogsDir } from "@main/utils/logger";
 import { getNetworkProxyUrl } from "@main/utils/proxy";
@@ -136,4 +136,16 @@ export const syncCoverCacheDir = (): void => {
   if (playerInstance) {
     playerInstance.setCoverCacheDir(getCoverCacheDir());
   }
+};
+
+/** 整盘配置重置/恢复时同步播放设置，不因操作设置而创建原生播放器。 */
+export const syncPlaybackSettings = async (): Promise<void> => {
+  const player = playerInstance;
+  if (!player) return;
+  const config = store.get("player");
+  // 设备重建必须等待完成；失败交还配置操作，不能只记日志后向界面报告成功。
+  if (isWin) await player.setExclusiveMode(config.audioOutputMode === "exclusive");
+  await player.setOutputDevice(config.outputDevice ?? undefined);
+  player.setVolume(config.volume);
+  player.setFadeDuration(config.fadeEnabled ? config.fadeDuration : 0);
 };
