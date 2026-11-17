@@ -988,9 +988,7 @@
       "description": "Applies only to E-AC-3 (Dolby Atmos) with JOC metadata; other audio keeps its existing playback path",
       "off": "Off",
       "speaker": "Speaker 2.0",
-      "binaural": "Binaural",
-      "activeBinaural": "Atmos · Binaural",
-      "activeSpeaker": "Atmos · 2.0"
+      "binaural": "Binaural"
     },
     "jocHrtf": {
       "label": "HRTF",

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isDolbyAtmosQuality, isEAC3Codec, isLosslessCodec, getQualityLevel } from "./quality";
+import {
+  isDolbyAtmosQuality,
+  isEAC3Codec,
+  isLosslessCodec,
+  getQualityLevel,
+  getQualityLabel,
+  getQualityFullLabel,
+} from "./quality";
 import type { AudioQuality } from "@shared/types/player";
 
 describe("quality utilities", () => {
@@ -62,6 +69,37 @@ describe("quality utilities", () => {
       expect(isLosslessCodec("wav")).toBe(true);
       expect(isLosslessCodec("mp3")).toBe(false);
       expect(isLosslessCodec("aac")).toBe(false);
+    });
+  });
+
+  describe("quality labels", () => {
+    it.each(["eac3", "ec-3", "E-AC-3"])("768 kbps 的 %s 优先显示 Dolby Atmos", (codec) => {
+      const quality: AudioQuality = {
+        sampleRate: 48000,
+        channels: 6,
+        bitsPerSample: 16,
+        bitRate: 768000,
+        codec,
+      };
+      expect(getQualityLabel(quality)).toBe("Dolby Atmos");
+      expect(getQualityFullLabel(quality)).toBe("Dolby Atmos");
+    });
+
+    it("普通高码率立体声不误标为 Dolby Atmos", () => {
+      const quality: AudioQuality = {
+        sampleRate: 48000,
+        channels: 2,
+        bitsPerSample: 16,
+        bitRate: 768000,
+        codec: "aac",
+      };
+      expect(getQualityLabel(quality)).toBe("HQ");
+      expect(getQualityFullLabel(quality)).toBe("High Quality");
+    });
+
+    it("缺少音质信息时保留低音质兜底", () => {
+      expect(getQualityLabel(undefined)).toBe("LQ");
+      expect(getQualityFullLabel(undefined)).toBe("Low Quality");
     });
   });
 

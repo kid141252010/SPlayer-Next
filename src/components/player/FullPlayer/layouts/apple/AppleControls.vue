@@ -7,7 +7,7 @@ import { useProgressLyric } from "@/composables/useProgressLyric";
 import * as player from "@/core/player";
 import { volumeGainToPosition, volumePositionToGain } from "@/utils/volume";
 import { getValidArtists } from "@shared/utils/track";
-import { getQualityLabel, isDolbyAtmosQuality, isLosslessQuality } from "@/utils/quality";
+import { getQualityLabel, isLosslessQuality } from "@/utils/quality";
 import { usePlaylistPicker } from "@/composables/usePlaylistPicker";
 import { useDownload } from "@/composables/useDownload";
 import { useTrackMenu } from "@/composables/useTrackMenu";
@@ -150,14 +150,6 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
         title="Clean"
       >
         CLEAN
-      </span>
-      <span
-        v-if="isDolbyAtmosQuality(quality)"
-        class="px-1.5 py-0.5 rounded border border-solid border-cover/30 cursor-pointer"
-        title="Dolby Atmos"
-        @click="status.audioInfoOpen = true"
-      >
-        DOLBY ATMOS
       </span>
       <span
         v-if="displayTrack.album?.name"

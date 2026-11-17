@@ -2,7 +2,6 @@
 import { useMediaStore } from "@/stores/media";
 import { usePlayerResources } from "@/components/player/usePlayerResources";
 import { getValidArtists } from "@shared/utils/track";
-import { isDolbyAtmosQuality } from "@/utils/quality";
 import { setPlayerExpanded } from "@/services/playerTransition";
 
 withDefaults(
@@ -14,12 +13,6 @@ withDefaults(
 );
 
 const media = useMediaStore();
-
-/** 是否为杜比全景声 */
-const isDolbyAtmos = computed(() => {
-  const q = media.detail?.quality ?? media.track?.quality;
-  return isDolbyAtmosQuality(q);
-});
 
 /** 当前歌曲中可展示的歌手 */
 const artists = computed(() => getValidArtists(media.track?.artists));
@@ -72,13 +65,6 @@ const { artistTarget, isArtistLinkable, goToResource } = usePlayerResources(toRe
             title="Clean"
           >
             Clean
-          </span>
-          <span
-            v-if="isDolbyAtmos"
-            class="shrink-0 self-center px-1 rounded text-[9px] leading-[14px] font-bold border border-solid text-primary/80 border-primary/40 select-none tracking-tight"
-            title="Dolby Atmos"
-          >
-            ATMOS
           </span>
           <slot name="title-trailing" />
         </div>
