@@ -82,6 +82,10 @@ pub struct InnerPlayer {
     /// commit_loaded 比对 token 与最新值，不一致则该次加载已被新加载取代，需丢弃
     /// 用于防止快速切歌时旧 IO 完成后覆盖新音频的竞态
     load_token: Arc<AtomicU64>,
+    /// 只在音源或设备接管时递增，普通 seek 不使同一队列中的后续请求失效。
+    seek_epoch: u64,
+    /// 解码句柄由异步 seek 持有时的 load token，用于区分 seek 与普通 load。
+    pending_seek: Option<u64>,
     /// 当前输出流代次；错误回调仅允许上报与此值一致的输出，避免旧流销毁后的迟到事件重建新流
     output_generation: Arc<AtomicU64>,
     /// 当前音频源的原始采样率
@@ -184,6 +188,8 @@ impl InnerPlayer {
                 initial_rate,
             ))),
             load_token: Arc::new(AtomicU64::new(0)),
+            seek_epoch: 0,
+            pending_seek: None,
             output_generation: Arc::new(AtomicU64::new(0)),
             original_sample_rate: decoder::DEFAULT_TARGET_SAMPLE_RATE,
             original_bits: 16,
@@ -396,6 +402,7 @@ impl InnerPlayer {
     /// （`stop_internal` 是内部过渡用，不清；load() 会立即用新源覆盖）
     pub fn stop(&mut self) {
         self.preload.clear();
+        self.reset_seek_requests();
         // 使在途的 async load/seek 在 commit 时被拒绝，防止 stop 后被复活
         self.load_token.fetch_add(1, Ordering::AcqRel);
         if let Some(handle) = self.pending_load_handle.take() {

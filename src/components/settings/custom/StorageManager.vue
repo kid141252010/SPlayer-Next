@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import localforage from "localforage";
 import { toast } from "@/composables/useToast";
 import { dialog } from "@/composables/useDialog";
-import { usePlaylistStore } from "@/stores/playlist";
 import { useSettingsStore } from "@/stores/settings";
 import { APP_VERSION } from "@/utils/config";
 
@@ -116,8 +114,10 @@ const handleResetSettings = async (): Promise<void> => {
   });
   if (!confirmed) return;
   const settingsStore = useSettingsStore();
-  settingsStore.$reset();
   await window.api.config.reset();
+  settingsStore.$reset();
+  await settingsStore.syncSystem();
+  settingsStore.$persist();
   toast.success(t("settings.resetSettings.done"));
 };
 
@@ -129,16 +129,8 @@ const handleResetAll = async (): Promise<void> => {
     type: "error",
   });
   if (!confirmed) return;
-  const stores = ["playlists", "queue", "library"];
-  await Promise.all(
-    stores.map((name) => localforage.createInstance({ name: "splayer", storeName: name }).clear()),
-  );
-  const settingsStore = useSettingsStore();
-  settingsStore.$reset();
-  await window.api.config.reset();
-  const playlistStore = usePlaylistStore();
-  await playlistStore.clear();
-  toast.success(t("settings.resetAll.done"));
+  // 主进程受控重启后、创建新窗口前清理；旧窗口不能先清库再让 live store 写回。
+  await window.api.config.clearAllData();
 };
 
 /** 按 key 分发并互斥执行 */
@@ -150,6 +142,8 @@ const runAction = async (key: ActionKey): Promise<void> => {
     else if (key === "restore") await handleRestore();
     else if (key === "resetSettings") await handleResetSettings();
     else await handleResetAll();
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : String(error));
   } finally {
     running.value = null;
   }

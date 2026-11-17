@@ -26,17 +26,6 @@ const qualityLabel = computed(() => getQualityLabel(quality.value));
 
 /** 是否为杜比全景声 */
 const isDolbyAtmos = computed(() => isDolbyAtmosQuality(quality.value));
-const displayQualityLabel = computed(() => {
-  if (isDolbyAtmos.value && status.jocActive && settings.system.player.joc.mode !== "off") {
-    return t(
-      settings.system.player.joc.mode === "binaural"
-        ? "settings.jocMode.activeBinaural"
-        : "settings.jocMode.activeSpeaker",
-    );
-  }
-  if (isDolbyAtmos.value) return "Atmos";
-  return qualityLabel.value;
-});
 const dolbyAtmosTooltip = computed(() => {
   if (!isDolbyAtmos.value) return t("settings.songLevel.unsupportedHint");
   return "杜比全景声 (Dolby Atmos)";
@@ -97,7 +86,7 @@ const onQualityChange = (value: string | number | boolean): void => {
             : 'border-on-surface-variant/30 text-on-surface-variant',
         ]"
       >
-        {{ displayQualityLabel }}
+        {{ qualityLabel }}
       </button>
     </template>
     <div class="space-y-3">
@@ -153,7 +142,7 @@ const onQualityChange = (value: string | number | boolean): void => {
             : 'border-on-surface-variant/30 text-on-surface-variant hover:border-on-surface-variant/60',
         ]"
       >
-        {{ displayQualityLabel }}
+        {{ qualityLabel }}
       </span>
     </template>
   </SPopselect>
@@ -172,7 +161,7 @@ const onQualityChange = (value: string | number | boolean): void => {
           : 'border-on-surface-variant/25 text-on-surface-variant/80',
       ]"
     >
-      {{ displayQualityLabel }}
+      {{ qualityLabel }}
     </span>
   </STooltip>
 </template>

@@ -12,7 +12,11 @@ import path from "node:path";
 import crypto from "node:crypto";
 import zlib from "node:zlib";
 import { PLUGIN_GRANTS, type PluginGrant, type PluginManifest } from "@shared/types/plugin";
-import { HOST_API_LEVEL, PluginErrorCodes } from "@shared/defaults/plugin-api";
+import {
+  HOST_API_LEVEL,
+  INSTALL_URL_MAX_SIZE,
+  PluginErrorCodes,
+} from "@shared/defaults/plugin-api";
 
 const GZ_PREFIX = "gz_";
 
@@ -32,13 +36,29 @@ const HEADER_RE = /^\s*\*?\s*@(\w+)\s+(.+)$/;
 // 源码开头的第一个块注释（`/*` 或 `/**` 或 `/*!`，非贪婪）
 const BLOCK_COMMENT_RE = /^\s*\/\*[\s\S]*?\*\//;
 
-/** 解压 gz_ 前缀脚本；若不是 gz_ 直接返回原文 */
+/** 解压并限制最终源码的 UTF-8 字节数，元数据解析与落盘前统一执行。 */
 export const decompressIfNeeded = (raw: string): string => {
+  if (Buffer.byteLength(raw, "utf-8") > INSTALL_URL_MAX_SIZE) {
+    throw new Error("PLUGIN_INSTALL_URL_TOO_LARGE");
+  }
   const trimmed = raw.trim();
   if (!trimmed.startsWith(GZ_PREFIX)) return raw;
   const payload = trimmed.slice(GZ_PREFIX.length);
   const buf = Buffer.from(payload, "base64");
-  return zlib.inflateSync(buf).toString("utf-8");
+  let inflated: Buffer;
+  try {
+    inflated = zlib.inflateSync(buf, { maxOutputLength: INSTALL_URL_MAX_SIZE });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ERR_BUFFER_TOO_LARGE") {
+      throw new Error("PLUGIN_INSTALL_URL_TOO_LARGE");
+    }
+    throw err;
+  }
+  const source = inflated.toString("utf-8");
+  if (Buffer.byteLength(source, "utf-8") > INSTALL_URL_MAX_SIZE) {
+    throw new Error("PLUGIN_INSTALL_URL_TOO_LARGE");
+  }
+  return source;
 };
 
 interface HeaderFields {

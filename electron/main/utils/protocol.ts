@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { net, protocol, session } from "electron";
 import { getAppCacheDir } from "./config";
 
@@ -50,7 +51,7 @@ const cacheHandler = (request: Request): Response | Promise<Response> => {
   if (resolved !== root && !resolved.startsWith(rootWithSep)) {
     return new Response(null, { status: 403 });
   }
-  return net.fetch(`file://${resolved.replace(/\\/g, "/")}`);
+  return net.fetch(pathToFileURL(resolved).href);
 };
 
 /**
@@ -79,5 +80,6 @@ export const toCacheUrl = (filePath: string | undefined | null): string | undefi
   const relative = path.relative(getAppCacheDir(), filePath);
   // 路径不在缓存根目录下时拒绝生成 URL，避免产出可逃逸的 cache:// 链接
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return undefined;
-  return `${SCHEME}://${relative.replace(/\\/g, "/")}`;
+  const encodedRelative = relative.replace(/\\/g, "/").split("/").map(encodeURIComponent).join("/");
+  return `${SCHEME}://${encodedRelative}`;
 };

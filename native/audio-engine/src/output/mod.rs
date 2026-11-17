@@ -28,6 +28,11 @@ pub(crate) enum OutputStream {
     Shared(cpal::Stream),
     #[cfg(target_os = "windows")]
     Exclusive(crate::output::wasapi::ExclusiveStream),
+    /// 保留真实 PCM 消费源，但不连接声卡；只用于解码与协调回归。
+    #[cfg(test)]
+    Headless {
+        _source: DecoderSource,
+    },
 }
 
 /// 输出设备与配置句柄。`Send`，可放进 `InnerPlayer` 而不需 `unsafe impl Send`。
@@ -35,7 +40,10 @@ pub(crate) enum OutputStream {
 /// 不持有输出流——输出流由每次加载音源时的 `PlaybackHandle::attach` 按此配置创建，
 /// 因此切歌时无需跨线程移交流，也天然避免新旧流重叠占用设备。
 pub struct AudioOutput {
+    #[cfg(not(test))]
     device: cpal::Device,
+    #[cfg(test)]
+    device: Option<cpal::Device>,
     config: SupportedStreamConfig,
     /// Windows 独占模式协商结果；`Some` 时输出走 WASAPI 独占流
     #[cfg(target_os = "windows")]
@@ -101,7 +109,10 @@ impl AudioOutput {
             "打开音频输出配置"
         );
         Ok(Self {
+            #[cfg(not(test))]
             device,
+            #[cfg(test)]
+            device: Some(device),
             config,
             #[cfg(target_os = "windows")]
             exclusive: _exclusive_format,
@@ -110,6 +121,25 @@ impl AudioOutput {
             #[cfg(target_os = "windows")]
             on_fallback: exclusive.cloned(),
         })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn headless(sample_rate: u32, channels: u16) -> Self {
+        Self {
+            device: None,
+            config: SupportedStreamConfig::new(
+                channels,
+                sample_rate,
+                cpal::SupportedBufferSize::Unknown,
+                SampleFormat::F32,
+            ),
+            #[cfg(target_os = "windows")]
+            exclusive: None,
+            generation: 0,
+            on_failure: Arc::new(|| {}),
+            #[cfg(target_os = "windows")]
+            on_fallback: None,
+        }
     }
 
     /// 实际输出流采样率（播放重采样目标）
@@ -132,11 +162,18 @@ impl AudioOutput {
 
     /// 实际输出设备名称
     pub fn device_name(&self) -> String {
-        self.device
+        #[cfg(test)]
+        let Some(device) = &self.device
+        else {
+            return "测试隔离输出".to_owned();
+        };
+        #[cfg(not(test))]
+        let device = &self.device;
+        device
             .description()
             .ok()
             .map(|desc| desc.name().to_owned())
-            .unwrap_or_else(|| self.device.to_string())
+            .unwrap_or_else(|| device.to_string())
     }
 
     /// 是否处于独占模式输出
@@ -180,9 +217,16 @@ impl AudioOutput {
         stopped: Arc<AtomicBool>,
         paused: bool,
     ) -> Result<OutputStream> {
+        #[cfg(test)]
+        let Some(device) = &self.device
+        else {
+            return Ok(OutputStream::Headless { _source: source });
+        };
+        #[cfg(not(test))]
+        let device = &self.device;
         #[cfg(target_os = "windows")]
         if let Some(format) = self.exclusive {
-            let device_id = device_id_string(&self.device);
+            let device_id = device_id_string(device);
             let on_failure = Arc::clone(&self.on_failure);
             return run_in_mta(move || {
                 crate::output::wasapi::open_exclusive_stream(
@@ -200,7 +244,7 @@ impl AudioOutput {
         }
         #[cfg(not(target_os = "windows"))]
         let _ = paused;
-        let device = self.device.clone();
+        let device = device.clone();
         let config = self.config;
         let on_failure = Arc::clone(&self.on_failure);
         run_in_mta(move || {

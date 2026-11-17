@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, dialog } from "electron";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
 import {
   createMainWindow,
@@ -40,6 +40,7 @@ import {
 import { extractAudioFiles, captureAudioFiles } from "@main/services/externalFile";
 import { syncProxyEnv } from "@main/utils/proxy";
 import { initAppleMusicService } from "@main/services/appleMusic";
+import { completePendingDataReset } from "@main/services/dataReset";
 
 /**
  * 配置 Chromium 启动参数以优化内存占用
@@ -111,7 +112,15 @@ export const initApp = (): void => {
   // 注册缓存协议方案
   registerCacheScheme();
   // 其他初始化
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
+    try {
+      if (await completePendingDataReset()) return;
+    } catch (error) {
+      coreLog.error("清除应用数据失败，已中止启动", error);
+      dialog.showErrorBox("清除应用数据失败", String(error));
+      app.exit(1);
+      return;
+    }
     electronApp.setAppUserModelId("top.imsyy.splayer-next");
     // 同步代理环境变量到主进程及原生引擎
     syncProxyEnv();

@@ -66,7 +66,10 @@ export const dispatchHostCall = async (
     if (!isActive()) return;
     // 权限门控
     const requiredGrant =
-      method === "request" || method === "music.searchOnline"
+      method === "request" ||
+      method === "music.searchOnline" ||
+      method === "appleMusic.getStreamUrl" ||
+      method === "appleMusic.prewarm"
         ? "network"
         : method === "music.searchLibrary"
           ? "library"

@@ -154,27 +154,7 @@ export const updateQueueItem = (index: number, track: Track, context?: PlaybackC
 };
 
 /**
- * 移除指定服务器的全部流媒体歌曲
- * @param serverId - 服务器 ID
- */
-export const removeServerTracks = (serverId: string): void => {
-  const belongsToServer = (track: Track): boolean =>
-    track.source === "streaming" && track.serverId === serverId;
-  const next = queueEntries.value.filter((item) => !belongsToServer(item.track));
-  const nextOriginal = originalQueue.value?.filter((item) => !belongsToServer(item.track)) ?? null;
-  if (
-    next.length === queueEntries.value.length &&
-    nextOriginal?.length === originalQueue.value?.length
-  ) {
-    return;
-  }
-  queueEntries.value = next;
-  originalQueue.value = nextOriginal;
-  save();
-};
-
-/**
- * 移除指定位置的歌曲，同时从 originalQueue 中移除同 ID 的歌
+ * 移除指定位置的歌曲，同时从 originalQueue 中移除同来源身份的歌
  * @param index - 要移除的位置，越界时静默忽略
  */
 export const removeFromQueue = (index: number): void => {
@@ -184,7 +164,12 @@ export const removeFromQueue = (index: number): void => {
   next.splice(index, 1);
   queueEntries.value = next;
   if (originalQueue.value) {
-    const origIdx = originalQueue.value.findIndex((item) => item.track.id === removed.track.id);
+    const origIdx = originalQueue.value.findIndex(
+      ({ track }) =>
+        track.id === removed.track.id &&
+        track.source === removed.track.source &&
+        track.serverId === removed.track.serverId,
+    );
     if (origIdx !== -1) {
       const nextOrig = [...originalQueue.value];
       nextOrig.splice(origIdx, 1);

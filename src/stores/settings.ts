@@ -245,6 +245,14 @@ export const useSettingsStore = defineStore(
     /** 系统配置 - 传递主进程 */
     const system = reactive<SystemConfig>(structuredClone(defaultSystemConfig));
 
+    // 在持久化插件恢复存档前捕获默认值，重置时保留现有响应式对象引用。
+    const localDefaults = structuredClone({
+      appearance: toRaw(appearance),
+      player: toRaw(player),
+      preset: toRaw(preset),
+      lyric: toRaw(lyric),
+    });
+
     /** 桌面歌词窗口是否打开；由主进程广播 */
     const isDesktopLyricOpen = ref(false);
 
@@ -259,6 +267,9 @@ export const useSettingsStore = defineStore(
      * 避免浅 Object.assign 替换嵌套引用，导致依赖路径的 watcher 误触
      */
     const deepAssign = (target: Record<string, unknown>, source: Record<string, unknown>): void => {
+      for (const key of Object.keys(target)) {
+        if (!Object.hasOwn(source, key)) delete target[key];
+      }
       for (const key of Object.keys(source)) {
         const next = source[key];
         const cur = target[key];
@@ -364,6 +375,27 @@ export const useSettingsStore = defineStore(
       }
     };
 
+    /** setup store 需要显式提供重置动作，开发与生产环境保持一致。 */
+    const $reset = (): void => {
+      locale.value = "zh-CN";
+      const defaults = structuredClone(localDefaults);
+      for (const [target, source] of [
+        [appearance, defaults.appearance],
+        [player, defaults.player],
+        [preset, defaults.preset],
+        [lyric, defaults.lyric],
+      ]) {
+        deepAssign(
+          target as unknown as Record<string, unknown>,
+          source as unknown as Record<string, unknown>,
+        );
+      }
+      deepAssign(
+        system as unknown as Record<string, unknown>,
+        structuredClone(defaultSystemConfig) as unknown as Record<string, unknown>,
+      );
+    };
+
     return {
       locale,
       appearance,
@@ -378,6 +410,7 @@ export const useSettingsStore = defineStore(
       syncSystem,
       setSystem,
       afterLocalChange,
+      $reset,
     };
   },
   {

@@ -34,7 +34,7 @@ tracing-subscriber = { workspace = true }
 tracing-appender = { workspace = true }
 time = { workspace = true }
 walkdir = "2"
-tokio = { workspace = true, features = ["rt"] }
+tokio = { workspace = true, features = ["rt", "sync"] }
 cpal = { version = "0.18.2", default-features = false, features = [
   "pipewire",
   "pulseaudio",

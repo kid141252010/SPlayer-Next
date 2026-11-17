@@ -1,5 +1,5 @@
 /// 用已知频率和时长验证重采样，避免仅检查元数据中的采样率。
-pub(super) fn tone_file(rate: u32, suffix: &str) -> std::path::PathBuf {
+pub(crate) fn tone_file(rate: u32, suffix: &str) -> std::path::PathBuf {
     let path = std::env::temp_dir().join(format!(
         "splayer-rate-{}-{rate}-{suffix}.wav",
         std::process::id()

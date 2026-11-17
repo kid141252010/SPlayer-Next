@@ -63,22 +63,22 @@ describe("Atmos 对象渲染质量面板", () => {
       }),
     });
   });
-  it("本地 Atmos 也可切换模式，与设置页的值双向同步", async () => {
+  it("本地杜比音源统一显示音质名称，模式选择与设置页同步", async () => {
     const wrapper = render();
-    expect(wrapper.get("button").text()).toBe("Atmos");
+    expect(wrapper.get("button").text()).toBe("Dolby Atmos");
     wrapper.findComponent(select).vm.$emit("update:modelValue", "binaural");
     await flushPromises();
     expect(mocks.settings.setSystem).toHaveBeenCalledWith("player.joc.mode", "binaural");
     expect(wrapper.findComponent(select).props("modelValue")).toBe("binaural");
     mocks.status.jocActive = true;
     await nextTick();
-    expect(wrapper.get("button").text()).toBe("Atmos · 双耳");
+    expect(wrapper.get("button").text()).toBe("Dolby Atmos");
     mocks.settings.system.player.joc.mode = "speaker";
     await nextTick();
-    expect(wrapper.get("button").text()).toBe("Atmos · 2.0");
+    expect(wrapper.get("button").text()).toBe("Dolby Atmos");
     expect(wrapper.findComponent(select).props("modelValue")).toBe("speaker");
   });
-  it("没有生效事件时不把模式偏好误标为生效", () => {
+  it("未生效时显示音源音质，但不提供空间场景入口", () => {
     mocks.settings.system.player.joc.mode = "binaural";
     const wrapper = render();
     expect(wrapper.get("button").text()).toBe("Atmos");

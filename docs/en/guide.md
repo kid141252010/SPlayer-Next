@@ -7,6 +7,8 @@ This page covers the basics of SPlayer-Next. See [Download](/en/download) for in
 - **Search and play:** Enter a song, artist, or album in the top search box, then play it or add it to the queue.
 - **Queue:** Use sequential, shuffle, and repeat-one modes, and drag tracks to reorder them.
 - **Quality and effects:** Select audio quality and enable fades, loudness normalization, the equalizer, playback speed, and pitch controls in Settings.
+- **Keyword filtering:** When enabled, the player searches the current queue at most once. If every track is filtered out, playback stops with a message. Personal FM checks at most five consecutive candidates before stopping.
+- **Resume playback:** The player restores the track and saved position before applying the auto-play setting or playback requests made during restoration. Selecting another track or stopping invalidates the previous restoration.
 
 ## Local music
 
