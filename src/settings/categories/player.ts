@@ -8,6 +8,7 @@ import { setDeviceVolume } from "@/services/deviceVolume";
 import { useStatusStore } from "@/stores/status";
 import AutoMixComponents from "@/components/settings/custom/AutoMixComponents.vue";
 import { JOC_HRTFS } from "@shared/types/joc";
+import { useSpatialStore } from "@/stores/spatial";
 
 const playerCategory: SettingCategory = {
   id: "player",
@@ -45,6 +46,13 @@ const playerCategory: SettingCategory = {
           max: 6,
           step: 1,
           marks: { [-12]: "-12 dB", 0: "0 dB", 6: "+6 dB" },
+        },
+        {
+          key: "jocScene",
+          type: "button",
+          action: () => {
+            useSpatialStore().open = true;
+          },
         },
       ],
     },

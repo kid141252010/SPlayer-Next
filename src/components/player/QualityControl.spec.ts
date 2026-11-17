@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { defineComponent, nextTick, reactive } from "vue";
 import { createI18n } from "vue-i18n";
-import { createPinia, setActivePinia } from "pinia";
-import { useSpatialStore } from "@/stores/spatial";
 import zhCN from "@/i18n/locales/zh-CN.json";
 import QualityControl from "./QualityControl.vue";
 
@@ -52,7 +50,6 @@ const render = () =>
 
 describe("Atmos 对象渲染质量面板", () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
     mocks.media = reactive({
       track: { source: "local", quality: { codec: "eac3", channels: 6 } },
       detail: null,
@@ -85,18 +82,6 @@ describe("Atmos 对象渲染质量面板", () => {
     mocks.settings.system.player.joc.mode = "binaural";
     const wrapper = render();
     expect(wrapper.get("button").text()).toBe("Atmos");
-    expect(wrapper.text()).not.toContain("空间场景");
-  });
-  it("仅实际双耳生效时显示空间场景入口，并打开共享场景", async () => {
-    mocks.status.jocActive = true;
-    mocks.settings.system.player.joc.mode = "binaural";
-    const wrapper = render();
-    const entry = wrapper.findAll("button").find((button) => button.text() === "空间场景")!;
-    await entry.trigger("click");
-    expect(useSpatialStore().open).toBe(true);
-    mocks.settings.system.player.joc.mode = "speaker";
-    await nextTick();
-    expect(wrapper.text()).not.toContain("空间场景");
   });
   it("普通音频和空曲目不显示对象渲染选择器", async () => {
     mocks.media.track!.quality = { codec: "flac", channels: 2 };

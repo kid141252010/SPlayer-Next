@@ -303,8 +303,16 @@ export class SceneInteraction extends SceneDrawing {
       this.onClose();
       return;
     }
-    // 滑块自己用方向键
-    if (e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey) return;
+    // 表单控件自行处理方向键和字母键
+    if (
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLSelectElement ||
+      e.ctrlKey ||
+      e.metaKey ||
+      e.altKey
+    ) {
+      return;
+    }
     const turn = 0.12;
     switch (e.key) {
       case "ArrowLeft":

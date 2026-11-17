@@ -2,6 +2,7 @@
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
 import { useStatusStore } from "@/stores/status";
 import { useSettingsStore } from "@/stores/settings";
+import { useSpatialStore } from "@/stores/spatial";
 import * as player from "@/core/player";
 import { VOLUME_STEP, volumeGainToPosition, volumePositionToGain } from "@/utils/volume";
 import IconLucideSliders from "~icons/lucide/sliders-horizontal";
@@ -11,6 +12,7 @@ import IconLucideClock from "~icons/lucide/clock";
 import IconLucideRepeat2 from "~icons/lucide/repeat-2";
 import IconLucideRadio from "~icons/lucide/radio";
 import IconLucideAudioWaveform from "~icons/lucide/audio-waveform";
+import IconLucideOrbit from "~icons/lucide/orbit";
 
 const props = withDefaults(
   defineProps<{
@@ -23,6 +25,7 @@ const props = withDefaults(
 const { t } = useI18n();
 const status = useStatusStore();
 const settings = useSettingsStore();
+const spatial = useSpatialStore();
 const { isDesktopLyricOpen } = storeToRefs(settings);
 
 const buttonType = computed<"default" | "cover">(() => (props.cover ? "cover" : "default"));
@@ -180,6 +183,18 @@ const onMoreMenuSelect = (key: string): void => {
         <QueuePopover @close="status.outerQueueOpen = false" />
       </SPopover>
     </div>
+    <SButton
+      :type="buttonType"
+      variant="ghost"
+      size="large"
+      :class="[mutedClass, 'shrink-0']"
+      :title="t('scene.open')"
+      :aria-label="t('scene.open')"
+      @click="spatial.open = true"
+    >
+      <template #icon><IconLucideOrbit /></template>
+      <span class="lt-lg:hidden">{{ t("scene.title") }}</span>
+    </SButton>
     <SDropdownMenu
       :items="moreMenuItems"
       side="top"

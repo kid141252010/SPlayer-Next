@@ -1,6 +1,6 @@
 {
   "scene": {
-    "title": "空间场景",
+    "title": "空间声场",
     "close": "关闭",
     "viewOrbit": "俯瞰",
     "viewFirst": "第一人称",
@@ -22,7 +22,10 @@
     "reset": "回正",
     "restore": "全部恢复",
     "hint": "拖动转头 · 右键拖动转视角 · 滚轮缩放 · 点光球独奏，Alt+点击静音 · W A S D 走动 · 双击回正",
-    "waiting": "等待 Dolby Atmos（JOC）双耳播放…",
+    "waiting": "当前音源尚未进入 JOC 双耳渲染；普通立体声或不含 JOC 元数据的 E-AC-3 无法提供对象声场。",
+    "disabled": "对象渲染当前已关闭。可在上方选择“双耳”，再播放带 JOC 元数据的 Dolby Atmos 音源。打开此界面不会自动启用渲染或开始播放。",
+    "speakerOnly": "当前为 Speaker 2.0 扬声器输出。交互声场仅适用于耳机双耳模式，可在上方切换为“双耳”。",
+    "noSource": "尚未播放音源。请播放带 JOC 元数据的 Dolby Atmos 音源，生效后这里会显示对象声场。",
     "object": "对象 {n}",
     "lfe": "LFE",
     "solo": "独奏",
@@ -38,8 +41,8 @@
     "tiltDown": "低头",
     "position": "站位 {x}, {y} m",
     "notice": "JOC 对象是从 5.1 核心按参数重建的空间分组，不是分轨：独奏时仍会听到其他声部的残留。",
-    "open": "空间场景",
-    "error": "空间场景读取失败，请关闭后重试",
+    "open": "打开空间声场",
+    "error": "空间声场读取失败，请关闭后重试",
     "mixer": "对象混音",
     "view": "场景视角"
   },
@@ -999,6 +1002,10 @@
     "jocGain": {
       "label": "输出增益（dB）",
       "description": "调整对象渲染的输出电平，范围 -12 至 +6 dB"
+    },
+    "jocScene": {
+      "label": "打开空间声场",
+      "description": "可随时打开；对象数据仅在 JOC 双耳渲染生效后显示，打开不会开始播放"
     },
     "loudnessNormalization": {
       "label": "音量均衡",
