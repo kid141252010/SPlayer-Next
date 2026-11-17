@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
     track: null as { source: string; quality: { codec: string; channels: number } } | null,
     detail: null,
   },
-  status: { jocActive: false },
   settings: {
     system: { player: { joc: { mode: "off" } } },
     player: { songLevel: "hq" },
@@ -18,7 +17,6 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 vi.mock("@/stores/media", () => ({ useMediaStore: () => mocks.media }));
-vi.mock("@/stores/status", () => ({ useStatusStore: () => mocks.status }));
 vi.mock("@/stores/settings", () => ({ useSettingsStore: () => mocks.settings }));
 vi.mock("@/core/player", () => ({ reloadCurrentTrack: vi.fn() }));
 
@@ -54,7 +52,6 @@ describe("Atmos 对象渲染质量面板", () => {
       track: { source: "local", quality: { codec: "eac3", channels: 6 } },
       detail: null,
     });
-    mocks.status = reactive({ jocActive: false });
     mocks.settings = reactive({
       system: { player: { joc: { mode: "off" } } },
       player: { songLevel: "hq" },
@@ -70,18 +67,16 @@ describe("Atmos 对象渲染质量面板", () => {
     await flushPromises();
     expect(mocks.settings.setSystem).toHaveBeenCalledWith("player.joc.mode", "binaural");
     expect(wrapper.findComponent(select).props("modelValue")).toBe("binaural");
-    mocks.status.jocActive = true;
-    await nextTick();
-    expect(wrapper.get("button").text()).toBe("Dolby Atmos");
     mocks.settings.system.player.joc.mode = "speaker";
     await nextTick();
     expect(wrapper.get("button").text()).toBe("Dolby Atmos");
     expect(wrapper.findComponent(select).props("modelValue")).toBe("speaker");
   });
-  it("未生效时显示音源音质，但不提供空间场景入口", () => {
+  it("双耳模式下显示完整音质名称，质量面板不提供空间场景入口", () => {
     mocks.settings.system.player.joc.mode = "binaural";
     const wrapper = render();
-    expect(wrapper.get("button").text()).toBe("Atmos");
+    expect(wrapper.get("button").text()).toBe("Dolby Atmos");
+    expect(wrapper.text()).not.toContain(zhCN.scene.open);
   });
   it("普通音频和空曲目不显示对象渲染选择器", async () => {
     mocks.media.track!.quality = { codec: "flac", channels: 2 };

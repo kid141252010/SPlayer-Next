@@ -3,7 +3,6 @@ import type { SSelectOption } from "@/components/ui/SSelect.vue";
 import type { QualityLevel } from "@/utils/quality";
 import { useMediaStore } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
-import { useStatusStore } from "@/stores/status";
 import type { JocMode } from "@shared/types/joc";
 import { getQualityLabel, isDolbyAtmosQuality } from "@/utils/quality";
 import * as player from "@/core/player";
@@ -14,7 +13,6 @@ withDefaults(defineProps<{ cover?: boolean }>(), { cover: false });
 const { t } = useI18n();
 const media = useMediaStore();
 const settings = useSettingsStore();
-const status = useStatusStore();
 const qualityOpen = ref(false);
 
 /** 是否支持切换在线音质 */
