@@ -2,8 +2,8 @@
   "repository": "https://github.com/kid141252010/applemusic-like-lyrics",
   "upstreamRepository": "https://github.com/amll-dev/applemusic-like-lyrics",
   "branch": "master",
-  "commit": "b02c59e5e67e7f04fe08bff76ccc38960e67fd80",
-  "committedAt": "2026-11-18T18:34:49Z",
+  "commit": "5e106e6e04156e805fb2522e61aeefe110568fe0",
+  "committedAt": "2026-11-19T03:35:14+08:00",
   "sourcePath": "packages/core",
   "version": "0.6.0"
 }
