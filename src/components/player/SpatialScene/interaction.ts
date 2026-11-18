@@ -290,7 +290,10 @@ export class SceneInteraction extends SceneDrawing {
     });
   }
 
-  /** 处理声场内快捷键，保留播放器的空格键 */
+  /**
+   * 处理声场内快捷键，保留播放器的空格键
+   * @param e - 声场内触发的键盘按下事件
+   */
   keyDown(e: KeyboardEvent) {
     if (e.key === "Escape") {
       e.preventDefault();

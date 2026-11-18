@@ -31,7 +31,10 @@ const unavailableMessage = computed(() => {
   return status.jocActive ? "" : t("scene.waiting");
 });
 
-/** 只在用户主动选择时修改模式，打开声场不触发自动播放或切换 */
+/**
+ * 只在用户主动选择时修改模式，打开声场不触发自动播放或切换
+ * @param event - 渲染模式选择框的变更事件
+ */
 function onModeChange(event: Event): void {
   void settings.setSystem("player.joc.mode", (event.target as HTMLSelectElement).value);
 }
@@ -62,7 +65,10 @@ function toggleStick(): void {
   spatial.view.stickOn = !spatial.view.stickOn;
   if (spatial.view.stickOn) spatial.view.view = "first";
 }
-/** 让 Tab 留在模态声场内 */
+/**
+ * 让 Tab 留在模态声场内
+ * @param event - 用于判断焦点移动方向的 Tab 按键事件
+ */
 function trapFocus(event: KeyboardEvent): void {
   const elements = Array.from(
     root.value!.querySelectorAll<HTMLElement>("button, input, select, canvas"),
