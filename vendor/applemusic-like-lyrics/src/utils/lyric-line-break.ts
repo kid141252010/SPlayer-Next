@@ -156,11 +156,13 @@ export function calcBalancedBreaks(
 			let breakPenalty = 0;
 			if (j < n) {
 				const prevChild = children[j - 1];
+				const prevIsSpaceBreak =
+					prevChild.isSpace || /\s$/.test(prevChild.text);
 
 				// 优先级：标点 > 空格 > CJK 词界 > 单字相邻 CJK 词界 > 普通文本
 				if (
 					(isMixed &&
-						prevChild.isSpace &&
+						prevIsSpaceBreak &&
 						previousScripts[j] !== 0 &&
 						nextScripts[j] !== 0 &&
 						previousScripts[j] !== nextScripts[j]) ||
@@ -172,7 +174,7 @@ export function calcBalancedBreaks(
 						2
 					);
 				} else if (
-					prevChild.isSpace ||
+					prevIsSpaceBreak ||
 					(isMixed && PUNCTUATION_REGEX.test(prevChild.text))
 				) {
 					breakPenalty = -((containerWidth * SPACE_BREAK_REWARD_RATIO) ** 2);
