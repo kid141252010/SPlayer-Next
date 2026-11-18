@@ -15,6 +15,7 @@ export default defineConfig(
     "**/resources/",
     "**/public/",
     "vendor/applemusic-like-lyrics/",
+    "vendor/lyric-kit/",
     "**/.git/",
     "**/.vitepress/",
     "native/*/index.d.ts",

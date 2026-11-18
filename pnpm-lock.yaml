@@ -199,9 +199,6 @@ importers:
       hono:
         specifier: ^4.13.16
         version: 4.13.16
-      lyric-kit:
-        specifier: ^0.7.0
-        version: 0.7.0
       undici:
         specifier: ^8.12.3
         version: 8.12.3
@@ -326,6 +323,9 @@ importers:
       lyric-dom:
         specifier: ^0.3.1
         version: 0.3.1
+      lyric-kit:
+        specifier: file:vendor/lyric-kit
+        version: file:vendor/lyric-kit
       markdown-it-mathjax3:
         specifier: ^4.3.2
         version: 4.3.2
@@ -3896,8 +3896,8 @@ packages:
   lyric-dom@0.3.1:
     resolution: {integrity: sha512-gMN/kqXud3+p5BnwaYYzNQD7PnehZUmwVazbQm1zgTAOY98R+GWXygv/9yesc4eE4JXjBDY5IUBa1ICMi8e91Q==}
 
-  lyric-kit@0.7.0:
-    resolution: {integrity: sha512-CCbgRab9HW+X0qIiPwCEHlYaaB9OGe+YzMcrMon1ENfI1ST9I7H7RXhpubsMxJjFuP9wo6e0rsWiGbWNTIgogw==}
+  lyric-kit@file:vendor/lyric-kit:
+    resolution: {directory: vendor/lyric-kit, type: directory}
 
   magic-string-ast@1.0.2:
     resolution: {integrity: sha512-8ngQgLhcT0t3YBdn9CGkZqCYlvwW9pm7aWJwd7AxseVWf1RU8ZHCQvG1mt3N5vvUme+pXTcHB8G/7fE666U8Vw==}
@@ -9107,7 +9107,7 @@ snapshots:
 
   lyric-dom@0.3.1: {}
 
-  lyric-kit@0.7.0: {}
+  lyric-kit@file:vendor/lyric-kit: {}
 
   magic-string-ast@1.0.2:
     dependencies:

@@ -10,3 +10,4 @@ components.d.ts
 native/*/index.d.ts
 
 vendor/applemusic-like-lyrics/
+vendor/lyric-kit/

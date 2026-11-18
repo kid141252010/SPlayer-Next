@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/kid141252010/lyric-kit",
+  "upstreamRepository": "https://github.com/SPlayer-Dev/lyric-kit",
+  "branch": "main",
+  "commit": "ccc7f9cb4234433ed05d8b9e47069e27906b88c4",
+  "committedAt": "2026-11-18T13:53:32Z",
+  "sourcePath": "src",
+  "version": "0.7.0"
+}

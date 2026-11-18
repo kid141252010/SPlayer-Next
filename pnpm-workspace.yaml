@@ -20,7 +20,6 @@ minimumReleaseAgeExclude:
   - browserslist@4.28.8
   - electron-to-chromium@1.5.403
   - lyric-dom
-  - lyric-kit
 
 overrides:
   node-abi: ^4.33.0
