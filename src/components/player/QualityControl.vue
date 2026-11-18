@@ -74,18 +74,14 @@ const onQualityChange = (value: string | number | boolean): void => {
     content-class="w-72 p-3"
   >
     <template #trigger>
-      <button
-        type="button"
-        :class="[
-          chipBase,
-          'cursor-pointer',
-          cover
-            ? 'border-cover/30 text-cover/80'
-            : 'border-on-surface-variant/30 text-on-surface-variant',
-        ]"
+      <SButton
+        :type="cover ? 'cover' : 'default'"
+        variant="bordered"
+        size="tiny"
+        class="min-w-9 shrink-0 font-normal opacity-80 hover:opacity-100"
       >
         {{ qualityLabel }}
-      </button>
+      </SButton>
     </template>
     <div class="space-y-3">
       <div class="text-sm font-medium">{{ t("settings.section.joc") }}</div>

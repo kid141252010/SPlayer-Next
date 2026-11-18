@@ -1,8 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
+import { DOMWrapper, flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { defineComponent, h, nextTick } from "vue";
 import { createPinia, defineStore, type Pinia } from "pinia";
 import { createI18n } from "vue-i18n";
+import {
+  SelectRoot,
+  SelectTrigger,
+  SelectPortal,
+  SelectContent,
+  SelectViewport,
+  SelectItem,
+  SelectItemText,
+  SelectItemIndicator,
+} from "reka-ui";
 import { useSettingsStore } from "@/stores/settings";
 import { useStatusStore } from "@/stores/status";
 import { useSpatialStore } from "@/stores/spatial";
@@ -10,6 +20,8 @@ import zhCN from "@/i18n/locales/zh-CN.json";
 import Toolbar from "../Toolbar.vue";
 import AppleLayout from "../FullPlayer/layouts/apple/AppleLayout.vue";
 import SpatialScene from "./SpatialScene.vue";
+import SButton from "@/components/ui/SButton.vue";
+import SPopselect from "@/components/ui/SPopselect.vue";
 
 const useTestSettingsStore = defineStore("settings", {
   state: () => ({
@@ -85,16 +97,29 @@ function render({ cover = false, apple = false } = {}) {
     {
       attachTo: host,
       global: {
+        components: {
+          SButton,
+          SPopselect,
+          SelectRoot,
+          SelectTrigger,
+          SelectPortal,
+          SelectContent,
+          SelectViewport,
+          SelectItem,
+          SelectItemText,
+          SelectItemIndicator,
+        },
         plugins: [
           pinia,
           createI18n({ legacy: false, locale: "zh-CN", messages: { "zh-CN": zhCN } }),
         ],
         stubs: {
-          teleport: true,
           SPopover: { template: '<div><slot name="trigger" /><slot /></div>' },
-          SButton: { template: '<button><slot name="icon" /><slot /></button>' },
           SDropdownMenu: true,
           SSlider: true,
+          SLoading: true,
+          IconLucideChevronDown: true,
+          IconLucideCheck: true,
           EqualizerDialog: true,
           SpeedDialog: true,
           AutoCloseDialog: true,
@@ -121,7 +146,16 @@ function render({ cover = false, apple = false } = {}) {
     },
   );
   mounted.push({ wrapper, host });
-  return { wrapper, settings, status };
+  return { wrapper: new DOMWrapper<HTMLElement>(document.body), settings, status };
+}
+
+/** 通过真实下拉触发器和选项选择模式，不直接写入组件状态 */
+async function chooseMode(wrapper: DOMWrapper<HTMLElement>, label: string): Promise<void> {
+  await wrapper.get('[role="combobox"]').trigger("keydown", { key: "ArrowDown" });
+  const selector = `[role="option"][title="${label}"]`;
+  await vi.waitFor(() => expect(wrapper.find(selector).exists()).toBe(true));
+  await wrapper.get(selector).trigger("keydown", { key: "Enter" });
+  await flushPromises();
 }
 
 describe("空间声场入口", () => {
@@ -133,7 +167,7 @@ describe("空间声场入口", () => {
       await wrapper.get('[aria-label="打开空间声场"]').trigger("click");
       expect(wrapper.get('[role="dialog"]').attributes("aria-label")).toBe("空间声场");
       expect(wrapper.get('[role="status"]').text()).toContain("对象渲染当前已关闭");
-      expect(wrapper.get<HTMLSelectElement>("select").element.value).toBe("off");
+      expect(wrapper.get('[role="combobox"]').text()).toBe(zhCN.settings.jocMode.off);
       expect(setSystem).not.toHaveBeenCalled();
     },
   );
@@ -153,7 +187,7 @@ describe("空间声场入口", () => {
   it("在声场内选择模式，区分未加载、无 JOC 数据、已生效及扬声器模式", async () => {
     const { wrapper, status } = render();
     await wrapper.get('[aria-label="打开空间声场"]').trigger("click");
-    await wrapper.get("select").setValue("binaural");
+    await chooseMode(wrapper, zhCN.settings.jocMode.binaural);
     expect(wrapper.get('[role="status"]').text()).toContain("尚未播放音源");
     status.currentSource = "ordinary.flac";
     await nextTick();
@@ -161,7 +195,7 @@ describe("空间声场入口", () => {
     status.jocActive = true;
     await nextTick();
     expect(wrapper.find('[role="status"]').exists()).toBe(false);
-    await wrapper.get("select").setValue("speaker");
+    await chooseMode(wrapper, zhCN.settings.jocMode.speaker);
     expect(wrapper.get('[role="status"]').text()).toContain("Speaker 2.0");
   });
 

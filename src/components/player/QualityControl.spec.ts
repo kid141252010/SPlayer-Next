@@ -4,6 +4,7 @@ import { defineComponent, nextTick, reactive } from "vue";
 import { createI18n } from "vue-i18n";
 import zhCN from "@/i18n/locales/zh-CN.json";
 import QualityControl from "./QualityControl.vue";
+import SButton from "@/components/ui/SButton.vue";
 
 const mocks = vi.hoisted(() => ({
   media: {
@@ -41,8 +42,15 @@ const select = createStub('<div class="select" />');
 const render = () =>
   mount(QualityControl, {
     global: {
+      components: { SButton },
       plugins: [createI18n({ legacy: false, locale: "zh-CN", messages: { "zh-CN": zhCN } })],
-      stubs: { SPopover: popover, SSelect: select, SPopselect: true, STooltip: popover },
+      stubs: {
+        SPopover: popover,
+        SSelect: select,
+        SPopselect: true,
+        STooltip: popover,
+        SLoading: true,
+      },
     },
   });
 
