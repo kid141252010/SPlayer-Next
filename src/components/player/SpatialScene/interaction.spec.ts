@@ -58,6 +58,23 @@ describe("空间交互", () => {
     root.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     expect(close).toHaveBeenCalledTimes(1);
   });
+  it("模式选择控件的方向键和字母键不转头或漫步", () => {
+    const { scene, store, root } = fixture();
+    const select = document.createElement("select");
+    root.append(select);
+    for (const [key, code] of [
+      ["ArrowLeft", "ArrowLeft"],
+      ["w", "KeyW"],
+    ]) {
+      const event = new KeyboardEvent("keydown", { key, code, bubbles: true, cancelable: true });
+      select.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    scene.animate(0.1);
+    expect(store.controls.yaw).toBe(0);
+    expect(store.controls.y).toBe(0);
+    scene.dispose();
+  });
   it("应援棒切换后的锁定点击可挥动、独奏和静音", () => {
     const { scene, store } = fixture();
     store.view.stickOn = true;

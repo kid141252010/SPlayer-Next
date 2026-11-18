@@ -1,6 +1,6 @@
 {
   "scene": {
-    "title": "Spatial scene",
+    "title": "Spatial soundstage",
     "close": "Close",
     "viewOrbit": "Orbit",
     "viewFirst": "First person",
@@ -22,7 +22,10 @@
     "reset": "Reset",
     "restore": "Restore all",
     "hint": "Drag to turn your head · right-drag to orbit · wheel to zoom · click an orb to solo, Alt+click to mute · W A S D to walk · double-click to reset",
-    "waiting": "Waiting for Dolby Atmos (JOC) binaural playback…",
+    "waiting": "The current source has not entered JOC binaural rendering. Stereo audio and E-AC-3 without JOC metadata cannot provide an object soundstage.",
+    "disabled": "Object rendering is off. Select Binaural above and play Dolby Atmos audio with JOC metadata. Opening this view does not enable rendering or start playback.",
+    "speakerOnly": "Speaker 2.0 output is selected. The interactive soundstage requires headphones and Binaural mode, which you can select above.",
+    "noSource": "No audio source is loaded. Play Dolby Atmos audio with JOC metadata to display its object soundstage here.",
     "object": "Object {n}",
     "lfe": "LFE",
     "solo": "Solo",
@@ -38,8 +41,8 @@
     "tiltDown": "looking down",
     "position": "Position {x}, {y} m",
     "notice": "JOC objects are spatial groups rebuilt parametrically from the 5.1 core, not stems: soloing still lets other parts bleed through.",
-    "open": "Spatial scene",
-    "error": "Unable to read the spatial scene. Close and reopen to retry",
+    "open": "Open spatial soundstage",
+    "error": "Unable to read the spatial soundstage. Close and reopen to retry",
     "mixer": "Object mixer",
     "view": "Scene view"
   },
@@ -997,6 +1000,10 @@
     "jocGain": {
       "label": "Output gain (dB)",
       "description": "Adjust object rendering output level from -12 to +6 dB"
+    },
+    "jocScene": {
+      "label": "Open spatial soundstage",
+      "description": "Available at any time; object data appears when JOC binaural rendering is active. Opening this view does not start playback"
     },
     "loudnessNormalization": {
       "label": "Loudness Normalization",

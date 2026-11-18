@@ -3,8 +3,6 @@ import type { SSelectOption } from "@/components/ui/SSelect.vue";
 import type { QualityLevel } from "@/utils/quality";
 import { useMediaStore } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
-import { useStatusStore } from "@/stores/status";
-import { useSpatialStore } from "@/stores/spatial";
 import type { JocMode } from "@shared/types/joc";
 import { getQualityLabel, isDolbyAtmosQuality } from "@/utils/quality";
 import * as player from "@/core/player";
@@ -15,15 +13,7 @@ withDefaults(defineProps<{ cover?: boolean }>(), { cover: false });
 const { t } = useI18n();
 const media = useMediaStore();
 const settings = useSettingsStore();
-const status = useStatusStore();
-const spatial = useSpatialStore();
 const qualityOpen = ref(false);
-
-/** 从质量面板进入唯一的全局空间场景，释放面板焦点 */
-function openScene(): void {
-  qualityOpen.value = false;
-  spatial.open = true;
-}
 
 /** 是否支持切换在线音质 */
 const canSwitchQuality = computed(() => isPlatform(media.track?.source) && !media.track?.cloud);
@@ -106,14 +96,6 @@ const onQualityChange = (value: string | number | boolean): void => {
         :aria-label="t('settings.jocMode.label')"
         @update:model-value="onJocModeChange"
       />
-      <button
-        v-if="status.jocActive && settings.system.player.joc.mode === 'binaural'"
-        type="button"
-        class="w-full rounded-lg px-3 py-2 text-sm bg-on-surface/8"
-        @click="openScene"
-      >
-        {{ t("scene.open") }}
-      </button>
       <template v-if="canSwitchQuality">
         <div class="text-sm">{{ t("settings.songLevel.switchTitle") }}</div>
         <SSelect

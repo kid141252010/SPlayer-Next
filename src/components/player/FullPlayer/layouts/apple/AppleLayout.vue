@@ -3,10 +3,13 @@ import { useStatusStore } from "@/stores/status";
 import { useMediaStore } from "@/stores/media";
 import { setPlayerExpanded } from "@/services/playerTransition";
 import { useFullPlayer } from "../../context";
+import { useSpatialStore } from "@/stores/spatial";
+import IconLucideOrbit from "~icons/lucide/orbit";
 
 const { t } = useI18n();
 const status = useStatusStore();
 const media = useMediaStore();
+const spatial = useSpatialStore();
 const { showLyric } = storeToRefs(status);
 const { onBarEnter, onBarLeave } = useFullPlayer();
 
@@ -91,6 +94,17 @@ const toggleLyric = (): void => {
     @mouseenter="onBarEnter"
     @mouseleave="onBarLeave"
   >
+    <SButton
+      type="cover"
+      variant="text"
+      size="auto"
+      class="opacity-45 hover:opacity-80"
+      :title="t('scene.open')"
+      :aria-label="t('scene.open')"
+      @click="spatial.open = true"
+    >
+      <IconLucideOrbit class="size-9" />
+    </SButton>
     <SButton
       type="cover"
       variant="text"

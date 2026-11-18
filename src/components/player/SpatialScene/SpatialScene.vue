@@ -22,6 +22,23 @@ const error = ref(false);
 let renderer: SceneInteraction;
 let loop: ReturnType<typeof createSceneLoop>;
 
+/** 入口始终可达，单独说明当前为何没有对象声场数据 */
+const unavailableMessage = computed(() => {
+  if (error.value) return t("scene.error");
+  if (settings.system.player.joc.mode === "off") return t("scene.disabled");
+  if (settings.system.player.joc.mode === "speaker") return t("scene.speakerOnly");
+  if (!status.currentSource) return t("scene.noSource");
+  return status.jocActive ? "" : t("scene.waiting");
+});
+
+/**
+ * 只在用户主动选择时修改模式，打开声场不触发自动播放或切换
+ * @param event - 渲染模式选择框的变更事件
+ */
+function onModeChange(event: Event): void {
+  void settings.setSystem("player.joc.mode", (event.target as HTMLSelectElement).value);
+}
+
 const readout = computed(() => {
   let yaw = spatial.controls.yaw % TAU;
   if (yaw > Math.PI) yaw -= TAU;
@@ -48,9 +65,14 @@ function toggleStick(): void {
   spatial.view.stickOn = !spatial.view.stickOn;
   if (spatial.view.stickOn) spatial.view.view = "first";
 }
-/** 让 Tab 留在模态声场内 */
+/**
+ * 让 Tab 留在模态声场内
+ * @param event - 用于判断焦点移动方向的 Tab 按键事件
+ */
 function trapFocus(event: KeyboardEvent): void {
-  const elements = Array.from(root.value!.querySelectorAll<HTMLElement>("button, input, canvas"));
+  const elements = Array.from(
+    root.value!.querySelectorAll<HTMLElement>("button, input, select, canvas"),
+  );
   const first = elements[0],
     last = elements[elements.length - 1];
   if (
@@ -190,13 +212,17 @@ onMounted(() => {
         <button class="joc-scene-close" type="button" :aria-label="t('scene.close')" @click="close">
           ×
         </button>
+        <label class="joc-scene-mode">
+          <span>{{ t("settings.jocMode.label") }}</span>
+          <select :value="settings.system.player.joc.mode" @change="onModeChange">
+            <option value="off">{{ t("settings.jocMode.off") }}</option>
+            <option value="speaker">{{ t("settings.jocMode.speaker") }}</option>
+            <option value="binaural">{{ t("settings.jocMode.binaural") }}</option>
+          </select>
+        </label>
       </header>
-      <p
-        v-if="error || !status.jocActive || settings.system.player.joc.mode !== 'binaural'"
-        class="joc-scene-message"
-        role="status"
-      >
-        {{ t(error ? "scene.error" : "scene.waiting") }}
+      <p v-if="unavailableMessage" class="joc-scene-message" role="status">
+        {{ unavailableMessage }}
       </p>
       <footer ref="bottom" class="joc-scene-bottom">
         <div class="joc-scene-mixer" role="group" :aria-label="t('scene.mixer')">

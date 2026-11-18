@@ -233,3 +233,9 @@ Put cross-process types (`LocaleCode / SystemConfig / StreamingServerType`, etc.
 Use Conventional Commits with a Chinese summary: `<type>: <summary>`. Keep the title on one line;
 do not add a body or bullets unless explicitly requested. Use the type that matches the change,
 such as `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `build`, `ci`, `style`, or `chore`.
+
+### 默认提交与推送
+
+- 本任务的代码或文档修改完成并通过针对性验证后，默认自行提交并推送到 `origin` 的当前任务分支，不再等待用户额外要求或确认；用户明确要求暂不提交或推送时除外。
+- 只提交本任务产生的改动，保留用户及其他任务的暂存和未暂存内容；不得为推送擅自合并到 `master`、强制推送或改写已有历史。
+- 完成后提供分支名、提交号和远端链接；提交或推送失败时如实报告，不得宣称已发布。

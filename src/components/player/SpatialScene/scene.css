@@ -53,6 +53,7 @@
 }
 .joc-scene-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   padding: max(14px, env(safe-area-inset-top)) 16px 0;
@@ -72,6 +73,21 @@
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.joc-scene-mode {
+  display: flex;
+  flex-basis: 100%;
+  align-items: center;
+  gap: 8px;
+}
+.joc-scene-mode select {
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  color-scheme: dark;
+  font: inherit;
 }
 .joc-scene-close {
   display: grid;
@@ -229,7 +245,8 @@
   }
 }
 .joc-scene button:focus-visible,
-.joc-scene input:focus-visible {
+.joc-scene input:focus-visible,
+.joc-scene select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
