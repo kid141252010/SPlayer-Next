@@ -1283,6 +1283,10 @@
       "label": "Spring Animation Debug Switch",
       "description": "Enable spring bounce and active line scaling effects for applemusic-like-lyrics"
     },
+    "amllTextAutospace": {
+      "label": "Pangu Spacing",
+      "description": "Add visual spacing between Chinese/Japanese characters and Latin letters or digits in the main lyrics without changing the source text"
+    },
     "amllVerticalSpringMass": {
       "label": "Vertical Spring Mass",
       "description": "Mass of the vertical scrolling physics spring. Larger mass increases spring inertia."

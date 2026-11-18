@@ -22,6 +22,13 @@ pnpm build:native         # Rust only; add `--dev` for debug
 
 `audio-engine` static-links FFmpeg via the `ffmpeg_audio` crate (vendor zip + cc-built at compile time). Zero environment dependency — no `FFMPEG_DIR` / `PKG_CONFIG_PATH`, no system FFmpeg required.
 
+## 默认验证方式
+
+- 默认只做与本次改动直接相关的静态检查、类型检查、自动化测试或必要的构建检查，不做实机验证。
+- 未经用户明确要求，不启动真实应用（包括 Electron、`pnpm dev`、preview）、浏览器或桌面自动化进行实机验证，不进行真实播放，不连接或操作用户正在使用的实例。
+- 用户要求开发功能、修改设置、修复问题或构建打包，不等于授权实机验证；不得为了补充验证结论而自行启动实机，也不得改动用户实际数据、账号或设备设置。
+- 验证临时文件、日志、缓存和隔离数据目录统一放在 E 盘，不在 C 盘堆放临时文件；任务结束后清理本任务创建的临时数据和进程。
+
 ## 默认构建与私房包交付
 
 - 用户要求“构建”“打包”或“私房菜”时，默认先将当前功能分支完整合并进 `master`，再切到 `master` 构建；已经在 `master` 时直接构建。用户明确指定例外时按该次要求执行。
@@ -186,8 +193,8 @@ Split logic into files rather than separator comments. Don't extract a helper fo
 ### Memory Discipline
 
 Memory is a hard requirement. The main process logs memory usage through `app.getAppMetrics()`
-60 seconds after launch and then every 10 minutes. When a change touches rendering, caching, or
-IPC, verify before and after with these samples.
+60 seconds after launch and then every 10 minutes. Collect before/after runtime samples only
+when the user explicitly requests real-device verification; otherwise use targeted automated checks.
 
 - **Images by display size** — anything blurred, sampled, or rendered small uses the 300px `cover` thumbnail (player blur background, color extraction, lists). `coverOriginal` only for the visible large cover and poster export. Large `<img>`: add `decoding="async"`; preload with `img.decode()` before fading in.
 - **Compositing layers are budgeted** — never put `will-change` in CSS on unbounded element collections; promote dynamically and only near the viewport (lyric engine `lineWillChange` pattern). New full-screen `filter: blur` / `backdrop-filter` layers need justification.

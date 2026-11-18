@@ -24,6 +24,8 @@ Connect self-hosted Subsonic, Navidrome, Jellyfin, or Emby servers. See [Streami
 
 SPlayer-Next supports LRC, QRC, YRC, and TTML, including word-by-word highlighting, translations, and romanization. Online lyrics are matched according to **Settings → Lyrics → Source preference**, source order, and format preference.
 
+With the AMLL lyric engine selected, enable **Settings → Lyrics → Lyric Display → Pangu Spacing** to add visual spacing between Chinese/Japanese characters and Latin letters or digits in the main lyrics. It is off by default and takes effect immediately, without changing the source text, timestamps, translations, or romanization.
+
 ### Online TTML lyrics
 
 [AMLL TTML DB](https://github.com/amll-dev/amll-ttml-db) is a community-maintained database of high-quality word-timed lyrics, often including translations and romanization.

@@ -208,6 +208,8 @@ export interface LyricSettings {
   excludeLyricsUserRegexes: string[];
   /** 歌词引擎类型 */
   engine: "physics" | "amll";
+  /** AMLL 主歌词正文的 Pangu 化视觉间距 */
+  amllTextAutospace: boolean;
   /** AM 歌词是否启用物理回弹与缩放 */
   useAMSpring: boolean;
   /** AMLL 垂直位移弹簧参数 */

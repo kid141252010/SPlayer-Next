@@ -150,6 +150,7 @@ const syncPlayerOptions = (player = playerRef.value): void => {
   player.setWordFadeWidth(props.wordFadeWidth);
   player.setHidePassedLines(props.hidePassedLines);
   player.setEnableBlur(props.enableBlur);
+  player.setEnableTextAutospace(settings.lyric.amllTextAutospace);
 
   const useSpring = settings.lyric.useAMSpring;
   player.setEnableSpring(useSpring);
@@ -284,6 +285,7 @@ watch(
     props.enableBlur,
     props.bgAlwaysBelow,
     settings.lyric.useAMSpring,
+    settings.lyric.amllTextAutospace,
     settings.lyric.amllVerticalSpringMass,
     settings.lyric.amllVerticalSpringDamping,
     settings.lyric.amllVerticalSpringStiffness,

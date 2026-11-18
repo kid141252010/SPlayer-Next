@@ -1283,6 +1283,10 @@
       "label": "弹簧动画调试开关",
       "description": "为 applemusic-like-lyrics 启用物理弹性回弹与焦点行缩放效果"
     },
+    "amllTextAutospace": {
+      "label": "Pangu 化（中西文间距）",
+      "description": "自动为主歌词正文中的中日文与西文字母、数字添加视觉间距，不修改原始歌词"
+    },
     "amllVerticalSpringMass": {
       "label": "垂直回弹质量",
       "description": "垂直弹性滚动的惯性质量。质量越大，回弹惯性越大"

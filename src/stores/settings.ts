@@ -226,6 +226,7 @@ export const useSettingsStore = defineStore(
       excludeLyricsUserKeywords: [],
       excludeLyricsUserRegexes: [],
       engine: "physics",
+      amllTextAutospace: false,
       useAMSpring: true,
       amllVerticalSpringMass: 1,
       amllVerticalSpringDamping: 15,

@@ -288,6 +288,13 @@ const lyricCategory: SettingCategory = {
           visible: () => lyricEngine() === "physics",
         },
         {
+          key: "amllTextAutospace",
+          type: "switch",
+          binding: { store: "settings", path: "lyric.amllTextAutospace" },
+          defaultValue: false,
+          visible: () => lyricEngine() === "amll",
+        },
+        {
           key: "autoGenerateWordByWord",
           type: "switch",
           binding: { store: "settings", path: "lyric.autoGenerateWordByWord" },
