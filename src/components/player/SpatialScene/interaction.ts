@@ -309,7 +309,7 @@ export class SceneInteraction extends SceneDrawing {
     // 表单控件自行处理方向键和字母键
     if (
       e.target instanceof HTMLInputElement ||
-      e.target instanceof HTMLSelectElement ||
+      (e.target instanceof HTMLElement && e.target.closest('[role="combobox"]')) ||
       e.ctrlKey ||
       e.metaKey ||
       e.altKey

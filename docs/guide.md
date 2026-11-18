@@ -68,6 +68,8 @@ SPlayer-Next 支持 LRC / QRC / YRC / TTML 多种歌词格式，提供逐字高�
 
 可在声场顶部的「对象渲染模式」中选择「双耳」；HRTF 仍在播放设置中选择，默认 D2。对象位置和电平仅在带 JOC 元数据的 Dolby Atmos 音源实际进入双耳渲染后显示；关闭渲染、Speaker 2.0、没有音源或未生效时，界面会分别说明原因。
 
+播放栏的 Dolby Atmos 标签使用透明底并跟随明暗主题；声场模式使用与场景配套的深色下拉菜单，支持方向键选择和 Enter 确认，不使用系统原生选择框。
+
 ## 系统集成
 
 - **系统媒体控制**：对接 Windows SMTC / Linux MPRIS / macOS Now Playing，可用锁屏、通知栏、键盘媒体键控制播放；

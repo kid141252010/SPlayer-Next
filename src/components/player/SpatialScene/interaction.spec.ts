@@ -60,14 +60,17 @@ describe("空间交互", () => {
   });
   it("模式选择控件的方向键和字母键不转头或漫步", () => {
     const { scene, store, root } = fixture();
-    const select = document.createElement("select");
-    root.append(select);
+    const trigger = document.createElement("button");
+    trigger.setAttribute("role", "combobox");
+    const label = document.createElement("span");
+    trigger.append(label);
+    root.append(trigger);
     for (const [key, code] of [
       ["ArrowLeft", "ArrowLeft"],
       ["w", "KeyW"],
     ]) {
       const event = new KeyboardEvent("keydown", { key, code, bubbles: true, cancelable: true });
-      select.dispatchEvent(event);
+      label.dispatchEvent(event);
       expect(event.defaultPrevented).toBe(false);
     }
     scene.animate(0.1);

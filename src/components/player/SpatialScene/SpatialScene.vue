@@ -7,6 +7,8 @@ import { createSceneLoop } from "./loop";
 import { hue, TAU } from "./math";
 import "./scene.css";
 import { usePopupZIndex } from "@/composables/useZIndex";
+import type { SSelectOption } from "@/components/ui/SSelect.vue";
+import type { JocMode } from "@shared/types/joc";
 
 const spatial = useSpatialStore();
 const status = useStatusStore();
@@ -22,6 +24,12 @@ const error = ref(false);
 let renderer: SceneInteraction;
 let loop: ReturnType<typeof createSceneLoop>;
 
+const modeOptions = computed<SSelectOption[]>(() => [
+  { value: "off", label: t("settings.jocMode.off") },
+  { value: "speaker", label: t("settings.jocMode.speaker") },
+  { value: "binaural", label: t("settings.jocMode.binaural") },
+]);
+
 /** 入口始终可达，单独说明当前为何没有对象声场数据 */
 const unavailableMessage = computed(() => {
   if (error.value) return t("scene.error");
@@ -33,10 +41,10 @@ const unavailableMessage = computed(() => {
 
 /**
  * 只在用户主动选择时修改模式，打开声场不触发自动播放或切换
- * @param event - 渲染模式选择框的变更事件
+ * @param mode - 用户选择的对象渲染模式
  */
-function onModeChange(event: Event): void {
-  void settings.setSystem("player.joc.mode", (event.target as HTMLSelectElement).value);
+function onModeChange(mode: string | number | boolean): void {
+  void settings.setSystem("player.joc.mode", mode as JocMode);
 }
 
 const readout = computed(() => {
@@ -70,9 +78,7 @@ function toggleStick(): void {
  * @param event - 用于判断焦点移动方向的 Tab 按键事件
  */
 function trapFocus(event: KeyboardEvent): void {
-  const elements = Array.from(
-    root.value!.querySelectorAll<HTMLElement>("button, input, select, canvas"),
-  );
+  const elements = Array.from(root.value!.querySelectorAll<HTMLElement>("button, input, canvas"));
   const first = elements[0],
     last = elements[elements.length - 1];
   if (
@@ -212,14 +218,31 @@ onMounted(() => {
         <button class="joc-scene-close" type="button" :aria-label="t('scene.close')" @click="close">
           ×
         </button>
-        <label class="joc-scene-mode">
+        <div class="joc-scene-mode">
           <span>{{ t("settings.jocMode.label") }}</span>
-          <select :value="settings.system.player.joc.mode" @change="onModeChange">
-            <option value="off">{{ t("settings.jocMode.off") }}</option>
-            <option value="speaker">{{ t("settings.jocMode.speaker") }}</option>
-            <option value="binaural">{{ t("settings.jocMode.binaural") }}</option>
-          </select>
-        </label>
+          <SPopselect
+            :model-value="settings.system.player.joc.mode"
+            :options="modeOptions"
+            side="bottom"
+            align="start"
+            :min-width="184"
+            cover
+            @update:model-value="onModeChange"
+          >
+            <template #trigger="{ selected }">
+              <SButton
+                type="cover"
+                variant="bordered"
+                size="small"
+                class="min-w-40 font-normal"
+                :aria-label="t('settings.jocMode.label')"
+              >
+                <span class="min-w-0 flex-1 truncate text-left">{{ selected?.label }}</span>
+                <IconLucideChevronDown class="size-3.5 shrink-0 opacity-50" />
+              </SButton>
+            </template>
+          </SPopselect>
+        </div>
       </header>
       <p v-if="unavailableMessage" class="joc-scene-message" role="status">
         {{ unavailableMessage }}
