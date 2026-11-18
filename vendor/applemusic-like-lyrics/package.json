@@ -1,0 +1,47 @@
+{
+  "name": "@applemusic-like-lyrics/core",
+  "version": "0.6.0",
+  "private": true,
+  "description": "AMLL 的纯 JS 核心组件框架，包括歌词显示组件和背景组件等其它可以复用的组件",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kid141252010/applemusic-like-lyrics.git",
+    "directory": "packages/core"
+  },
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "files": [
+    "src",
+    "LICENSE",
+    "upstream.json"
+  ],
+  "types": "./src/index.ts",
+  "imports": {
+    "#interfaces": "./src/interfaces.ts",
+    "#utils/*": "./src/utils/*",
+    "#styles/*": "./src/styles/*",
+    "#lyric/*": "./src/lyric-player/*"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./style.css": "./src/styles/index.css"
+  },
+  "peerDependencies": {
+    "@pixi/app": "*",
+    "@pixi/core": "*",
+    "@pixi/display": "*",
+    "@pixi/filter-blur": "*",
+    "@pixi/filter-bulge-pinch": "*",
+    "@pixi/filter-color-matrix": "*",
+    "@pixi/sprite": "*"
+  },
+  "dependencies": {
+    "@types/ungap__structured-clone": "^1.2.0",
+    "@ungap/structured-clone": "^1.3.3",
+    "bezier-easing": "^3.0.1",
+    "gl-matrix": "4.0.0-beta.2"
+  }
+}

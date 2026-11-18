@@ -8,3 +8,5 @@ auto-eslint.mjs
 auto-imports.d.ts
 components.d.ts
 native/*/index.d.ts
+
+vendor/applemusic-like-lyrics/

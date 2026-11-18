@@ -73,7 +73,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@applemusic-like-lyrics/core": "^0.6.0",
+    "@applemusic-like-lyrics/core": "file:vendor/applemusic-like-lyrics",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@electron/rebuild": "^4.2.1",

@@ -11,6 +11,7 @@
   ],
   "compilerOptions": {
     "tsBuildInfoFile": "node_modules/.cache/tsconfig.web.tsbuildinfo",
+    "allowImportingTsExtensions": true,
     "paths": {
       "@/*": ["./src/*"],
       "@shared/*": ["./shared/*"],

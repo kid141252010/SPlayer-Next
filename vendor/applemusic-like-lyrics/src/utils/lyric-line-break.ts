@@ -1,0 +1,198 @@
+import { isCJK } from "./is-cjk.ts";
+import type { WordSegmenter } from "./segmenter.ts";
+
+export interface ChildNodeInfo {
+	width: number;
+	text: string;
+	isSpace: boolean;
+	/** Layout-only spacing discarded when this node starts a visual line. */
+	leadingSpacing?: number;
+}
+
+/**
+ * 单个词超过容器宽度时的大惩罚倍数
+ */
+const OVERFLOW_PENALTY_MULTIPLIER = 1000;
+/**
+ * 截断 CJK 词组边界的惩罚比例
+ *
+ * 相对于容器宽度
+ */
+const CJK_BREAK_PENALTY_RATIO = 0.15;
+/**
+ * 相邻词组含单字 CJK 词时的惩罚比例
+ */
+const SINGLE_CHAR_CJK_BREAK_PENALTY_RATIO = 0.35;
+/**
+ * 截断普通文本（非空格、非 CJK 词界）的惩罚比例
+ */
+const NORMAL_BREAK_PENALTY_RATIO = 0.5;
+/**
+ * 在空格处断开的奖励比例
+ */
+const SPACE_BREAK_REWARD_RATIO = 0.4;
+/**
+ * 在标点符号处断开的奖励比例
+ *
+ * 比空格更高以便优先一点在标点处换行
+ */
+const PUNCTUATION_BREAK_REWARD_RATIO = 0.6;
+const PUNCTUATION_REGEX = /[,;:!?，。；：！？、）】》」』’”)[\]}>~…]$/;
+
+/**
+ * 计算平均行长度的断点位置
+ * @param children 子节点信息
+ * @param containerWidth 容器可用内容宽度
+ * @param fullText 完整的行文本
+ * @param segmenter 预创建的分词器
+ * @returns 需要在其前面插入 `<br>` 的子节点索引数组，升序
+ */
+export function calcBalancedBreaks(
+	children: ChildNodeInfo[],
+	containerWidth: number,
+	fullText: string,
+	segmenter: WordSegmenter,
+): number[] {
+	const n = children.length;
+	if (n === 0 || containerWidth <= 0) {
+		return [];
+	}
+
+	// 计算哪里是 CJK 词组的边界
+	const cjkBoundaries = new Set<number>();
+	const singleCharCjkBoundaries = new Set<number>();
+	let offset = 0;
+	let prevIsSingleCjkWord = false;
+	for (const { segment, isWordLike } of segmenter.segment(fullText)) {
+		const chars = [...segment];
+		const isSingleCjkWord =
+			!!isWordLike && chars.length === 1 && isCJK(chars[0]);
+		if (offset > 0 && isWordLike) {
+			if (chars.some((ch) => isCJK(ch))) {
+				cjkBoundaries.add(offset);
+				if (prevIsSingleCjkWord || isSingleCjkWord) {
+					singleCharCjkBoundaries.add(offset);
+				}
+			}
+		}
+		offset += segment.length;
+		prevIsSingleCjkWord = isSingleCjkWord;
+	}
+
+	// 计算前缀宽和字符偏移量用于快速查询
+	const charOffsets = new Int32Array(n + 1);
+	const prefixWidth = new Float64Array(n + 1);
+	for (let i = 0; i < n; i++) {
+		charOffsets[i + 1] = charOffsets[i] + children[i].text.length;
+		prefixWidth[i + 1] = prefixWidth[i] + children[i].width;
+	}
+
+	if (prefixWidth[n] <= containerWidth) {
+		return [];
+	}
+
+	const isMixed =
+		/\p{Script=Latin}/u.test(fullText) && [...fullText].some(isCJK);
+	const previousScripts = new Int8Array(n + 1);
+	const nextScripts = new Int8Array(n + 1);
+	if (isMixed) {
+		const scriptOf = (ch: string) =>
+			isCJK(ch) ? 2 : /\p{Script=Latin}/u.test(ch) ? 1 : 0;
+		for (let i = 0; i < n; i++) {
+			previousScripts[i + 1] = previousScripts[i];
+			for (const ch of children[i].text) {
+				const script = scriptOf(ch);
+				if (script) previousScripts[i + 1] = script;
+			}
+		}
+		for (let i = n - 1; i >= 0; i--) {
+			nextScripts[i] = children[i].isSpace
+				? nextScripts[i + 1]
+				: scriptOf(children[i].text.trimStart().charAt(0));
+		}
+	}
+
+	/**
+	 * dp[i] 表示将 index i 到 n-1 的节点进行排版的最小代价
+	 */
+	const dp = new Float64Array(n + 1).fill(Number.POSITIVE_INFINITY);
+	const nextBreak = new Int32Array(n + 1).fill(-1);
+	dp[n] = 0;
+
+	const PENALTY_CJK = (containerWidth * CJK_BREAK_PENALTY_RATIO) ** 2;
+	const PENALTY_SINGLE_CHAR_CJK =
+		(containerWidth * SINGLE_CHAR_CJK_BREAK_PENALTY_RATIO) ** 2;
+	const PENALTY_NORMAL = (containerWidth * NORMAL_BREAK_PENALTY_RATIO) ** 2;
+
+	for (let i = n - 1; i >= 0; i--) {
+		for (let j = i + 1; j <= n; j++) {
+			const w =
+				prefixWidth[j] - prefixWidth[i] - (children[i].leadingSpacing ?? 0);
+
+			let lineCost = 0;
+
+			if (w > containerWidth) {
+				if (j === i + 1) {
+					// 单个无法分割的词自身就比容器宽，被迫独立成行，给大惩罚
+					lineCost = (w - containerWidth) ** 2 * OVERFLOW_PENALTY_MULTIPLIER;
+				} else {
+					// 行内包含多个超过物理宽度的词就跳过
+					continue;
+				}
+			} else {
+				// 末行不计留白代价，让前面的行尽量填满。
+				lineCost = j === n ? 0 : (containerWidth - w) ** 2;
+			}
+
+			let breakPenalty = 0;
+			if (j < n) {
+				const prevChild = children[j - 1];
+
+				// 优先级：标点 > 空格 > CJK 词界 > 单字相邻 CJK 词界 > 普通文本
+				if (
+					(isMixed &&
+						prevChild.isSpace &&
+						previousScripts[j] !== 0 &&
+						nextScripts[j] !== 0 &&
+						previousScripts[j] !== nextScripts[j]) ||
+					(PUNCTUATION_REGEX.test(prevChild.text) &&
+						(!isMixed || nextScripts[j] !== 1))
+				) {
+					breakPenalty = -(
+						(containerWidth * PUNCTUATION_BREAK_REWARD_RATIO) **
+						2
+					);
+				} else if (
+					prevChild.isSpace ||
+					(isMixed && PUNCTUATION_REGEX.test(prevChild.text))
+				) {
+					breakPenalty = -((containerWidth * SPACE_BREAK_REWARD_RATIO) ** 2);
+				} else if (cjkBoundaries.has(charOffsets[j])) {
+					breakPenalty = singleCharCjkBoundaries.has(charOffsets[j])
+						? PENALTY_SINGLE_CHAR_CJK
+						: PENALTY_CJK;
+				} else {
+					breakPenalty = PENALTY_NORMAL;
+				}
+			}
+
+			const totalCost = lineCost + breakPenalty + dp[j];
+
+			if (totalCost < dp[i]) {
+				dp[i] = totalCost;
+				nextBreak[i] = j;
+			}
+		}
+	}
+
+	const breaks: number[] = [];
+	let curr = 0;
+	while (curr < n) {
+		curr = nextBreak[curr];
+		if (curr > 0 && curr < n) {
+			breaks.push(curr);
+		}
+	}
+
+	return breaks;
+}

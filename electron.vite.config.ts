@@ -90,7 +90,19 @@ export default defineConfig({
     optimizeDeps: {
       // 自动注册的组件不在 HTML 的静态导入图中，需扫描其惰性加载依赖
       entries: ["index.html", "windows/**/index.html", "src/components/**/*.vue"],
-      include: ["reka-ui"],
+      include: [
+        "reka-ui",
+        "@pixi/app",
+        "@pixi/core",
+        "@pixi/display",
+        "@pixi/filter-blur",
+        "@pixi/filter-bulge-pinch",
+        "@pixi/filter-color-matrix",
+        "@pixi/sprite",
+        "@applemusic-like-lyrics/core > bezier-easing",
+      ],
+      // vendor 源码包含 GLSL ?raw 导入，需要由 Vite 转换，不能进入依赖预打包
+      exclude: ["@applemusic-like-lyrics/core"],
     },
     publicDir: resolve(__dirname, "public"),
     build: {
