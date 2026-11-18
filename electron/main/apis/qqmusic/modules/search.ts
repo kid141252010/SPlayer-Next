@@ -70,7 +70,6 @@ const searchMobile = (keywords: string, page: number, limit: number, searchType:
     },
     {
       session: false,
-      auth: false,
     },
   );
 

@@ -2,16 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@main/database/sessions", () => ({
   getSessionCookies: () => ({ uin: "123456", qm_keyst: "saved-key" }),
+  saveSessionCookies: vi.fn(),
+  clearSessionCookies: vi.fn(),
 }));
 vi.mock("@main/utils/logger", () => ({ coreLog: { info: vi.fn(), warn: vi.fn() } }));
 
 import search from "../modules/search";
-import { qmRequest } from "./request";
+import { clearQQMusicCookies, mergeQQMusicCookies, qmRequest } from "./request";
 
 const fetchMock = vi.fn();
 
 describe("QQ 搜索签名请求", () => {
   beforeEach(() => {
+    clearQQMusicCookies();
+    mergeQQMusicCookies({ uin: "123456", qm_keyst: "saved-key" });
     fetchMock
       .mockReset()
       .mockImplementation(
@@ -54,7 +58,8 @@ describe("QQ 搜索签名请求", () => {
     expect(init.headers.Cookie).toBe("uin=123456; qm_keyst=saved-key");
   });
 
-  it("四类搜索共用 DoSearchForQQMusicMobile 接口，并保留分页参数和结果映射", async () => {
+  it.each([true, false])("四类搜索保留 Mobile 接口、分页和映射，已登录：%s", async (loggedIn) => {
+    if (!loggedIn) clearQQMusicCookies();
     fetchMock.mockImplementation(
       async () =>
         new Response(
@@ -85,8 +90,9 @@ describe("QQ 搜索签名请求", () => {
       expect(result).toMatchObject({ code: 200, total: 100, [field]: [expected] });
       const [url, init] = fetchMock.mock.calls.at(-1)!;
       expect(new URL(url).pathname).toBe("/cgi-bin/musicu.fcg");
-      expect(JSON.parse(init.body)).toMatchObject({
-        comm: { tmeAppID: "qqmusic", cv: "14090508", uin: "0" },
+      const body = JSON.parse(init.body);
+      expect(body).toMatchObject({
+        comm: { tmeAppID: "qqmusic", cv: "14090508", uin: loggedIn ? "123456" : "0" },
         request: {
           method: "DoSearchForQQMusicMobile",
           param: {
@@ -104,7 +110,11 @@ describe("QQ 搜索签名请求", () => {
           },
         },
       });
-      expect(init.headers.Cookie).toBe("tmeLoginType=-1;");
+      expect(body.comm.authst).toBe(loggedIn ? "saved-key" : undefined);
+      expect(body.comm.tmeLoginType).toBe(loggedIn ? 2 : undefined);
+      expect(init.headers.Cookie).toBe(
+        loggedIn ? "uin=123456; qm_keyst=saved-key" : "tmeLoginType=-1;",
+      );
     }
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
