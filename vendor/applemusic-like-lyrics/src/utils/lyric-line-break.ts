@@ -14,6 +14,12 @@ export interface ChildNodeInfo {
  */
 const OVERFLOW_PENALTY_MULTIPLIER = 1000;
 /**
+ * 每次断行的基础惩罚比例
+ *
+ * 大于标点奖励，避免为了标点或空格奖励多断出行
+ */
+const LINE_BREAK_PENALTY_RATIO = 0.7;
+/**
  * 截断 CJK 词组边界的惩罚比例
  *
  * 相对于容器宽度
@@ -119,6 +125,7 @@ export function calcBalancedBreaks(
 	const nextBreak = new Int32Array(n + 1).fill(-1);
 	dp[n] = 0;
 
+	const PENALTY_LINE_BREAK = (containerWidth * LINE_BREAK_PENALTY_RATIO) ** 2;
 	const PENALTY_CJK = (containerWidth * CJK_BREAK_PENALTY_RATIO) ** 2;
 	const PENALTY_SINGLE_CHAR_CJK =
 		(containerWidth * SINGLE_CHAR_CJK_BREAK_PENALTY_RATIO) ** 2;
@@ -175,6 +182,8 @@ export function calcBalancedBreaks(
 					breakPenalty = PENALTY_NORMAL;
 				}
 			}
+
+			if (j < n) breakPenalty += PENALTY_LINE_BREAK;
 
 			const totalCost = lineCost + breakPenalty + dp[j];
 

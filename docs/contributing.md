@@ -31,7 +31,7 @@ pnpm dev -- [参数]...
 
 `@applemusic-like-lyrics/core` 使用 `file:vendor/applemusic-like-lyrics`，直接由 Vite 转换本地源码，不再下载 npm 发布的 core，也不需要单独构建 AMLL。
 
-源码来自 [kid141252010/applemusic-like-lyrics](https://github.com/kid141252010/applemusic-like-lyrics) 的 `master` 分支，当前固定为提交 [`ce5d87b12e76f7d2b796c0d000c2d9bb70ea7f6d`](https://github.com/kid141252010/applemusic-like-lyrics/commit/ce5d87b12e76f7d2b796c0d000c2d9bb70ea7f6d)。完整来源记录在 `vendor/applemusic-like-lyrics/upstream.json`，上游 AGPL-3.0-only 许可证保留在同目录的 `LICENSE`。
+源码来自 [kid141252010/applemusic-like-lyrics](https://github.com/kid141252010/applemusic-like-lyrics) 的 `master` 分支，当前固定为提交 [`13463503ac72eff51ba6f36a33316f0b8e66be68`](https://github.com/kid141252010/applemusic-like-lyrics/commit/13463503ac72eff51ba6f36a33316f0b8e66be68)。完整来源记录在 `vendor/applemusic-like-lyrics/upstream.json`，上游 AGPL-3.0-only 许可证保留在同目录的 `LICENSE`。
 
 更新时，用目标提交的 `packages/core/src/` 和根 `LICENSE` 替换 vendor 中的对应内容，并同步 `upstream.json`。保留本地 `package.json` 的源码导出与内部导入映射，按上游实际运行时依赖调整清单；不要引入上游的 `catalog:` 引用、测试依赖或发布工具链。最后运行 `pnpm install` 更新锁文件，并验证歌词与背景渲染。
 
