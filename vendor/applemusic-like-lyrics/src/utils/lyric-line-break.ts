@@ -110,7 +110,10 @@ export function calcBalancedBreaks(
 			previousScripts[i + 1] = previousScripts[i];
 			for (const ch of children[i].text) {
 				const script = scriptOf(ch);
-				if (script) previousScripts[i + 1] = script;
+				if (script) {
+					previousScripts[i + 1] = script;
+					break;
+				}
 			}
 		}
 		for (let i = n - 1; i >= 0; i--) {
