@@ -43,6 +43,14 @@ const SPACE_BREAK_REWARD_RATIO = 0.4;
  * 比空格更高以便优先一点在标点处换行
  */
 const PUNCTUATION_BREAK_REWARD_RATIO = 0.6;
+/**
+ * 在脚本（CJK/韩文与拉丁）边界处断开的奖励比例
+ *
+ * 独立于标点奖励且更高：混合脚本行应优先在语种边界断行，
+ * 奖励需能压过贪心填充的留白差（约 0.56 * W^2 的优势），
+ * 同时避免边界过早时把首行留得过空。
+ */
+const SCRIPT_BOUNDARY_BREAK_REWARD_RATIO = 0.85;
 const PUNCTUATION_REGEX = /[,;:!?，。；：！？、）】》」』’”)[\]}>~…]$/;
 
 /**
@@ -110,7 +118,10 @@ export function calcBalancedBreaks(
 			previousScripts[i + 1] = previousScripts[i];
 			for (const ch of children[i].text) {
 				const script = scriptOf(ch);
-				if (script) previousScripts[i + 1] = script;
+				if (script) {
+					previousScripts[i + 1] = script;
+					break;
+				}
 			}
 		}
 		for (let i = n - 1; i >= 0; i--) {
@@ -159,15 +170,21 @@ export function calcBalancedBreaks(
 				const prevIsSpaceBreak =
 					prevChild.isSpace || /\s$/.test(prevChild.text);
 
-				// 优先级：标点 > 空格 > CJK 词界 > 单字相邻 CJK 词界 > 普通文本
+				// 优先级：脚本边界 > 标点 > 空格 > CJK 词界 > 单字相邻 CJK 词界 > 普通文本
 				if (
-					(isMixed &&
-						prevIsSpaceBreak &&
-						previousScripts[j] !== 0 &&
-						nextScripts[j] !== 0 &&
-						previousScripts[j] !== nextScripts[j]) ||
-					(PUNCTUATION_REGEX.test(prevChild.text) &&
-						(!isMixed || nextScripts[j] !== 1))
+					isMixed &&
+					prevIsSpaceBreak &&
+					previousScripts[j] !== 0 &&
+					nextScripts[j] !== 0 &&
+					previousScripts[j] !== nextScripts[j]
+				) {
+					breakPenalty = -(
+						(containerWidth * SCRIPT_BOUNDARY_BREAK_REWARD_RATIO) **
+						2
+					);
+				} else if (
+					PUNCTUATION_REGEX.test(prevChild.text) &&
+					(!isMixed || nextScripts[j] !== 1)
 				) {
 					breakPenalty = -(
 						(containerWidth * PUNCTUATION_BREAK_REWARD_RATIO) **
