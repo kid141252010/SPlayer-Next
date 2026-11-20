@@ -15,8 +15,8 @@ const lyricVisible = computed(() => hasLyric.value && !status.fullQueueOpen);
 
 <template>
   <!-- 封面压在频谱与遮罩之下 -->
-  <div class="absolute inset-y-0 left-0 w-[60%] -z-1">
-    <PlayerCover class="full-cover size-full" />
+  <div class="absolute inset-y-0 left-0 w-[48%] -z-1">
+    <PlayerCover class="full-cover size-full" motion-variant="tall" />
   </div>
   <!-- 顶/底栏渐变遮罩 -->
   <div
@@ -33,7 +33,7 @@ const lyricVisible = computed(() => hasLyric.value && !status.fullQueueOpen);
   <div class="absolute top-14 inset-x-0 bottom-20">
     <!-- 右侧信息与歌词 -->
     <div
-      class="group absolute inset-y-0 right-0 w-1/2 pr-20 flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+      class="group absolute inset-y-0 left-[48%] right-0 pl-8 pr-20 flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
       :class="status.fullQueueOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'"
     >
       <PlayerLyric :visible="lyricVisible">
@@ -47,7 +47,7 @@ const lyricVisible = computed(() => hasLyric.value && !status.fullQueueOpen);
     </div>
     <!-- 播放队列 -->
     <div
-      class="absolute inset-y-0 right-0 w-1/2 pl-4 py-6 flex items-center"
+      class="absolute inset-y-0 left-[48%] right-0 pl-4 py-6 flex items-center"
       :class="status.fullQueueOpen ? '' : 'pointer-events-none'"
     >
       <Transition

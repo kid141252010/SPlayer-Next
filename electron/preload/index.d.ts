@@ -1,5 +1,12 @@
 import { ElectronAPI } from "@electron-toolkit/preload";
-import { MotionCoverSource, PlayerApi, Track, TrackSource } from "@shared/types/player";
+import {
+  MotionCoverResult,
+  MotionCoverSource,
+  MotionCoverVariant,
+  PlayerApi,
+  Track,
+  TrackSource,
+} from "@shared/types/player";
 import {
   ConfigApi,
   ExternalApiStatus,
@@ -89,7 +96,11 @@ declare global {
       comments: CommentsApi;
       download: DownloadApi;
       motionCover: {
-        resolve: (track: Track, source: MotionCoverSource) => Promise<string | null>;
+        resolve: (
+          track: Track,
+          source: MotionCoverSource,
+          variant?: MotionCoverVariant,
+        ) => Promise<MotionCoverResult | null>;
       };
       theme: {
         pickBackgroundImage: () => Promise<string | null>;

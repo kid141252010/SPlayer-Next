@@ -17,6 +17,9 @@ import type {
 import type { HotkeyActionId, HotkeyBinding, HotkeyConflict } from "@shared/types/hotkey";
 import type {
   LoadOptions,
+  MotionCoverResult,
+  MotionCoverSource,
+  MotionCoverVariant,
   Track,
   TrackSource,
   TransitionPreference,
@@ -669,8 +672,12 @@ const api = {
   },
   motionCover: {
     // 解析曲目的动态封面
-    resolve: (track: unknown, source: string): Promise<string | null> =>
-      ipcRenderer.invoke("motionCover:resolve", track, source),
+    resolve: (
+      track: Track,
+      source: MotionCoverSource,
+      variant: MotionCoverVariant = "square",
+    ): Promise<MotionCoverResult | null> =>
+      ipcRenderer.invoke("motionCover:resolve", track, source, variant),
   },
   theme: {
     // 弹出文件选择框

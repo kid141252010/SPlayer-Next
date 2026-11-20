@@ -6,7 +6,9 @@ const hdCache = shallowRef<{ id: string; data: string } | null>(null);
 import { useMediaStore } from "@/stores/media";
 import { useStatusStore } from "@/stores/status";
 import { useSettingsStore } from "@/stores/settings";
+import type { MotionCoverVariant } from "@shared/types/player";
 
+const props = defineProps<{ motionVariant?: MotionCoverVariant }>();
 const media = useMediaStore();
 const status = useStatusStore();
 const settings = useSettingsStore();
@@ -57,13 +59,18 @@ watch([coverSrc, () => displayTrack.value?.cover], async () => {
   if (layer.id === layerId) layers.value = [layers.value[0], layer];
 });
 
-const motion = shallowRef<{ key: string; src: string; replay: boolean } | null>(null);
+const motion = shallowRef<{
+  key: string;
+  src: string;
+  variant: MotionCoverVariant;
+  replay: boolean;
+} | null>(null);
 const motionReady = ref(false);
 const videoRef = ref<HTMLVideoElement>();
 const waitingReplay = ref(false);
 const motionKey = computed(() => {
   const track = displayTrack.value;
-  return `${settings.player.motionCoverSource}:${track?.source}:${track?.serverId ?? ""}:${track?.id}`;
+  return `${settings.player.motionCoverSource}:${props.motionVariant ?? "square"}:${track?.source}:${track?.serverId ?? ""}:${track?.id}`;
 });
 
 watch(
@@ -79,16 +86,19 @@ watch(
     const track = displayTrack.value;
     const source = settings.player.motionCoverSource;
     if (!active || source === "off" || !track?.id || motion.value) return;
-    const src = await window.api.motionCover.resolve(toRaw(track), source).catch((error) => {
-      console.warn("[PlayerCover] resolve motion cover failed:", error);
-      return null;
-    });
-    if (!cancelled && src) {
+    const result = await window.api.motionCover
+      .resolve(toRaw(track), source, props.motionVariant ?? "square")
+      .catch((error) => {
+        console.warn("[PlayerCover] resolve motion cover failed:", error);
+        return null;
+      });
+    if (!cancelled && result) {
       motion.value = {
         key,
-        src,
+        src: result.url,
+        variant: result.variant,
         // AM 的缓存视频无缝循环；NCM 保留两秒静态封面后的再放送。
-        replay: source === "ncm" || (source === "amFirst" && !src.startsWith("cache:")),
+        replay: source === "ncm" || (source === "amFirst" && !result.url.startsWith("cache:")),
       };
     }
   },
@@ -175,8 +185,11 @@ onBeforeUnmount(() => {
         muted
         :loop="!motion.replay"
         playsinline
-        class="absolute inset-0 z-2 size-full object-cover transition-opacity duration-500"
-        :class="motionReady ? 'opacity-100' : 'opacity-0'"
+        class="absolute inset-0 z-2 size-full transition-opacity duration-500"
+        :class="[
+          motion?.variant === 'tall' ? 'object-contain' : 'object-cover',
+          motionReady ? 'opacity-100' : 'opacity-0',
+        ]"
         @loadeddata="$event.target === videoRef && (motionReady = true)"
         @ended="onVideoEnded"
       />

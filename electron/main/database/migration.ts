@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
 /** 当前 schema 版本 */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 type TableInfoRow = { name: string };
 
@@ -50,6 +50,14 @@ export const migrate = (d: Database.Database): void => {
       d.exec("ALTER TABLE tracks ADD COLUMN cue_end_ms INTEGER");
     }
     v = 4;
+  }
+
+  // v4 → v5: 记录动态封面的实际画幅，旧缓存按方形处理
+  if (v < 5) {
+    if (!hasColumn(d, "motion_cover_cache", "variant")) {
+      d.exec("ALTER TABLE motion_cover_cache ADD COLUMN variant TEXT NOT NULL DEFAULT 'square'");
+    }
+    v = 5;
   }
 
   // 版本无关部分

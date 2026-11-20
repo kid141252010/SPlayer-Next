@@ -144,7 +144,6 @@ export const pickBestCandidate = <E>(
   for (const candidate of candidates) {
     const candName = normalize(candidate.name);
     const candAlbum = normalize(candidate.album);
-
     const nameExact = candName.length > 0 && candName === trackName;
     if (!nameExact) {
       if (!bothContains(candName, trackName)) continue;

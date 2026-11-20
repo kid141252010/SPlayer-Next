@@ -253,6 +253,15 @@ export type TransitionPreference = "conservative" | "standard" | "eager";
 /** 动态封面来源 */
 export type MotionCoverSource = "off" | "ncm" | "am" | "amFirst";
 
+/** 动态封面画幅变体 */
+export type MotionCoverVariant = "square" | "tall";
+
+/** 动态封面地址及实际画幅 */
+export interface MotionCoverResult {
+  url: string;
+  variant: MotionCoverVariant;
+}
+
 export type PlayerEvent =
   | { type: "jocStateChanged"; data: { active: boolean } }
   | { type: "status"; data: PlayerStatus }
