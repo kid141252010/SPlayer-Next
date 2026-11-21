@@ -67,6 +67,7 @@ const motion = shallowRef<{
   replay: boolean;
 } | null>(null);
 const motionReady = ref(false);
+const coverRef = ref<HTMLDivElement>();
 const videoRef = ref<HTMLVideoElement>();
 const waitingReplay = ref(false);
 const motionKey = computed(() => {
@@ -157,6 +158,7 @@ onBeforeUnmount(() => {
 <template>
   <!-- 外观由布局决定，这里只负责高清封面加载与共享过渡标记 -->
   <div
+    ref="coverRef"
     data-player-cover="full"
     :data-motion-ready="motionReady && status.isPlayerExpanded ? '' : undefined"
     class="relative overflow-hidden shrink-0"
@@ -164,6 +166,7 @@ onBeforeUnmount(() => {
     <MotionCoverAmbient
       v-if="props.ambient && motion && motionReady && status.isPlayerExpanded"
       :video="videoRef"
+      :container="coverRef"
       :active="status.isPlaying && visibility === 'visible' && !waitingReplay"
       class="motion-cover-ambient"
     />

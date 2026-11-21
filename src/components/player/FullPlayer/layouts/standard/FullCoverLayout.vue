@@ -70,19 +70,51 @@ const lyricVisible = computed(() => hasLyric.value && !status.fullQueueOpen);
 .full-cover {
   container-type: size;
   --cover-padding: clamp(4px, 0.65vmin, 10px);
+  --cover-feather: 18px;
   --cover-width: max(0px, calc(48cqw - 2 * var(--cover-padding)));
   --cover-height: max(0px, calc(100cqh - 2 * var(--cover-padding)));
 }
 
 .full-cover :deep(.motion-cover-ambient) {
   position: absolute;
-  inset: -4%;
   z-index: 0;
-  width: 108%;
-  height: 108%;
-  opacity: 0.7;
-  filter: blur(clamp(28px, 4vw, 64px)) saturate(1.15) brightness(0.8);
-  mask-image: linear-gradient(to right, black 40%, rgba(0, 0, 0, 0.65) 100%);
+  pointer-events: none;
+}
+
+.full-cover :deep(.motion-cover-ambient-far),
+.full-cover :deep(.motion-cover-ambient-near) {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+}
+
+.full-cover :deep(.motion-cover-ambient-far) {
+  z-index: 0;
+  filter: blur(48px) brightness(0.72);
+}
+
+.full-cover :deep(.motion-cover-ambient-near) {
+  z-index: 1;
+  filter: blur(12px);
+  mask-image:
+    linear-gradient(
+      to right,
+      transparent,
+      black var(--motion-cover-near-radius),
+      black calc(100% - var(--motion-cover-near-radius)),
+      transparent
+    ),
+    linear-gradient(
+      to bottom,
+      transparent,
+      black var(--motion-cover-near-radius),
+      black calc(100% - var(--motion-cover-near-radius)),
+      transparent
+    );
+  mask-repeat: no-repeat;
+  mask-composite: intersect;
 }
 
 .full-cover :deep(.player-cover-still),
@@ -94,8 +126,20 @@ const lyricVisible = computed(() => hasLyric.value && !status.fullQueueOpen);
   margin-block: auto;
   object-fit: contain;
   mask-image:
-    linear-gradient(to right, transparent, black 4px, black calc(100% - 12px), transparent),
-    linear-gradient(to bottom, transparent, black 4px, black calc(100% - 4px), transparent);
+    linear-gradient(
+      to right,
+      transparent,
+      black min(var(--cover-feather), 25%),
+      black calc(100% - min(var(--cover-feather), 25%)),
+      transparent
+    ),
+    linear-gradient(
+      to bottom,
+      transparent,
+      black min(var(--cover-feather), 25%),
+      black calc(100% - min(var(--cover-feather), 25%)),
+      transparent
+    );
   mask-composite: intersect;
 }
 

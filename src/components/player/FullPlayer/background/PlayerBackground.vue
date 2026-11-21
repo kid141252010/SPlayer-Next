@@ -205,4 +205,10 @@ onBeforeUnmount(() => {
 .bg-fluid-wrap.ready {
   opacity: 1;
 }
+
+/* 仅真实外围帧已绘制时退出图片层，暂停保留，失效自动回退。 */
+:global(.player-panel:has(.full-cover [data-motion-cover-ambient-ready]) .bg-blur-wrap),
+:global(.player-panel:has(.full-cover [data-motion-cover-ambient-ready]) .bg-fluid-wrap) {
+  visibility: hidden;
+}
 </style>
