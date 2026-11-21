@@ -15,25 +15,25 @@ const lyricVisible = computed(() => hasLyric.value && !status.fullQueueOpen);
 
 <template>
   <!-- 封面压在频谱与遮罩之下 -->
-  <div class="full-cover-pane absolute inset-y-0 left-0 w-[48%] -z-1">
-    <PlayerCover class="full-cover size-full" motion-variant="tall" />
+  <div class="full-cover-stage absolute inset-0 -z-1 pointer-events-none">
+    <PlayerCover class="full-cover size-full" motion-variant="tall" ambient />
   </div>
   <!-- 顶/底栏渐变遮罩 -->
   <div
     data-player-layout="mask-top"
-    class="cover-mask-top absolute top-0 inset-x-0 h-20 z-5 pointer-events-none transition-opacity duration-400"
+    class="cover-mask-top absolute top-0 inset-x-0 h-14 z-5 pointer-events-none transition-opacity duration-400"
     :class="immersive ? 'opacity-0' : 'opacity-100'"
   />
   <div
     data-player-layout="mask-bottom"
-    class="cover-mask-bottom absolute bottom-0 inset-x-0 h-48 z-5 pointer-events-none transition-opacity duration-400"
+    class="cover-mask-bottom absolute bottom-0 inset-x-0 h-20 z-5 pointer-events-none transition-opacity duration-400"
     :class="immersive ? 'opacity-0' : 'opacity-100'"
   />
   <PlayerTopBar />
-  <div class="absolute top-14 inset-x-0 bottom-20">
+  <div class="full-cover-content absolute top-14 inset-x-0 bottom-20">
     <!-- 右侧信息与歌词 -->
     <div
-      class="group absolute inset-y-0 left-[48%] right-0 pl-8 pr-20 flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+      class="full-cover-column group absolute inset-y-0 left-[48%] right-0 pl-8 pr-20 flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
       :class="status.fullQueueOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'"
     >
       <PlayerLyric :visible="lyricVisible">
@@ -47,7 +47,7 @@ const lyricVisible = computed(() => hasLyric.value && !status.fullQueueOpen);
     </div>
     <!-- 播放队列 -->
     <div
-      class="absolute inset-y-0 left-[48%] right-0 pl-4 py-6 flex items-center"
+      class="full-cover-column absolute inset-y-0 left-[48%] right-0 pl-4 py-6 flex items-center"
       :class="status.fullQueueOpen ? '' : 'pointer-events-none'"
     >
       <Transition
@@ -66,72 +66,60 @@ const lyricVisible = computed(() => hasLyric.value && !status.fullQueueOpen);
 </template>
 
 <style scoped>
+/* 贴近窗口边缘展示完整画幅，只有背景光晕向整屏扩散。 */
 .full-cover {
   container-type: size;
+  --cover-padding: clamp(4px, 0.65vmin, 10px);
+  --cover-width: max(0px, calc(48cqw - 2 * var(--cover-padding)));
+  --cover-height: max(0px, calc(100cqh - 2 * var(--cover-padding)));
 }
 
-.full-cover:not([data-motion-ready]) {
-  mask-image: linear-gradient(
-    to right,
-    rgba(0, 0, 0, 1) 0%,
-    rgba(0, 0, 0, 0.98) 10%,
-    rgba(0, 0, 0, 0.92) 22%,
-    rgba(0, 0, 0, 0.82) 32%,
-    rgba(0, 0, 0, 0.68) 42%,
-    rgba(0, 0, 0, 0.52) 52%,
-    rgba(0, 0, 0, 0.36) 62%,
-    rgba(0, 0, 0, 0.22) 72%,
-    rgba(0, 0, 0, 0.1) 82%,
-    rgba(0, 0, 0, 0.03) 92%,
-    rgba(0, 0, 0, 0) 100%
-  );
+.full-cover :deep(.motion-cover-ambient) {
+  position: absolute;
+  inset: -4%;
+  z-index: 0;
+  width: 108%;
+  height: 108%;
+  opacity: 0.7;
+  filter: blur(clamp(28px, 4vw, 64px)) saturate(1.15) brightness(0.8);
+  mask-image: linear-gradient(to right, black 40%, rgba(0, 0, 0, 0.65) 100%);
 }
 
-.full-cover[data-motion-ready] {
-  mask-image: linear-gradient(
-    to right,
-    rgba(0, 0, 0, 1) 0%,
-    rgba(0, 0, 0, 0.98) 72%,
-    rgba(0, 0, 0, 0.9) 88%,
-    rgba(0, 0, 0, 0.68) 100%
-  );
-}
-
-/* 用静态封面做外围晕染，不给视频叠加模糊，也不重复解码视频。 */
-.full-cover[data-motion-ready] :deep(.player-cover-still) {
-  opacity: 0.3;
-  filter: blur(16px);
-  mask-image:
-    linear-gradient(to right, transparent, black 7% 91%, transparent),
-    linear-gradient(to bottom, transparent, black 7% 93%, transparent);
-  mask-composite: intersect;
-}
-
+.full-cover :deep(.player-cover-still),
 .full-cover :deep(video[data-motion-variant]) {
-  --art-ratio: 1;
-  inset: 0;
-  margin: auto;
-  width: min(90cqw, max(0px, calc((100cqh - 8.5rem) * 0.94 * var(--art-ratio))));
-  height: auto;
-  aspect-ratio: var(--art-ratio);
+  --cover-ratio: 1;
+  inset: var(--cover-padding) auto var(--cover-padding) var(--cover-padding);
+  width: min(var(--cover-width), calc(var(--cover-height) * var(--cover-ratio)));
+  height: min(var(--cover-height), calc(var(--cover-width) / var(--cover-ratio)));
+  margin-block: auto;
   object-fit: contain;
-  transform: translateY(-0.75rem);
   mask-image:
-    linear-gradient(to right, transparent, black 2% 98%, transparent),
-    linear-gradient(to bottom, transparent, black 2% 98%, transparent);
+    linear-gradient(to right, transparent, black 4px, black calc(100% - 12px), transparent),
+    linear-gradient(to bottom, transparent, black 4px, black calc(100% - 4px), transparent);
   mask-composite: intersect;
+}
+
+.full-cover :deep(.player-cover-still) {
+  z-index: 1;
+}
+
+.full-cover :deep(.player-cover-still img) {
+  object-fit: contain;
+}
+
+.full-cover[data-motion-ready] :deep(.player-cover-still) {
+  visibility: hidden;
 }
 
 .full-cover :deep(video[data-motion-variant="tall"]) {
-  --art-ratio: 0.75;
+  --cover-ratio: 0.75;
+  --cover-width: max(0px, calc(54cqw - 2 * var(--cover-padding)));
 }
 
-.full-cover-pane:has([data-motion-ready]) ~ .cover-mask-top {
-  height: 3.5rem;
-}
-
-.full-cover-pane:has([data-motion-ready]) ~ .cover-mask-bottom {
-  height: 5rem;
+.full-cover-stage:has([data-motion-ready] video[data-motion-variant="tall"])
+  ~ .full-cover-content
+  .full-cover-column {
+  left: min(54%, calc(75vh + 1rem));
 }
 
 /* 多段非线性 alpha，避免暗色渐变出色阶 */

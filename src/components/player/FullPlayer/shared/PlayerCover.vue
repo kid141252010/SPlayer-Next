@@ -7,8 +7,9 @@ import { useMediaStore } from "@/stores/media";
 import { useStatusStore } from "@/stores/status";
 import { useSettingsStore } from "@/stores/settings";
 import type { MotionCoverVariant } from "@shared/types/player";
+import MotionCoverAmbient from "./MotionCoverAmbient.vue";
 
-const props = defineProps<{ motionVariant?: MotionCoverVariant }>();
+const props = defineProps<{ motionVariant?: MotionCoverVariant; ambient?: boolean }>();
 const media = useMediaStore();
 const status = useStatusStore();
 const settings = useSettingsStore();
@@ -160,6 +161,12 @@ onBeforeUnmount(() => {
     :data-motion-ready="motionReady && status.isPlayerExpanded ? '' : undefined"
     class="relative overflow-hidden shrink-0"
   >
+    <MotionCoverAmbient
+      v-if="props.ambient && motion && motionReady && status.isPlayerExpanded"
+      :video="videoRef"
+      :active="status.isPlaying && visibility === 'visible' && !waitingReplay"
+      class="motion-cover-ambient"
+    />
     <!-- 切歌交叉淡入 -->
     <TransitionGroup
       :css="!settings.reducedMotion"
