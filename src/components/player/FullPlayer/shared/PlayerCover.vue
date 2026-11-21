@@ -155,7 +155,11 @@ onBeforeUnmount(() => {
 
 <template>
   <!-- 外观由布局决定，这里只负责高清封面加载与共享过渡标记 -->
-  <div data-player-cover="full" class="relative overflow-hidden shrink-0">
+  <div
+    data-player-cover="full"
+    :data-motion-ready="motionReady && status.isPlayerExpanded ? '' : undefined"
+    class="relative overflow-hidden shrink-0"
+  >
     <!-- 切歌交叉淡入 -->
     <TransitionGroup
       :css="!settings.reducedMotion"
@@ -168,7 +172,7 @@ onBeforeUnmount(() => {
         :key="layer.id"
         :src="layer.src"
         :fallback="layer.fallback"
-        class="absolute! inset-0 size-full"
+        class="player-cover-still absolute! inset-0 size-full"
       />
     </TransitionGroup>
     <!-- 动态封面 -->
@@ -182,6 +186,7 @@ onBeforeUnmount(() => {
         ref="videoRef"
         :key="motion.src"
         :src="motion.src"
+        :data-motion-variant="motion.variant"
         muted
         :loop="!motion.replay"
         playsinline

@@ -15,7 +15,7 @@ const lyricVisible = computed(() => hasLyric.value && !status.fullQueueOpen);
 
 <template>
   <!-- 封面压在频谱与遮罩之下 -->
-  <div class="absolute inset-y-0 left-0 w-[48%] -z-1">
+  <div class="full-cover-pane absolute inset-y-0 left-0 w-[48%] -z-1">
     <PlayerCover class="full-cover size-full" motion-variant="tall" />
   </div>
   <!-- 顶/底栏渐变遮罩 -->
@@ -67,6 +67,10 @@ const lyricVisible = computed(() => hasLyric.value && !status.fullQueueOpen);
 
 <style scoped>
 .full-cover {
+  container-type: size;
+}
+
+.full-cover:not([data-motion-ready]) {
   mask-image: linear-gradient(
     to right,
     rgba(0, 0, 0, 1) 0%,
@@ -81,6 +85,53 @@ const lyricVisible = computed(() => hasLyric.value && !status.fullQueueOpen);
     rgba(0, 0, 0, 0.03) 92%,
     rgba(0, 0, 0, 0) 100%
   );
+}
+
+.full-cover[data-motion-ready] {
+  mask-image: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.98) 72%,
+    rgba(0, 0, 0, 0.9) 88%,
+    rgba(0, 0, 0, 0.68) 100%
+  );
+}
+
+/* 用静态封面做外围晕染，不给视频叠加模糊，也不重复解码视频。 */
+.full-cover[data-motion-ready] :deep(.player-cover-still) {
+  opacity: 0.3;
+  filter: blur(16px);
+  mask-image:
+    linear-gradient(to right, transparent, black 7% 91%, transparent),
+    linear-gradient(to bottom, transparent, black 7% 93%, transparent);
+  mask-composite: intersect;
+}
+
+.full-cover :deep(video[data-motion-variant]) {
+  --art-ratio: 1;
+  inset: 0;
+  margin: auto;
+  width: min(90cqw, max(0px, calc((100cqh - 8.5rem) * 0.94 * var(--art-ratio))));
+  height: auto;
+  aspect-ratio: var(--art-ratio);
+  object-fit: contain;
+  transform: translateY(-0.75rem);
+  mask-image:
+    linear-gradient(to right, transparent, black 2% 98%, transparent),
+    linear-gradient(to bottom, transparent, black 2% 98%, transparent);
+  mask-composite: intersect;
+}
+
+.full-cover :deep(video[data-motion-variant="tall"]) {
+  --art-ratio: 0.75;
+}
+
+.full-cover-pane:has([data-motion-ready]) ~ .cover-mask-top {
+  height: 3.5rem;
+}
+
+.full-cover-pane:has([data-motion-ready]) ~ .cover-mask-bottom {
+  height: 5rem;
 }
 
 /* 多段非线性 alpha，避免暗色渐变出色阶 */
